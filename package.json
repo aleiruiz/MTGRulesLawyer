@@ -9,17 +9,25 @@
   "scripts": {
     "dev:api": "pnpm --filter @mtg-rules/api dev",
     "dev:mobile": "pnpm --filter @mtg-rules/mobile start",
-    "build": "pnpm -r build",
+    "build": "pnpm db:generate && pnpm -r build",
     "lint": "pnpm --filter @mtg-rules/contracts build && eslint apps/mobile/app apps/api/src packages/contracts/src eslint.config.mjs",
     "lint:fix": "pnpm --filter @mtg-rules/contracts build && eslint apps/mobile/app apps/api/src packages/contracts/src eslint.config.mjs --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm --filter @mtg-rules/contracts build && pnpm -r --if-present typecheck",
+    "typecheck": "pnpm db:generate && pnpm --filter @mtg-rules/contracts build && pnpm -r --if-present typecheck",
     "test": "pnpm --filter @mtg-rules/contracts build && pnpm --filter @mtg-rules/api test",
-    "audit:check": "node scripts/audit-dependencies.mjs"
+    "audit:check": "node scripts/audit-dependencies.mjs",
+    "db:generate": "prisma generate",
+    "db:format": "prisma format",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:reset": "node scripts/reset-database.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@prisma/client": "6.19.0",
+    "dotenv": "^16.6.1",
     "eslint": "^9.35.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import-x": "^4.16.1",
@@ -27,10 +35,14 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.4.0",
     "prettier": "^3.6.2",
+    "prisma": "6.19.0",
+    "tsx": "^4.20.6",
     "typescript-eslint": "^8.44.0"
   },
   "pnpm": {
     "overrides": {
+      "deepmerge-ts": "8.0.2",
+      "effect": "3.20.0",
       "postcss": "8.5.29"
     }
   }

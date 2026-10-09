@@ -12,6 +12,22 @@ jobs:
   quality:
     name: Quality and builds
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://mtg_rules:local-dev-only@localhost:5432/mtg_rules_lawyer
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mtg_rules_lawyer
+          POSTGRES_USER: mtg_rules
+          POSTGRES_PASSWORD: local-dev-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mtg_rules -d mtg_rules_lawyer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,8 +50,14 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check Prisma schema formatting
+        run: pnpm db:format && git diff --exit-code -- prisma/schema.prisma
+
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Reset and seed PostgreSQL
+        run: pnpm db:reset
 
       - name: Test
         run: pnpm test

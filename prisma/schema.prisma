@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SnapshotStatus {
+  CANDIDATE
+  ACTIVE
+  RETIRED
+}
+
+enum SourceKind {
+  COMPREHENSIVE_RULES
+  ORACLE_CARDS
+  OFFICIAL_RULINGS
+}
+
+enum QuestionStatus {
+  SUBMITTED
+  INTERPRETED
+  ANSWERED
+  NEEDS_INFORMATION
+}
+
+enum CardFaceRole {
+  FRONT
+  BACK
+  OTHER
+}
+
+enum RulingOutcome {
+  RESOLVED
+  CONDITIONAL
+  NEEDS_INFORMATION
+  UNCERTAIN
+}
+
+enum CitationKind {
+  RULE
+  CARD
+}
+
+enum AuthProvider {
+  GOOGLE
+  APPLE
+  GITHUB
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ChallengeStatus {
+  OPEN
+  NEEDS_INFORMATION
+  APPROVED
+  REJECTED
+}
+
+enum ReviewDecision {
+  REQUEST_INFORMATION
+  APPROVE
+  REJECT
+}
+
+enum UsageKind {
+  INTERPRETATION
+  RULING
+}
+
+model DataSnapshot {
+  id             String           @id @default(uuid()) @db.Uuid
+  version        String           @unique
+  status         SnapshotStatus   @default(CANDIDATE)
+  notes          String?          @db.Text
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  activatedAt    DateTime?        @db.Timestamptz(6)
+  sources        SourceSnapshot[]
+  rules          Rule[]
+  cards          Card[]
+  rulingVersions RulingVersion[]
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model SourceSnapshot {
+  id                String       @id @default(uuid()) @db.Uuid
+  snapshotId        String       @db.Uuid
+  kind              SourceKind
+  sourceUrl         String
+  sourceVersion     String?
+  sourcePublishedAt DateTime?    @db.Timestamptz(6)
+  importedAt        DateTime     @default(now()) @db.Timestamptz(6)
+  checksumSha256    String       @db.Char(64)
+  snapshot          DataSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, kind])
+  @@index([kind, importedAt(sort: Desc)])
+}
+
+model Rule {
+  id            String               @id @default(uuid()) @db.Uuid
+  snapshotId    String               @db.Uuid
+  number        String
+  text          String               @db.Text
+  sortOrder     Int
+  parentId      String?              @db.Uuid
+  snapshot      DataSnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  parent        Rule?                @relation("RuleTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      Rule[]               @relation("RuleTree")
+  referencesOut RuleCrossReference[] @relation("RuleReferenceSource")
+  referencesIn  RuleCrossReference[] @relation("RuleReferenceTarget")
+  citations     RulingCitation[]
+
+  @@unique([snapshotId, number])
+  @@index([snapshotId, sortOrder])
+  @@index([parentId])
+}
+
+model RuleCrossReference {
+  id         String @id @default(uuid()) @db.Uuid
+  fromRuleId String @db.Uuid
+  toRuleId   String @db.Uuid
+  fromRule   Rule   @relation("RuleReferenceSource", fields: [fromRuleId], references: [id], onDelete: Cascade)
+  toRule     Rule   @relation("RuleReferenceTarget", fields: [toRuleId], references: [id], onDelete: Cascade)
+
+  @@unique([fromRuleId, toRuleId])
+  @@index([toRuleId])
+}
+
+model Card {
+  id            String         @id @default(uuid()) @db.Uuid
+  snapshotId    String         @db.Uuid
+  oracleId      String
+  name          String
+  layout        String
+  typeLine      String         @default("")
+  oracleText    String         @default("") @db.Text
+  snapshot      DataSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  faces         CardFace[]
+  questionCards QuestionCard[]
+
+  @@unique([snapshotId, oracleId])
+  @@index([snapshotId, name])
+  @@index([name])
+}
+
+model CardFace {
+  id            String           @id @default(uuid()) @db.Uuid
+  cardId        String           @db.Uuid
+  faceIndex     Int
+  role          CardFaceRole     @default(OTHER)
+  name          String
+  manaCost      String           @default("")
+  typeLine      String           @default("")
+  oracleText    String           @default("") @db.Text
+  power         String?
+  toughness     String?
+  imageUri      String?
+  card          Card             @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  questionCards QuestionCard[]
+  citations     RulingCitation[]
+
+  @@unique([cardId, faceIndex])
+  @@unique([id, cardId])
+  @@index([name])
+}
+
+model Question {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String?        @db.Uuid
+  text           String         @db.Text
+  status         QuestionStatus @default(SUBMITTED)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
+  user           AppUser?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  confirmedCards QuestionCard[]
+  ruling         Ruling?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+}
+
+model QuestionCard {
+  id          String    @id @default(uuid()) @db.Uuid
+  questionId  String    @db.Uuid
+  cardId      String    @db.Uuid
+  faceId      String?   @db.Uuid
+  quantity    Int       @default(1)
+  position    Int
+  confirmedAt DateTime? @db.Timestamptz(6)
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  card        Card      @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  face        CardFace? @relation(fields: [faceId, cardId], references: [id, cardId], onDelete: Restrict)
+
+  @@unique([questionId, position])
+  @@index([cardId])
+  @@index([faceId])
+}
+
+model Ruling {
+  id         String          @id @default(uuid()) @db.Uuid
+  questionId String          @unique @db.Uuid
+  createdAt  DateTime        @default(now()) @db.Timestamptz(6)
+  question   Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versions   RulingVersion[]
+}
+
+model RulingVersion {
+  id               String           @id @default(uuid()) @db.Uuid
+  rulingId         String           @db.Uuid
+  snapshotId       String           @db.Uuid
+  version          Int
+  outcome          RulingOutcome
+  summary          String           @db.Text
+  reasoningSteps   Json
+  assumptions      String[]         @default([])
+  modelName        String?
+  promptVersion    String?
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  ruling           Ruling           @relation(fields: [rulingId], references: [id], onDelete: Cascade)
+  snapshot         DataSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  citations        RulingCitation[]
+  challenges       Challenge[]
+  correctedByEvent ReviewEvent?     @relation("CorrectedVersion")
+
+  @@unique([rulingId, version])
+  @@index([snapshotId, createdAt(sort: Desc)])
+}
+
+model RulingCitation {
+  id              String        @id @default(uuid()) @db.Uuid
+  rulingVersionId String        @db.Uuid
+  // The initial SQL migration enforces that only the matching source FK is set for each kind.
+  kind            CitationKind
+  ruleId          String?       @db.Uuid
+  cardFaceId      String?       @db.Uuid
+  label           String
+  excerpt         String        @db.Text
+  sourceUrl       String
+  rulingVersion   RulingVersion @relation(fields: [rulingVersionId], references: [id], onDelete: Cascade)
+  rule            Rule?         @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  cardFace        CardFace?     @relation(fields: [cardFaceId], references: [id], onDelete: Restrict)
+
+  @@index([ruleId])
+  @@index([cardFaceId])
+  @@index([rulingVersionId])
+}
+
+model AppUser {
+  id              String        @id @default(uuid()) @db.Uuid
+  authProvider    AuthProvider
+  providerSubject String
+  role            UserRole      @default(USER)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
+  questions       Question[]
+  challenges      Challenge[]
+  reviewEvents    ReviewEvent[]
+  usageWindows    UsageWindow[]
+
+  @@unique([authProvider, providerSubject])
+  @@index([role, createdAt])
+}
+
+model Challenge {
+  id              String          @id @default(uuid()) @db.Uuid
+  rulingVersionId String          @db.Uuid
+  userId          String          @db.Uuid
+  explanation     String          @db.Text
+  proposedOutcome RulingOutcome?
+  status          ChallengeStatus @default(OPEN)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(6)
+  rulingVersion   RulingVersion   @relation(fields: [rulingVersionId], references: [id], onDelete: Restrict)
+  user            AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reviewEvents    ReviewEvent[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@index([rulingVersionId])
+}
+
+model ReviewEvent {
+  id                 String           @id @default(uuid()) @db.Uuid
+  challengeId        String           @db.Uuid
+  reviewerId         String           @db.Uuid
+  decision           ReviewDecision
+  fromStatus         ChallengeStatus?
+  toStatus           ChallengeStatus
+  reason             String           @db.Text
+  correctedVersionId String?          @unique @db.Uuid
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  challenge          Challenge        @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  reviewer           AppUser          @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  correctedVersion   RulingVersion?   @relation("CorrectedVersion", fields: [correctedVersionId], references: [id], onDelete: Restrict)
+
+  @@index([challengeId, createdAt])
+  @@index([reviewerId, createdAt])
+}
+
+model UsageWindow {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String?   @db.Uuid
+  kind            UsageKind
+  principalHash   String
+  windowStartedAt DateTime  @db.Timestamptz(6)
+  windowEndsAt    DateTime  @db.Timestamptz(6)
+  unitsReserved   Int       @default(0)
+  unitsConsumed   Int       @default(0)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  user            AppUser?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([principalHash, kind, windowStartedAt])
+  @@index([userId, kind, windowStartedAt])
+  @@index([windowEndsAt])
+}
