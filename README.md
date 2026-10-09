@@ -29,7 +29,22 @@ Start the local database:
 docker compose up -d db
 ```
 
-The starter API does not connect to PostgreSQL yet. F05 adds Prisma and migrations; the `DATABASE_URL` and local database are prepared here for that task.
+The API's Prisma client and schema use this database. To create the tables and idempotent empty development snapshot, run:
+
+```powershell
+pnpm db:dev
+```
+
+Useful database commands:
+
+```powershell
+pnpm db:migrate # Apply checked-in migrations to a local or deployment database
+pnpm db:format  # Format the Prisma schema
+pnpm db:seed    # Recreate the idempotent local development seed
+pnpm db:reset   # Drop and recreate the local schema, apply migrations, and seed
+```
+
+`db:reset` deletes data in the configured database. Use it only with the local database above, never with a shared or production URL. The seed snapshot is an empty candidate; it contains no rules or card data.
 
 In one terminal, start the API:
 
