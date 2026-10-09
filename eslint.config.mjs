@@ -1,4 +1,5 @@
 import eslint from "@eslint/js";
+import prettier from "eslint-config-prettier";
 import importX from "eslint-plugin-import-x";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -37,8 +38,14 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
-    files: ["apps/mobile/**/*.tsx"],
-    languageOptions: { globals: globals.browser },
+    files: ["apps/mobile/**/*.{ts,tsx}"],
+    languageOptions: {
+      globals: {
+        __DEV__: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+      },
+    },
     plugins: { react, "react-hooks": reactHooks },
     settings: { react: { version: "detect" } },
     rules: {
@@ -58,4 +65,5 @@ export default tseslint.config(
     rules: { "no-unused-vars": ["error", { argsIgnorePattern: "^_" }] },
   },
   { files: ["**/*.mjs", "**/*.js"], languageOptions: { globals: globals.node } },
+  prettier,
 );
