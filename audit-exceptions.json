@@ -1,0 +1,18 @@
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "reason": "The advisory has no patched release. It is currently transitive through Expo's Metro file watcher; remove this exception when upstream publishes a fix or the dependency path changes."
+  },
+  {
+    "id": "GHSA-86w9-cpqp-85rv",
+    "reason": "The advisory has no patched release. It is currently transitive through Expo's Xcode tooling; remove this exception when upstream publishes a fix or the dependency path changes."
+  },
+  {
+    "id": "GHSA-5p2g-fcmc-qvqq",
+    "reason": "Expo SDK 54's Metro 0.83.3 expects the image-size 1.x API; forcing patched image-size 2.x breaks Expo exports. Upgrade Expo/Metro to a compatible release before removing this exception."
+  },
+  {
+    "id": "GHSA-w3rx-r6r6-pgpr",
+    "reason": "Expo SDK 54's Metro 0.83.3 expects the image-size 1.x API; forcing patched image-size 2.x breaks Expo exports. Upgrade Expo/Metro to a compatible release before removing this exception."
+  }
+]

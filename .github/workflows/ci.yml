@@ -50,7 +50,7 @@ jobs:
         run: pnpm --filter @mtg-rules/mobile build
 
       - name: Audit dependencies
-        run: pnpm audit --audit-level critical
+        run: pnpm audit:check
 
   secrets:
     name: Secret scan
