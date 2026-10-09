@@ -6,7 +6,7 @@ This is the implementation checklist for the [development plan](DEVELOPMENT_PLAN
 
 ## Foundation
 
-- [ ] **F01 — Scaffold the repository.** Create the Expo Router app (`apps/mobile`), Fastify API (`apps/api`), shared schema package (`packages/contracts`), package-manager workspace, lockfile, and starter scripts. **Done:** both processes start locally and the app can call a health endpoint.
+- [x] **F01 — Scaffold the repository.** Create the Expo Router app (`apps/mobile`), Fastify API (`apps/api`), shared schema package (`packages/contracts`), package-manager workspace, lockfile, and starter scripts. **Done:** both processes start locally and the app can call a health endpoint.
 - [ ] **F02 — Set code quality defaults** (F01). Enable strict TypeScript, separate Expo/React Native and Node ESLint configs with type-aware rules, Prettier, and documented `lint`, `format:check`, `typecheck`, `test`, and `build` commands. **Done:** every command passes on the starter repo and an intentional lint/type error fails CI locally.
 - [ ] **F03 — Add CI and repository hygiene** (F02). Run formatting, lint, typecheck, tests, API build, Expo export/config checks, dependency audit, and secret scanning on PRs. Add `.gitignore`, `.env.example`, and dependency update configuration. **Done:** a clean PR passes and a bad formatting or secret fixture is caught.
 - [ ] **F04 — Document contributor setup** (F01–F03). Write `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and an architecture map with local API/app/database setup, source credits, and unofficial notice. **Done:** a contributor can start the project without private credentials or verbal guidance.

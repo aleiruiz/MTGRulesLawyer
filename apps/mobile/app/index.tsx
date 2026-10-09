@@ -24,7 +24,9 @@ export default function HomeScreen() {
         if (active) setMessage("API unavailable. Start the local API to connect.");
       });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
