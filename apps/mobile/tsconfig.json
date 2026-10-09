@@ -3,8 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "noEmit": true,
-    "allowJs": false,
-    "customConditions": []
+    "allowJs": false
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

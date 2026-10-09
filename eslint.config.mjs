@@ -24,7 +24,7 @@ export default tseslint.config(
     ...config,
     files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
   })),
-  ...tseslint.configs.recommended.map((config) => ({
+  ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
     files: ["apps/mobile/**/*.ts", "apps/mobile/**/*.tsx"],
   })),
@@ -55,10 +55,19 @@ export default tseslint.config(
     },
   },
   {
+    files: ["apps/mobile/**/*.ts", "apps/mobile/**/*.tsx"],
+    languageOptions: {
+      parserOptions: {
+        project: ["./apps/mobile/tsconfig.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
     languageOptions: { globals: globals.node },
   },
-  // Expo app files use React Native globals and Hooks rules. Strict type checking runs through tsc.
+  // Expo app files use React Native globals, Hooks rules, and typed TypeScript linting.
   {
     files: ["apps/mobile/**/*.{ts,tsx}"],
     languageOptions: {
