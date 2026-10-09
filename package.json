@@ -1,0 +1,12 @@
+{
+  "name": "mtg-rules-lawyer",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev:api": "pnpm --filter @mtg-rules/api dev",
+    "dev:mobile": "pnpm --filter @mtg-rules/mobile start",
+    "build": "pnpm -r build"
+  }
+}
