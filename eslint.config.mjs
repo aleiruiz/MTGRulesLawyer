@@ -7,17 +7,38 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/node_modules/**", "**/dist/**", "**/.expo/**", "coverage/**"] },
+  {
+    ignores: [
+      "**/node_modules",
+      "**/node_modules/**",
+      "node_modules/**",
+      "apps/mobile/node_modules/**",
+      "**/dist/**",
+      "**/.expo/**",
+      "coverage/**",
+    ],
+  },
   eslint.configs.recommended,
+  // API and contracts get type-aware server rules from their workspace tsconfigs.
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.ts", "**/*.tsx"],
+    files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
   })),
-  { files: ["**/*.ts", "**/*.tsx"], plugins: { "@typescript-eslint": tseslint.plugin } },
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ["apps/mobile/**/*.ts", "apps/mobile/**/*.tsx"],
+  })),
   {
     files: ["**/*.ts", "**/*.tsx"],
+    plugins: { "@typescript-eslint": tseslint.plugin },
+  },
+  {
+    files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
     languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+      parserOptions: {
+        project: ["./apps/*/tsconfig.json", "./packages/*/tsconfig.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     plugins: { "import-x": importX },
     rules: {
@@ -37,6 +58,7 @@ export default tseslint.config(
     files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
     languageOptions: { globals: globals.node },
   },
+  // Expo app files use React Native globals and Hooks rules. Strict type checking runs through tsc.
   {
     files: ["apps/mobile/**/*.{ts,tsx}"],
     languageOptions: {
@@ -51,6 +73,9 @@ export default tseslint.config(
     rules: {
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/consistent-type-imports": "error",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       // Expo uses the automatic JSX runtime, and TypeScript provides component prop checking.
       "react/react-in-jsx-scope": "off",
       "react/prop-types": "off",
