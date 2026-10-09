@@ -14,8 +14,8 @@
     "lint:fix": "eslint apps/mobile/app apps/api/src packages/contracts/src eslint.config.mjs --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm --filter @mtg-rules/api test"
+    "typecheck": "pnpm --filter @mtg-rules/contracts build && pnpm -r --if-present typecheck",
+    "test": "pnpm --filter @mtg-rules/contracts build && pnpm --filter @mtg-rules/api test"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
