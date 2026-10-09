@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { healthResponseSchema } from "@mtg-rules/contracts";
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+const localApiUrl = Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000";
+const apiUrl = process.env.EXPO_PUBLIC_API_URL || localApiUrl;
 
 export default function HomeScreen() {
   const [message, setMessage] = useState("Checking API…");
