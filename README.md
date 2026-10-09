@@ -2,7 +2,7 @@
 
 MTG Rules Lawyer is an unofficial Magic: The Gathering rules research assistant. The MVP is being built in small, reviewable tasks. The current starter app checks its Fastify API health endpoint; card imports, rulings, and database migrations are added in later tasks.
 
-This project is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast. Magic: The Gathering, its game rules, cards, and related marks belong to Wizards of the Coast LLC and their respective owners. Read the [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Planned card data sources include [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data); source use, attribution, and image-display requirements are tracked separately before importing or displaying that material.
+This project is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast. Magic: The Gathering, its game rules, cards, and related marks belong to Wizards of the Coast LLC and their respective owners. Read the [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Planned card data sources include [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data); see the [source and image use decision](docs/source-policy.md) for import, attribution, and display requirements.
 
 ## Start locally
 
