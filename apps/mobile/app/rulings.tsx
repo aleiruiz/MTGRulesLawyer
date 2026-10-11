@@ -139,7 +139,7 @@ export default function PublicRulingScreen() {
             <Link href="/" style={styles.link}>
               Ask a rules question
             </Link>
-            <ChallengeForm rulingId={ruling.rulingId} />
+            {version === undefined ? <ChallengeForm rulingId={ruling.rulingId} /> : null}
           </View>
         ) : null}
       </ScrollView>
