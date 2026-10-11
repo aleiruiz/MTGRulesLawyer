@@ -103,6 +103,10 @@ The Expo build exports Android, iOS, and web bundles. It does not create install
 
 See [docs/architecture.md](docs/architecture.md) for the workspace map, runtime boundaries, and planned data flow. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and pull request checklist.
 
+### Optional OpenAI adapter smoke test
+
+The API starts without an OpenAI key. Model credentials are read only when a server-side model request is created; never set them with an `EXPO_PUBLIC_` prefix. Copy `.env.example` to `.env` and set a valid `OPENAI_API_KEY` only when running the opt-in provider smoke test. The default model is `gpt-6-luna`; timeout and output token limits are bounded by the API configuration. Run `pnpm --filter @mtg-rules/api exec tsx --test src/ai/openai.test.ts` for mocked adapter tests, or set `RUN_OPENAI_SMOKE_TEST=true` and run that command to include one live request.
+
 ## Security
 
 Do not commit API keys, OAuth credentials, database passwords, or populated `.env` files. Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
