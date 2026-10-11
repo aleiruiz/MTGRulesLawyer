@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import {
   CardFaceRole,
@@ -13,6 +18,9 @@ import { describe, it } from "node:test";
 import { PrismaOracleSnapshotWriter } from "../cards/oracle-import.js";
 import { PrismaRulesSnapshotWriter } from "../rules/import.js";
 import { assembleEvidence } from "../search/retrieval.js";
+import { getSourceStatus } from "../sources/status.js";
+import { ORACLE_METADATA_URL, refreshAllSources } from "../sources/refresh.js";
+import type { OracleBulkMetadata } from "../cards/source.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 
@@ -20,6 +28,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
   void it("keeps the last good snapshot active on failure and retains old citations on refresh", async () => {
     const prisma = new PrismaClient();
     const testSnapshots: string[] = [];
+    const testRefreshLogIds: string[] = [];
     let questionId: string | undefined;
     const originallyActive = await prisma.dataSnapshot.findMany({
       where: { status: SnapshotStatus.ACTIVE },
@@ -224,9 +233,96 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
           .snapshotId,
         oracle.id,
       );
+
+      let downloadedOracleFiles = 0;
+      const metadata: OracleBulkMetadata = {
+        updatedAt: new Date("2026-10-12T00:00:00.000Z"),
+        sourceUrl: ORACLE_METADATA_URL,
+        downloadUrl: "https://data.scryfall.io/oracle-cards.jsonl.gz",
+        declaredSize: null,
+      };
+      const oracleFileContents = gzipSync(
+        `${JSON.stringify({
+          oracle_id: `d06-card-${randomUUID()}`,
+          name: "D06 Refresh Fixture",
+          layout: "normal",
+          type_line: "Creature",
+          oracle_text: "This is a source refresh fixture.",
+        })}\n`,
+      );
+      const refreshDependencies = {
+        fetchRulesDocument: () =>
+          Promise.resolve({
+            sourceUrl: "https://media.wizards.com/test-rules.txt",
+            text: refreshRulesDocument(),
+          }),
+        fetchOracleMetadata: () => Promise.resolve(metadata),
+        downloadOracleBulk: async (sourceMetadata: OracleBulkMetadata) => {
+          downloadedOracleFiles += 1;
+          const directory = await mkdtemp(join(tmpdir(), "d06-oracle-fixture-"));
+          const filePath = join(directory, "oracle-cards.jsonl.gz");
+          await writeFile(filePath, oracleFileContents);
+          return {
+            metadata: sourceMetadata,
+            filePath,
+            checksumSha256: createHash("sha256").update(oracleFileContents).digest("hex"),
+            byteLength: oracleFileContents.byteLength,
+          };
+        },
+        removeDownloadedOracleBulk: async (download: { filePath: string }) => {
+          await rm(dirname(download.filePath), { recursive: true, force: true });
+        },
+        minimumRuleCount: 10,
+        minimumOracleCardCount: 1,
+      };
+      const firstRefresh = await refreshAllSources(prisma, refreshDependencies);
+      assert.deepEqual(
+        firstRefresh.map(({ status }) => status),
+        ["IMPORTED", "IMPORTED"],
+      );
+      const refreshedSnapshot = await prisma.dataSnapshot.findFirstOrThrow({
+        where: { status: SnapshotStatus.ACTIVE },
+      });
+      const refreshSnapshots = await prisma.dataSnapshot.findMany({
+        where: {
+          version: {
+            in: firstRefresh.flatMap(({ snapshotVersion }) =>
+              snapshotVersion ? [snapshotVersion] : [],
+            ),
+          },
+        },
+        select: { id: true },
+      });
+      testSnapshots.push(...refreshSnapshots.map(({ id }) => id));
+      const secondRefresh = await refreshAllSources(prisma, refreshDependencies);
+      assert.deepEqual(
+        secondRefresh.map(({ status }) => status),
+        ["UNCHANGED", "UNCHANGED"],
+      );
+      assert.equal(downloadedOracleFiles, 1, "unchanged Oracle metadata skips the bulk download");
+      const failedRefresh = await refreshAllSources(prisma, {
+        ...refreshDependencies,
+        fetchRulesDocument: () => Promise.reject(new Error("synthetic source outage")),
+      });
+      assert.equal(failedRefresh[0]?.status, "FAILED");
+      const sourceStatus = await getSourceStatus(prisma);
+      assert.equal(sourceStatus.activeSnapshot?.id, refreshedSnapshot.id);
+      assert.equal(
+        sourceStatus.sources.find(({ kind }) => kind === "COMPREHENSIVE_RULES")?.stale,
+        true,
+        "a failed refresh raises the stale-source signal",
+      );
+      const recentLogs = await prisma.sourceRefreshLog.findMany({
+        where: { kind: { in: [SourceKind.COMPREHENSIVE_RULES, SourceKind.ORACLE_CARDS] } },
+        orderBy: { checkedAt: "desc" },
+        take: 6,
+        select: { id: true },
+      });
+      testRefreshLogIds.push(...recentLogs.map(({ id }) => id));
     } finally {
       try {
         if (questionId) await prisma.question.deleteMany({ where: { id: questionId } });
+        await prisma.sourceRefreshLog.deleteMany({ where: { id: { in: testRefreshLogIds } } });
         await prisma.rulingCitation.deleteMany({
           where: { rulingVersion: { snapshotId: { in: testSnapshots } } },
         });
@@ -330,6 +426,22 @@ function fixtureRules(refreshed = false, overloadSearch = false) {
     }
   }
   return rules;
+}
+
+function refreshRulesDocument(): string {
+  return [
+    "Magic: The Gathering Comprehensive Rules",
+    "These rules are effective as of October 10, 2026.",
+    "Contents",
+    "Credits",
+    "1. Game Concepts",
+    ...[100, 200, 300, 400, 500, 600, 700, 800, 900].flatMap((section) => [
+      `${section}. Section`,
+      `${section}.1. D06 synthetic refresh rule ${section}.`,
+    ]),
+    "Glossary",
+    "Synthetic glossary entry.",
+  ].join("\n");
 }
 
 function oneCard() {

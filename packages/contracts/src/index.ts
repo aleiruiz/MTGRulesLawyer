@@ -106,3 +106,25 @@ export const evidenceSearchResponseSchema = z.object({
 });
 
 export type EvidenceSearchResponse = z.infer<typeof evidenceSearchResponseSchema>;
+
+export const sourceStatusResponseSchema = z.object({
+  activeSnapshot: z
+    .object({ id: z.string(), version: z.string(), activatedAt: z.string().datetime().nullable() })
+    .nullable(),
+  staleAfterHours: z.number().int().positive(),
+  sources: z.array(
+    z.object({
+      kind: z.enum(["COMPREHENSIVE_RULES", "ORACLE_CARDS"]),
+      sourceUrl: z.string().url(),
+      sourceVersion: z.string().nullable(),
+      checksumSha256: z.string().length(64).nullable(),
+      importedAt: z.string().datetime().nullable(),
+      checkedAt: z.string().datetime().nullable(),
+      lastStatus: z.enum(["RUNNING", "UNCHANGED", "IMPORTED", "FAILED"]).nullable(),
+      lastError: z.string().max(500).nullable(),
+      stale: z.boolean(),
+    }),
+  ),
+});
+
+export type SourceStatusResponse = z.infer<typeof sourceStatusResponseSchema>;

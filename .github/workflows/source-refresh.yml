@@ -1,0 +1,41 @@
+name: Source refresh
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    name: Refresh and check source freshness
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SOURCE_STALE_AFTER_HOURS: ${{ vars.SOURCE_STALE_AFTER_HOURS || '72' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply source tracking migrations
+        run: pnpm db:migrate
+
+      - name: Check sources and activate changes
+        run: pnpm sources:refresh
+
+      - name: Alert on stale sources or failed refreshes
+        run: pnpm sources:check

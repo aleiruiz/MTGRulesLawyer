@@ -51,9 +51,15 @@ With the local database running, populate private development source snapshots f
 ```powershell
 pnpm rules:import  # Fetch and validate the current Comprehensive Rules TXT
 pnpm oracle:import # Download and import the current Scryfall Oracle Cards bulk file
+pnpm sources:refresh # Check both sources and safely activate any changes
+pnpm sources:check   # Fail when source checks are stale or the last refresh failed
 ```
 
 These commands require network access but no API credentials. They store source metadata and checksums in PostgreSQL and keep the full bulk files in temporary local storage only. Keep imported rules and Oracle text private; see [the source use decision](docs/source-policy.md) before exposing source material or image references publicly. Exact face names can be looked up locally at GET /api/cards/lookup?name=Dauntless%20Avenger.
+
+`pnpm sources:refresh` records each source check as `RUNNING`, `UNCHANGED`, `IMPORTED`, or `FAILED` in PostgreSQL. It checks rules by content checksum and checks Scryfall's Oracle Cards update timestamp before downloading the bulk file. `GET /api/sources/status` reports the active snapshot, source versions, last check, and stale status without returning imported rules or card text. The stale threshold defaults to 72 hours and can be changed with `SOURCE_STALE_AFTER_HOURS`.
+
+The daily GitHub Actions refresh can be enabled by setting the repository Actions secret `DATABASE_URL` to the deployed PostgreSQL connection string. Run database migrations as part of deployment before enabling it. The scheduled and manually dispatched workflow applies pending migrations, checks both upstream sources, activates validated changes, and fails visibly in Actions on import errors or stale sources. It does not need OpenAI or OAuth credentials.
 
 In one terminal, start the API:
 

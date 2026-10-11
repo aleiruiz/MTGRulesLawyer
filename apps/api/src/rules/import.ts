@@ -138,8 +138,9 @@ export async function importRulesText(
   sourceUrl: string,
   writer: RulesSnapshotWriter,
   importedAt = new Date(),
+  minimumRuleCount = 1000,
 ): Promise<ImportRulesResult> {
-  const parsed = parseRulesDocument(text);
+  const parsed = parseRulesDocument(text, minimumRuleCount);
   const checksumSha256 = createHash("sha256").update(text, "utf8").digest("hex");
   const datePart = parsed.effectiveAt.toISOString().slice(0, 10).replaceAll("-", "");
   const version = `rules-${datePart}-${checksumSha256.slice(0, 12)}`;
