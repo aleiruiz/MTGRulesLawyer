@@ -57,7 +57,7 @@ export default function PublicRulingScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.notice}>
-          This fan content is unofficial Fan Content permitted under the Fan Content Policy. Not
+          Rules Lens is unofficial Fan Content permitted under the Fan Content Policy. Not
           approved/endorsed by Wizards. Portions of the materials used are property of Wizards of
           the Coast. ©Wizards of the Coast LLC.
         </Text>
