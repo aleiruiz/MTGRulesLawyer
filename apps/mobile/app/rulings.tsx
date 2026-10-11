@@ -9,7 +9,7 @@ const rulingIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function PublicRulingScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, version } = useLocalSearchParams<{ id?: string; version?: string }>();
   const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,11 @@ export default function PublicRulingScreen() {
     setRuling(null);
     setError(null);
 
-    if (typeof id !== "string" || !rulingIdPattern.test(id)) {
+    if (
+      typeof id !== "string" ||
+      !rulingIdPattern.test(id) ||
+      (version !== undefined && (!/^\d+$/.test(version) || Number(version) < 1))
+    ) {
       setError("This ruling link is invalid.");
       setLoading(false);
       return () => {
@@ -28,7 +32,8 @@ export default function PublicRulingScreen() {
     }
 
     setLoading(true);
-    void fetch(`${apiUrl}/api/rulings/${encodeURIComponent(id)}`)
+    const versionQuery = version === undefined ? "" : `?version=${encodeURIComponent(version)}`;
+    void fetch(`${apiUrl}/api/rulings/${encodeURIComponent(id)}${versionQuery}`)
       .then(async (response) => {
         if (response.status === 404) throw new Error("This ruling could not be found.");
         if (!response.ok) throw new Error("The ruling is temporarily unavailable.");
@@ -51,7 +56,7 @@ export default function PublicRulingScreen() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, version]);
 
   return (
     <SafeAreaView style={styles.safeArea}>

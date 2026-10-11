@@ -50,7 +50,7 @@ export async function submitChallenge(
         select: {
           id: true,
           question: { select: { text: true } },
-          versions: { orderBy: { version: "desc" }, take: 1, select: { id: true } },
+          versions: { orderBy: { version: "desc" }, take: 1, select: { id: true, version: true } },
         },
       });
       const currentVersion = ruling?.versions[0];
@@ -85,9 +85,18 @@ export async function submitChallenge(
           updatedAt: true,
         },
       });
-      return { ...challenge, rulingId: ruling.id, question: ruling.question.text };
+      return {
+        ...challenge,
+        rulingId: ruling.id,
+        rulingVersion: currentVersion.version,
+        question: ruling.question.text,
+      };
     });
-    return serializeChallenge({ ...row, latestInformationRequest: null });
+    return serializeChallenge({
+      ...row,
+      latestInformationRequest: null,
+      latestDecision: null,
+    });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new DuplicateChallengeError();
@@ -112,13 +121,21 @@ export async function listMyChallenges(
       createdAt: true,
       updatedAt: true,
       reviewEvents: {
-        where: { decision: "REQUEST_INFORMATION" },
+        where: { decision: { in: ["REQUEST_INFORMATION", "APPROVE", "REJECT"] } },
         orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { reason: true, createdAt: true },
+        take: 50,
+        select: {
+          decision: true,
+          reason: true,
+          createdAt: true,
+          correctedVersion: { select: { rulingId: true, version: true } },
+        },
       },
       rulingVersion: {
-        select: { ruling: { select: { id: true, question: { select: { text: true } } } } },
+        select: {
+          version: true,
+          ruling: { select: { id: true, question: { select: { text: true } } } },
+        },
       },
     },
   });
@@ -127,8 +144,17 @@ export async function listMyChallenges(
       serializeChallenge({
         ...challenge,
         rulingId: challenge.rulingVersion.ruling.id,
+        rulingVersion: challenge.rulingVersion.version,
         question: challenge.rulingVersion.ruling.question.text,
-        latestInformationRequest: challenge.reviewEvents[0] ?? null,
+        latestInformationRequest:
+          challenge.status === "NEEDS_INFORMATION"
+            ? (challenge.reviewEvents.find((event) => event.decision === "REQUEST_INFORMATION") ??
+              null)
+            : null,
+        latestDecision:
+          challenge.reviewEvents.flatMap((event) =>
+            event.decision === "APPROVE" || event.decision === "REJECT" ? [event] : [],
+          )[0] ?? null,
       }),
     ),
   });
@@ -137,6 +163,7 @@ export async function listMyChallenges(
 function serializeChallenge(challenge: {
   id: string;
   rulingId: string;
+  rulingVersion: number;
   question: string;
   explanation: string;
   proposedOutcome: RulingOutcome | null;
@@ -144,11 +171,18 @@ function serializeChallenge(challenge: {
   createdAt: Date;
   updatedAt: Date;
   latestInformationRequest: { reason: string; createdAt: Date } | null;
+  latestDecision: {
+    decision: string;
+    reason: string;
+    createdAt: Date;
+    correctedVersion: { rulingId: string; version: number } | null;
+  } | null;
 }): ChallengeResponse {
   const outcome = challenge.proposedOutcome?.toLowerCase();
   return challengeResponseSchema.parse({
     challengeId: challenge.id,
     rulingId: challenge.rulingId,
+    rulingVersion: challenge.rulingVersion,
     question: challenge.question,
     explanation: challenge.explanation,
     proposedOutcome:
@@ -163,6 +197,15 @@ function serializeChallenge(challenge: {
       ? {
           reason: challenge.latestInformationRequest.reason,
           createdAt: challenge.latestInformationRequest.createdAt.toISOString(),
+        }
+      : null,
+    latestDecision: challenge.latestDecision
+      ? {
+          decision: challenge.latestDecision.decision.toLowerCase(),
+          reason: challenge.latestDecision.reason,
+          createdAt: challenge.latestDecision.createdAt.toISOString(),
+          correctedRulingId: challenge.latestDecision.correctedVersion?.rulingId ?? null,
+          correctedRulingVersion: challenge.latestDecision.correctedVersion?.version ?? null,
         }
       : null,
     createdAt: challenge.createdAt.toISOString(),

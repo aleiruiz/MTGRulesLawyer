@@ -1,7 +1,10 @@
 import { ChallengeStatus, ReviewDecision, type PrismaClient } from "@prisma/client";
 import {
   confirmedQuestionEvidenceRequestSchema,
+  reviewDecisionResponseSchema,
   reviewQueueResponseSchema,
+  type ReviewDecisionRequest,
+  type ReviewDecisionResponse,
   type ReviewQueueResponse,
 } from "@mtg-rules/contracts";
 import { prisma } from "../db/client.js";
@@ -85,6 +88,7 @@ export async function getReviewQueue(client: PrismaClient = prisma): Promise<Rev
       const challenge = {
         challengeId: row.id,
         rulingId,
+        rulingVersion: version.version,
         question,
         explanation: row.explanation,
         proposedOutcome: row.proposedOutcome?.toLowerCase() ?? null,
@@ -95,6 +99,7 @@ export async function getReviewQueue(client: PrismaClient = prisma): Promise<Rev
               createdAt: row.reviewEvents[0].createdAt.toISOString(),
             }
           : null,
+        latestDecision: null,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       };
@@ -168,6 +173,124 @@ export async function requestMoreInformation(
         toStatus: ChallengeStatus.NEEDS_INFORMATION,
         reason,
       },
+    });
+  });
+}
+
+export async function decideChallenge(
+  challengeId: string,
+  reviewerId: string,
+  decision: ReviewDecisionRequest,
+  client: PrismaClient = prisma,
+): Promise<ReviewDecisionResponse> {
+  return client.$transaction(async (tx) => {
+    const challengeReference = await tx.challenge.findUnique({
+      where: { id: challengeId },
+      select: { rulingVersion: { select: { rulingId: true } } },
+    });
+    if (!challengeReference) throw new ReviewChallengeNotFoundError();
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${challengeReference.rulingVersion.rulingId}, 1))::text`;
+    const challenge = await tx.challenge.findUnique({
+      where: { id: challengeId },
+      select: {
+        id: true,
+        status: true,
+        rulingVersion: {
+          select: {
+            rulingId: true,
+            snapshotId: true,
+            citations: {
+              select: {
+                kind: true,
+                ruleId: true,
+                cardFaceId: true,
+                label: true,
+                excerpt: true,
+                sourceUrl: true,
+                sourceSnapshotId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!challenge) throw new ReviewChallengeNotFoundError();
+    if (
+      challenge.status !== ChallengeStatus.OPEN &&
+      challenge.status !== ChallengeStatus.NEEDS_INFORMATION
+    ) {
+      throw new ReviewChallengeConflictError();
+    }
+
+    const toStatus =
+      decision.decision === "approve" ? ChallengeStatus.APPROVED : ChallengeStatus.REJECTED;
+    const updated = await tx.challenge.updateMany({
+      where: { id: challengeId, status: challenge.status },
+      data: { status: toStatus },
+    });
+    if (updated.count !== 1) throw new ReviewChallengeConflictError();
+
+    let correctedVersionId: string | null = null;
+    let correctedRulingVersion: number | null = null;
+    if (decision.decision === "approve") {
+      const latestVersion = await tx.rulingVersion.aggregate({
+        where: { rulingId: challenge.rulingVersion.rulingId },
+        _max: { version: true },
+      });
+      const evidenceIds = challenge.rulingVersion.citations
+        .map((citation) => citation.ruleId ?? citation.cardFaceId)
+        .filter((id): id is string => id !== null);
+      const corrected = await tx.rulingVersion.create({
+        data: {
+          rulingId: challenge.rulingVersion.rulingId,
+          snapshotId: challenge.rulingVersion.snapshotId,
+          version: (latestVersion._max.version ?? 0) + 1,
+          outcome: decision.correction.outcome.toUpperCase() as
+            "RESOLVED" | "CONDITIONAL" | "NEEDS_INFORMATION" | "UNCERTAIN",
+          summary: decision.correction.summary,
+          reasoningSteps: decision.correction.reasoningSteps.map((text) => ({
+            text,
+            citationIds: evidenceIds.slice(0, 8),
+          })),
+          assumptions: decision.correction.assumptions,
+          summaryCitationIds: evidenceIds.slice(0, 8),
+          clarificationQuestions: [],
+          modelName: "human-review",
+          promptVersion: "review-correction-v1",
+          citations: {
+            create: challenge.rulingVersion.citations.map((citation) => ({
+              kind: citation.kind,
+              ruleId: citation.ruleId,
+              cardFaceId: citation.cardFaceId,
+              label: citation.label,
+              excerpt: citation.excerpt,
+              sourceUrl: citation.sourceUrl,
+              sourceSnapshotId: citation.sourceSnapshotId,
+            })),
+          },
+        },
+        select: { id: true, version: true },
+      });
+      correctedVersionId = corrected.id;
+      correctedRulingVersion = corrected.version;
+    }
+
+    await tx.reviewEvent.create({
+      data: {
+        challengeId,
+        reviewerId,
+        decision: decision.decision === "approve" ? ReviewDecision.APPROVE : ReviewDecision.REJECT,
+        fromStatus: challenge.status,
+        toStatus,
+        reason: decision.reason,
+        correctedVersionId,
+      },
+    });
+    return reviewDecisionResponseSchema.parse({
+      challengeId,
+      status: toStatus.toLowerCase(),
+      correctedRulingId: decision.decision === "approve" ? challenge.rulingVersion.rulingId : null,
+      correctedRulingVersion,
     });
   });
 }

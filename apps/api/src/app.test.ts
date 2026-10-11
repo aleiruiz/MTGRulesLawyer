@@ -18,6 +18,8 @@ import type {
   ChallengeSubmissionRequest,
   MyChallengesResponse,
   ReviewQueueResponse,
+  ReviewDecisionRequest,
+  ReviewDecisionResponse,
 } from "@mtg-rules/contracts";
 
 const app = buildApp({
@@ -136,6 +138,7 @@ const receivedRulingRequests: Array<{
   signal?: AbortSignal;
 }> = [];
 let savedRulingResponse: PersistedRulingResponse | null = null;
+let requestedRulingVersion: number | undefined;
 const rulingApp = buildApp({
   generateRuling: (request, clientIp, signal) => {
     receivedRulingRequests.push({ request, clientIp, signal });
@@ -164,8 +167,10 @@ const rulingApp = buildApp({
     };
     return Promise.resolve(savedRulingResponse);
   },
-  getRuling: (rulingId) =>
-    Promise.resolve(rulingId === savedRulingResponse?.rulingId ? savedRulingResponse : null),
+  getRuling: (rulingId, version) => {
+    requestedRulingVersion = version;
+    return Promise.resolve(rulingId === savedRulingResponse?.rulingId ? savedRulingResponse : null);
+  },
 });
 
 const challengeRequests: Array<ChallengeSubmissionRequest & { rulingId: string; userId: string }> =
@@ -182,11 +187,13 @@ const challengeApp = buildApp({
     return Promise.resolve({
       challengeId: "00000000-0000-4000-8000-000000000002",
       rulingId: request.rulingId,
+      rulingVersion: 1,
       question: "Test question",
       explanation: request.explanation,
       proposedOutcome: request.proposedOutcome ?? null,
       status: "open",
       latestInformationRequest: null,
+      latestDecision: null,
       createdAt: "2026-10-11T00:00:00.000Z",
       updatedAt: "2026-10-11T00:00:00.000Z",
     } satisfies ChallengeResponse);
@@ -197,11 +204,13 @@ const challengeApp = buildApp({
         {
           challengeId: "00000000-0000-4000-8000-000000000002",
           rulingId: "00000000-0000-4000-8000-000000000001",
+          rulingVersion: 1,
           question: "Test question",
           explanation: `Owned by ${userId}`,
           proposedOutcome: null,
           status: "open",
           latestInformationRequest: null,
+          latestDecision: null,
           createdAt: "2026-10-11T00:00:00.000Z",
           updatedAt: "2026-10-11T00:00:00.000Z",
         },
@@ -210,6 +219,11 @@ const challengeApp = buildApp({
 });
 
 const reviewRequests: Array<{ challengeId: string; reviewerId: string; reason: string }> = [];
+const reviewDecisions: Array<{
+  challengeId: string;
+  reviewerId: string;
+  decision: ReviewDecisionRequest;
+}> = [];
 const reviewQueueFixture: ReviewQueueResponse = {
   challenges: [
     {
@@ -219,11 +233,13 @@ const reviewQueueFixture: ReviewQueueResponse = {
       challenge: {
         challengeId: "00000000-0000-4000-8000-000000000010",
         rulingId: "00000000-0000-4000-8000-000000000001",
+        rulingVersion: 1,
         question: "Does this interaction resolve?",
         explanation: "The answer may overlook a replacement effect.",
         proposedOutcome: "conditional",
         status: "open",
         latestInformationRequest: null,
+        latestDecision: null,
         createdAt: "2026-10-11T00:00:00.000Z",
         updatedAt: "2026-10-11T00:00:00.000Z",
       },
@@ -262,6 +278,16 @@ const reviewApp = buildApp({
   requestMoreInformation: (challengeId, reviewerId, reason) => {
     reviewRequests.push({ challengeId, reviewerId, reason });
     return Promise.resolve();
+  },
+  decideChallenge: (challengeId, reviewerId, decision): Promise<ReviewDecisionResponse> => {
+    reviewDecisions.push({ challengeId, reviewerId, decision });
+    return Promise.resolve({
+      challengeId,
+      status: decision.decision === "approve" ? "approved" : "rejected",
+      correctedRulingId:
+        decision.decision === "approve" ? "00000000-0000-4000-8000-000000000001" : null,
+      correctedRulingVersion: decision.decision === "approve" ? 2 : null,
+    });
   },
 });
 
@@ -378,6 +404,35 @@ void describe("admin challenge review routes", () => {
       url: `/api/admin/challenges/${challengeId}/request-information`,
       headers: { authorization: "Bearer user-token" },
       payload: { reason: "Please identify the replacement effect you believe applies." },
+    });
+    assert.equal(denied.statusCode, 403);
+  });
+
+  void it("accepts approved corrections and rejects non-admin decisions", async () => {
+    const challengeId = "00000000-0000-4000-8000-000000000010";
+    const response = await reviewApp.inject({
+      method: "POST",
+      url: `/api/admin/challenges/${challengeId}/decision`,
+      headers: { authorization: "Bearer admin-token" },
+      payload: {
+        decision: "approve",
+        reason: "The challenge correctly identifies the replacement effect.",
+        correction: {
+          outcome: "conditional",
+          summary: "The spell resolves conditionally when the replacement effect applies.",
+          reasoningSteps: ["Apply the replacement effect before determining the result."],
+          assumptions: [],
+        },
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json<ReviewDecisionResponse>().correctedRulingVersion, 2);
+    assert.equal(reviewDecisions[0]?.reviewerId, "admin-token");
+    const denied = await reviewApp.inject({
+      method: "POST",
+      url: `/api/admin/challenges/${challengeId}/decision`,
+      headers: { authorization: "Bearer user-token" },
+      payload: { decision: "reject", reason: "The challenged ruling is supported by evidence." },
     });
     assert.equal(denied.statusCode, 403);
   });
@@ -602,10 +657,22 @@ void describe("POST /api/questions/ruling", () => {
       url: `/api/rulings/${rulingId}`,
     });
     assert.equal(sharedResponse.statusCode, 200);
+    assert.equal(requestedRulingVersion, undefined);
     assert.equal(
       sharedResponse.json<PersistedRulingResponse>().question,
       "What happens when Fixture Creature attacks?",
     );
+    const originalVersionResponse = await rulingApp.inject({
+      method: "GET",
+      url: `/api/rulings/${rulingId}?version=1`,
+    });
+    assert.equal(originalVersionResponse.statusCode, 200);
+    assert.equal(requestedRulingVersion, 1);
+    const invalidVersionResponse = await rulingApp.inject({
+      method: "GET",
+      url: `/api/rulings/${rulingId}?version=0`,
+    });
+    assert.equal(invalidVersionResponse.statusCode, 400);
   });
 
   void it("returns 404 for an unknown shareable ruling ID", async () => {

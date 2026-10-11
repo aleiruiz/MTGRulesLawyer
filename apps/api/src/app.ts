@@ -24,6 +24,10 @@ import {
   reviewQueueResponseSchema,
   requestChallengeInformationSchema,
   type ReviewQueueResponse,
+  reviewDecisionRequestSchema,
+  reviewDecisionResponseSchema,
+  type ReviewDecisionRequest,
+  type ReviewDecisionResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
 import { lookupCardsByExactFaceName } from "./cards/lookup.js";
@@ -51,6 +55,7 @@ import {
   submitChallenge,
 } from "./challenges/service.js";
 import {
+  decideChallenge,
   getReviewQueue,
   requestMoreInformation,
   ReviewChallengeConflictError,
@@ -76,7 +81,7 @@ export interface BuildAppOptions {
     request: ConfirmedQuestionEvidenceRequest,
     answer: RulingGenerationResponse,
   ) => Promise<PersistedRulingResponse>;
-  getRuling?: (rulingId: string) => Promise<PersistedRulingResponse | null>;
+  getRuling?: (rulingId: string, version?: number) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
   checkDatabase?: () => Promise<void>;
   verifyAccessToken?: AccessTokenVerifier;
@@ -91,6 +96,11 @@ export interface BuildAppOptions {
     reviewerId: string,
     reason: string,
   ) => Promise<void>;
+  decideChallenge?: (
+    challengeId: string,
+    reviewerId: string,
+    decision: ReviewDecisionRequest,
+  ) => Promise<ReviewDecisionResponse>;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -124,7 +134,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
   const createRuling = options.generateRuling ?? generateRuling;
   const persistRuling = options.saveRuling ?? saveRuling;
-  const readRuling = options.getRuling ?? getRuling;
+  const readRuling =
+    options.getRuling ?? ((rulingId, version) => getRuling(rulingId, prisma, version));
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
   const checkDatabase =
     options.checkDatabase ?? (() => prisma.$queryRaw`SELECT 1`.then(() => undefined));
@@ -149,6 +160,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const readMyChallenges = options.listMyChallenges ?? listMyChallenges;
   const readReviewQueue = options.getReviewQueue ?? getReviewQueue;
   const requestChallengeInformation = options.requestMoreInformation ?? requestMoreInformation;
+  const decideReview = options.decideChallenge ?? decideChallenge;
 
   registerAuthentication(app, verifyAccessToken, resolveAppUser);
 
@@ -260,6 +272,34 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           "Review request could not be saved",
         );
         return reply.code(503).send({ error: "REVIEW_REQUEST_UNAVAILABLE" });
+      }
+    },
+  );
+  app.post<{ Params: { challengeId: string } }>(
+    "/api/admin/challenges/:challengeId/decision",
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.challengeId))
+        return reply.code(400).send({ error: "INVALID_CHALLENGE_ID" });
+      const parsed = reviewDecisionRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "INVALID_REVIEW_DECISION" });
+      try {
+        return reply.send(
+          reviewDecisionResponseSchema.parse(
+            await decideReview(request.params.challengeId, user.id, parsed.data),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof ReviewChallengeNotFoundError)
+          return reply.code(404).send({ error: "CHALLENGE_NOT_FOUND" });
+        if (error instanceof ReviewChallengeConflictError)
+          return reply.code(409).send({ error: "CHALLENGE_ALREADY_DECIDED" });
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Challenge decision could not be saved",
+        );
+        return reply.code(503).send({ error: "CHALLENGE_DECISION_UNAVAILABLE" });
       }
     },
   );
@@ -377,14 +417,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       disconnect.cleanup();
     }
   });
-  app.get<{ Params: { rulingId: string } }>("/api/rulings/:rulingId", async (request, reply) => {
-    if (!isUuid(request.params.rulingId)) {
-      return reply.code(400).send({ error: "INVALID_RULING_ID" });
-    }
-    const result = await readRuling(request.params.rulingId);
-    if (!result) return reply.code(404).send({ error: "RULING_NOT_FOUND" });
-    return reply.send(persistedRulingResponseSchema.parse(result));
-  });
+  app.get<{ Params: { rulingId: string }; Querystring: { version?: string } }>(
+    "/api/rulings/:rulingId",
+    async (request, reply) => {
+      if (!isUuid(request.params.rulingId)) {
+        return reply.code(400).send({ error: "INVALID_RULING_ID" });
+      }
+      const version =
+        request.query.version === undefined ? undefined : Number(request.query.version);
+      if (version !== undefined && (!Number.isSafeInteger(version) || version < 1)) {
+        return reply.code(400).send({ error: "INVALID_RULING_VERSION" });
+      }
+      const result = await readRuling(request.params.rulingId, version);
+      if (!result) return reply.code(404).send({ error: "RULING_NOT_FOUND" });
+      return reply.send(persistedRulingResponseSchema.parse(result));
+    },
+  );
   return app;
 }
 
