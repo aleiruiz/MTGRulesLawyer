@@ -2,6 +2,7 @@ import "react-native-url-polyfill/auto";
 import * as SecureStore from "expo-secure-store";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
+import { createChunkedSecureStorage } from "./chunked-secure-storage";
 import {
   hasSupabaseClientConfig,
   SUPABASE_PLACEHOLDER_PUBLISHABLE_KEY,
@@ -31,13 +32,14 @@ const secureStorage = {
   setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
+const chunkedSecureStorage = createChunkedSecureStorage(secureStorage);
 
 export const supabase = createClient(
   configuredUrl || SUPABASE_PLACEHOLDER_URL,
   configuredKey || SUPABASE_PLACEHOLDER_PUBLISHABLE_KEY,
   {
     auth: {
-      storage: Platform.OS === "web" ? webStorage : secureStorage,
+      storage: Platform.OS === "web" ? webStorage : chunkedSecureStorage,
       autoRefreshToken: true,
       detectSessionInUrl: false,
       flowType: "pkce",
