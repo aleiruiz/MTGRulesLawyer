@@ -23,6 +23,7 @@ import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/
 import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
 import { getRuling, saveRuling } from "./rulings/persistence.js";
+import { prisma } from "./db/client.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -45,6 +46,7 @@ export interface BuildAppOptions {
   ) => Promise<PersistedRulingResponse>;
   getRuling?: (rulingId: string) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
+  checkDatabase?: () => Promise<void>;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -80,12 +82,53 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const persistRuling = options.saveRuling ?? saveRuling;
   const readRuling = options.getRuling ?? getRuling;
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
+  const checkDatabase =
+    options.checkDatabase ?? (() => prisma.$queryRaw`SELECT 1`.then(() => undefined));
 
   void app.register(cors, { origin: true });
+  app.addHook("onResponse", (request, reply, done) => {
+    const statusCode = reply.statusCode;
+    const event = statusCode >= 500 ? "api.request.failed" : "api.request.completed";
+    const metadata = {
+      event,
+      method: request.method,
+      route: request.routeOptions.url ?? "unmatched",
+      statusCode,
+      durationMs: Math.round(reply.elapsedTime),
+    };
+    if (statusCode >= 500) request.log.error(metadata, "API request failed");
+    else if (statusCode >= 400) request.log.warn(metadata, "API request rejected");
+    else request.log.info(metadata, "API request completed");
+    done();
+  });
   app.get("/health", async (_request, reply) =>
     reply.send(healthResponseSchema.parse({ status: "ok", service: "mtg-rules-api" })),
   );
-  app.get("/api/sources/status", async (_request, reply) => reply.send(await readSourceStatus()));
+  app.get("/ready", async (request, reply) => {
+    try {
+      await checkDatabase();
+      return reply.send({ status: "ok", database: "ok" });
+    } catch {
+      request.log.error(
+        { event: "health.database_unavailable" },
+        "Database readiness check failed",
+      );
+      return reply.code(503).send({ status: "unavailable", database: "unavailable" });
+    }
+  });
+  app.get("/api/sources/status", async (request, reply) => {
+    const status = await readSourceStatus();
+    const staleSources = status.sources
+      .filter((source) => source.stale)
+      .map((source) => source.kind);
+    if (staleSources.length > 0) {
+      request.log.warn(
+        { event: "source.freshness.stale", sourceKinds: staleSources },
+        "One or more source snapshots need attention",
+      );
+    }
+    return reply.send(status);
+  });
   app.get<{ Querystring: { name?: string | string[] } }>(
     "/api/cards/lookup",
     async (request, reply) => {
@@ -108,7 +151,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.send(questionInterpretResponseSchema.parse(result));
     } catch (error) {
       if (disconnect.signal.aborted) return reply;
-      if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
+      if (error instanceof AiUsageLimitError) {
+        request.log.warn(
+          { event: "ai.usage.limit_reached", reason: error.code, statusCode: error.statusCode },
+          "AI request blocked by an operational limit",
+        );
+        return sendAiUsageLimitError(reply, error);
+      }
       request.log.error(
         { errorName: error instanceof Error ? error.name : "UnknownError" },
         "Question interpretation failed",
@@ -150,7 +199,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       );
     } catch (error) {
       if (disconnect.signal.aborted) return reply;
-      if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
+      if (error instanceof AiUsageLimitError) {
+        request.log.warn(
+          { event: "ai.usage.limit_reached", reason: error.code, statusCode: error.statusCode },
+          "AI request blocked by an operational limit",
+        );
+        return sendAiUsageLimitError(reply, error);
+      }
       if (error instanceof InvalidConfirmedCardsError) {
         return reply.code(400).send({ error: "CONFIRMED_CARD_UNAVAILABLE" });
       }

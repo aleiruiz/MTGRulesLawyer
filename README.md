@@ -42,9 +42,14 @@ pnpm db:migrate # Apply checked-in migrations to a local or deployment database
 pnpm db:format  # Format the Prisma schema
 pnpm db:seed    # Recreate the idempotent local development seed
 pnpm db:reset   # Drop and recreate the local schema, apply migrations, and seed
+pnpm db:backup  # Write a PostgreSQL custom-format dump under .backups/
+pnpm db:restore # Restore a dump into an explicit replacement database
+pnpm db:rehearse-restore # Verify dump/restore against a disposable database
 ```
 
 `db:reset` deletes data in the configured database. Use it only with the local database above, never with a shared or production URL. The seed snapshot is an empty candidate; it contains no rules or card data.
+
+See [operations and recovery](docs/operations.md) for health probes, monitoring events, cost alerts, and backup/restore instructions. Backup commands require PostgreSQL client tools; restore commands require an explicit confirmation and should target a replacement or disposable database.
 
 With the local database running, populate private development source snapshots from the official sources:
 
