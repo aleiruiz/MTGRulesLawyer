@@ -2,6 +2,7 @@ CREATE TYPE "SourceRefreshStatus" AS ENUM ('RUNNING', 'UNCHANGED', 'IMPORTED', '
 
 CREATE TABLE "SourceRefreshLog" (
     "id" UUID NOT NULL,
+    "runId" UUID NOT NULL,
     "kind" "SourceKind" NOT NULL,
     "status" "SourceRefreshStatus" NOT NULL DEFAULT 'RUNNING',
     "sourceUrl" TEXT NOT NULL,
@@ -17,3 +18,5 @@ CREATE TABLE "SourceRefreshLog" (
 
 CREATE INDEX "SourceRefreshLog_kind_checkedAt_idx"
 ON "SourceRefreshLog"("kind", "checkedAt" DESC);
+
+CREATE INDEX "SourceRefreshLog_runId_idx" ON "SourceRefreshLog"("runId");

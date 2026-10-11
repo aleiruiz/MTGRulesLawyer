@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient, SourceKind } from "@prisma/client";
 import { SourceRefreshStatus, SnapshotStatus } from "@prisma/client";
 import { prisma } from "../db/client.js";
@@ -49,23 +49,26 @@ interface RefreshOutcome {
 export async function refreshAllSources(
   client: PrismaClient = prisma,
   overrides: Partial<SourceRefreshDependencies> = {},
+  runId: ReturnType<typeof randomUUID> = randomUUID(),
 ): Promise<RefreshOutcome[]> {
   const dependencies = { ...defaultDependencies, ...overrides };
   const outcomes: RefreshOutcome[] = [];
   // Snapshot activation is serialized: each importer copies the other active dataset.
-  outcomes.push(await refreshRules(client, dependencies));
-  outcomes.push(await refreshOracle(client, dependencies));
+  outcomes.push(await refreshRules(client, dependencies, runId));
+  outcomes.push(await refreshOracle(client, dependencies, runId));
   return outcomes;
 }
 
 async function refreshRules(
   client: PrismaClient,
   dependencies: SourceRefreshDependencies,
+  runId: string,
 ): Promise<RefreshOutcome> {
   return runLoggedRefresh(
     client,
     "COMPREHENSIVE_RULES",
     "https://magic.wizards.com/en/rules",
+    runId,
     async () => {
       const active = await getActiveSource(client, "COMPREHENSIVE_RULES");
       const document = await dependencies.fetchRulesDocument();
@@ -104,8 +107,9 @@ async function refreshRules(
 async function refreshOracle(
   client: PrismaClient,
   dependencies: SourceRefreshDependencies,
+  runId: string,
 ): Promise<RefreshOutcome> {
-  return runLoggedRefresh(client, "ORACLE_CARDS", ORACLE_METADATA_URL, async () => {
+  return runLoggedRefresh(client, "ORACLE_CARDS", ORACLE_METADATA_URL, runId, async () => {
     const active = await getActiveSource(client, "ORACLE_CARDS");
     const metadata = await dependencies.fetchOracleMetadata();
     const activeSnapshot = await client.dataSnapshot.findFirst({
@@ -155,6 +159,7 @@ async function runLoggedRefresh(
   client: PrismaClient,
   kind: SourceKind,
   initialUrl: string,
+  runId: string,
   refresh: () => Promise<{
     sourceUrl: string;
     sourceVersion: string;
@@ -164,7 +169,7 @@ async function runLoggedRefresh(
   }>,
 ): Promise<RefreshOutcome> {
   const log = await client.sourceRefreshLog.create({
-    data: { kind, sourceUrl: initialUrl, status: SourceRefreshStatus.RUNNING },
+    data: { runId, kind, sourceUrl: initialUrl, status: SourceRefreshStatus.RUNNING },
   });
   try {
     const result = await refresh();

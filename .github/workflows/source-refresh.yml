@@ -38,4 +38,5 @@ jobs:
         run: pnpm sources:refresh
 
       - name: Alert on stale sources or failed refreshes
+        if: always()
         run: pnpm sources:check

@@ -28,7 +28,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
   void it("keeps the last good snapshot active on failure and retains old citations on refresh", async () => {
     const prisma = new PrismaClient();
     const testSnapshots: string[] = [];
-    const testRefreshLogIds: string[] = [];
+    const testRefreshRunIds = [randomUUID(), randomUUID(), randomUUID()] as const;
     let questionId: string | undefined;
     const originallyActive = await prisma.dataSnapshot.findMany({
       where: { status: SnapshotStatus.ACTIVE },
@@ -275,7 +275,11 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         minimumRuleCount: 10,
         minimumOracleCardCount: 1,
       };
-      const firstRefresh = await refreshAllSources(prisma, refreshDependencies);
+      const firstRefresh = await refreshAllSources(
+        prisma,
+        refreshDependencies,
+        testRefreshRunIds[0],
+      );
       assert.deepEqual(
         firstRefresh.map(({ status }) => status),
         ["IMPORTED", "IMPORTED"],
@@ -294,16 +298,24 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         select: { id: true },
       });
       testSnapshots.push(...refreshSnapshots.map(({ id }) => id));
-      const secondRefresh = await refreshAllSources(prisma, refreshDependencies);
+      const secondRefresh = await refreshAllSources(
+        prisma,
+        refreshDependencies,
+        testRefreshRunIds[1],
+      );
       assert.deepEqual(
         secondRefresh.map(({ status }) => status),
         ["UNCHANGED", "UNCHANGED"],
       );
       assert.equal(downloadedOracleFiles, 1, "unchanged Oracle metadata skips the bulk download");
-      const failedRefresh = await refreshAllSources(prisma, {
-        ...refreshDependencies,
-        fetchRulesDocument: () => Promise.reject(new Error("synthetic source outage")),
-      });
+      const failedRefresh = await refreshAllSources(
+        prisma,
+        {
+          ...refreshDependencies,
+          fetchRulesDocument: () => Promise.reject(new Error("synthetic source outage")),
+        },
+        testRefreshRunIds[2],
+      );
       assert.equal(failedRefresh[0]?.status, "FAILED");
       const sourceStatus = await getSourceStatus(prisma);
       assert.equal(sourceStatus.activeSnapshot?.id, refreshedSnapshot.id);
@@ -312,17 +324,12 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         true,
         "a failed refresh raises the stale-source signal",
       );
-      const recentLogs = await prisma.sourceRefreshLog.findMany({
-        where: { kind: { in: [SourceKind.COMPREHENSIVE_RULES, SourceKind.ORACLE_CARDS] } },
-        orderBy: { checkedAt: "desc" },
-        take: 6,
-        select: { id: true },
-      });
-      testRefreshLogIds.push(...recentLogs.map(({ id }) => id));
     } finally {
       try {
         if (questionId) await prisma.question.deleteMany({ where: { id: questionId } });
-        await prisma.sourceRefreshLog.deleteMany({ where: { id: { in: testRefreshLogIds } } });
+        await prisma.sourceRefreshLog.deleteMany({
+          where: { runId: { in: [...testRefreshRunIds] } },
+        });
         await prisma.rulingCitation.deleteMany({
           where: { rulingVersion: { snapshotId: { in: testSnapshots } } },
         });
