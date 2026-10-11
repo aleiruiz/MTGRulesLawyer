@@ -159,8 +159,20 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
   constructor(private readonly prisma: PrismaClient) {}
 
   async activateRulesSnapshot(input: RulesSnapshotInput): Promise<{ id: string; version: string }> {
+    assertValidRulesInput(input);
     return this.prisma.$transaction(
       async (transaction) => {
+        const active = await transaction.dataSnapshot.findFirst({
+          where: { status: SnapshotStatus.ACTIVE },
+          include: { sources: true },
+        });
+        const activeRulesSource = active?.sources.find(
+          (source) => source.kind === SourceKind.COMPREHENSIVE_RULES,
+        );
+        if (active && activeRulesSource?.checksumSha256 === input.checksumSha256) {
+          return { id: active.id, version: active.version };
+        }
+
         const existing = await transaction.dataSnapshot.findUnique({
           where: { version: input.version },
           select: { id: true, version: true, status: true },
@@ -182,6 +194,7 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
             version: input.version,
             status: SnapshotStatus.CANDIDATE,
             activatedAt: null,
+            notes: active?.notes ?? null,
             createdAt: input.importedAt,
           },
         });
@@ -225,6 +238,51 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
           });
         }
 
+        // A rules refresh must carry forward the active Oracle corpus. Both datasets
+        // belong to the same immutable snapshot used by new rulings.
+        const oracleSource = active?.sources.find(
+          (source) => source.kind === SourceKind.ORACLE_CARDS,
+        );
+        const cardCount = active
+          ? await transaction.card.count({ where: { snapshotId: active.id } })
+          : 0;
+        const faceCount = active
+          ? await transaction.cardFace.count({ where: { card: { snapshotId: active.id } } })
+          : 0;
+        if (active && oracleSource) {
+          await transaction.sourceSnapshot.create({
+            data: {
+              id: randomUUID(),
+              snapshotId,
+              kind: SourceKind.ORACLE_CARDS,
+              sourceUrl: oracleSource.sourceUrl,
+              sourceVersion: oracleSource.sourceVersion,
+              sourcePublishedAt: oracleSource.sourcePublishedAt,
+              importedAt: oracleSource.importedAt,
+              checksumSha256: oracleSource.checksumSha256,
+            },
+          });
+          await copyCards(transaction, active.id, snapshotId);
+        }
+
+        const [candidateRuleCount, candidateCardCount, candidateFaceCount, candidateSources] =
+          await Promise.all([
+            transaction.rule.count({ where: { snapshotId } }),
+            transaction.card.count({ where: { snapshotId } }),
+            transaction.cardFace.count({ where: { card: { snapshotId } } }),
+            transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
+          ]);
+        if (
+          candidateRuleCount !== input.rules.length ||
+          candidateCardCount !== (oracleSource ? cardCount : 0) ||
+          candidateFaceCount !== (oracleSource ? faceCount : 0) ||
+          !candidateSources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES) ||
+          (oracleSource &&
+            !candidateSources.some((source) => source.kind === SourceKind.ORACLE_CARDS))
+        ) {
+          throw new Error("Rules snapshot candidate failed count or source validation.");
+        }
+
         await transaction.dataSnapshot.updateMany({
           where: { status: SnapshotStatus.ACTIVE },
           data: { status: SnapshotStatus.RETIRED },
@@ -236,8 +294,74 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
 
         return { id: snapshotId, version: input.version };
       },
-      { isolationLevel: "Serializable" },
+      { isolationLevel: "Serializable", timeout: 120_000, maxWait: 10_000 },
     );
+  }
+}
+
+function assertValidRulesInput(input: RulesSnapshotInput): void {
+  const numbers = new Set(input.rules.map((rule) => rule.number));
+  if (numbers.size !== input.rules.length || input.rules.length === 0) {
+    throw new Error("Rules snapshot candidate must contain unique numbered rules.");
+  }
+  for (const rule of input.rules) {
+    if (
+      (rule.parentNumber && !numbers.has(rule.parentNumber)) ||
+      rule.references.some((reference) => !numbers.has(reference))
+    ) {
+      throw new Error(
+        `Rules snapshot candidate contains unresolved references in rule ${rule.number}.`,
+      );
+    }
+  }
+}
+
+async function copyCards(
+  transaction: Prisma.TransactionClient,
+  fromSnapshotId: string,
+  toSnapshotId: string,
+): Promise<void> {
+  const pageSize = 500;
+  let cursor: string | undefined;
+  while (true) {
+    const cards = await transaction.card.findMany({
+      where: { snapshotId: fromSnapshotId },
+      orderBy: { id: "asc" },
+      take: pageSize,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: { faces: { orderBy: { faceIndex: "asc" } } },
+    });
+    if (cards.length === 0) return;
+    const cardIds = new Map(cards.map((card) => [card.id, randomUUID()]));
+    await transaction.card.createMany({
+      data: cards.map((card) => ({
+        id: cardIds.get(card.id)!,
+        snapshotId: toSnapshotId,
+        oracleId: card.oracleId,
+        name: card.name,
+        layout: card.layout,
+        typeLine: card.typeLine,
+        oracleText: card.oracleText,
+      })),
+    });
+    await transaction.cardFace.createMany({
+      data: cards.flatMap((card) =>
+        card.faces.map((face) => ({
+          id: randomUUID(),
+          cardId: cardIds.get(card.id)!,
+          faceIndex: face.faceIndex,
+          role: face.role,
+          name: face.name,
+          manaCost: face.manaCost,
+          typeLine: face.typeLine,
+          oracleText: face.oracleText,
+          power: face.power,
+          toughness: face.toughness,
+          imageUri: face.imageUri,
+        })),
+      ),
+    });
+    cursor = cards[cards.length - 1].id;
   }
 }
 
