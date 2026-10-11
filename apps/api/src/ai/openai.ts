@@ -70,6 +70,13 @@ export type OpenAiLogger = (metadata: Record<string, unknown>, message: string) 
 export interface OpenAiAdapterOptions {
   transport?: OpenAiTransport;
   logger?: OpenAiLogger;
+  logWriter?: (line: string) => void;
+}
+
+function createDefaultLogger(writeLine: (line: string) => void): OpenAiLogger {
+  return (metadata, message) => {
+    writeLine(`${JSON.stringify({ level: "info", ...metadata, msg: message })}\n`);
+  };
 }
 
 function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
@@ -106,7 +113,9 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
 
 export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapterOptions = {}) {
   const transport = options.transport ?? createSdkTransport(config);
-  const log = options.logger ?? (() => undefined);
+  const log =
+    options.logger ??
+    createDefaultLogger(options.logWriter ?? ((line) => process.stdout.write(line)));
 
   return {
     async generateStructuredOutput<TSchema extends z.ZodType>(

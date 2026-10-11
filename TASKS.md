@@ -19,7 +19,7 @@ This is the implementation checklist for the [development plan](DEVELOPMENT_PLAN
 - [x] **D03 — Import Oracle cards** (F05). Consume the Scryfall Oracle Cards bulk file, including multi-face cards, Oracle IDs, text, names, and image references. **Done:** exact and alternate-face lookups work without calling Scryfall for each user request.
 - [x] **D04 — Make snapshot activation safe** (D02, D03). Import into a candidate snapshot, validate counts/schema, then atomically activate it; retain the previous version and its citation IDs. **Done:** a failed import leaves the last good snapshot active, and old rulings remain reconstructable.
 - [x] **D05 — Add local search and retrieval** (D02, D03). Index card names and rule text in PostgreSQL; implement exact card lookup, text search, rule cross-reference expansion, and bounded evidence assembly. **Done:** fixture questions retrieve the expected cards and rule sections with no third-party request.
-- [x] **D06 — Refresh sources automatically** (D04). Add a scheduled daily change check plus a manual refresh command, import logs, active snapshot metadata, and stale-source alert. **Done:** an unchanged source does no reimport, a changed source activates safely, and a failure is visible.
+- [ ] **D06 — Refresh sources automatically** (D04). Add a scheduled daily change check plus a manual refresh command, import logs, active snapshot metadata, and stale-source alert. **Done:** an unchanged source does no reimport, a changed source activates safely, and a failure is visible.
 
 ## Ruling experience and AI cost controls
 

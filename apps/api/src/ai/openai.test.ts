@@ -70,6 +70,29 @@ void describe("OpenAI structured output adapter", () => {
     );
   });
 
+  void it("uses safe version logging by default without logging prompt text", async () => {
+    const logLines: string[] = [];
+    const adapter = createOpenAiAdapter(config, {
+      logWriter: (line) => logLines.push(line),
+      transport: () =>
+        Promise.resolve({ outputText: JSON.stringify({ answer: "ok", confidence: "low" }) }),
+    });
+
+    await adapter.generateStructuredOutput({
+      schema: resultSchema,
+      schemaName: "test_answer",
+      systemPrompt: "Private system prompt.",
+      userPrompt: "Private user prompt.",
+      promptVersion: OPENAI_PROMPT_VERSION,
+    });
+
+    const logs = logLines.join("");
+    assert.match(logs, /gpt-6-luna/);
+    assert.match(logs, /rules-assistant-v1/);
+    assert.doesNotMatch(logs, /Private (system|user) prompt/);
+    assert.doesNotMatch(logs, /test-key/);
+  });
+
   void it("does not accept missing or placeholder credentials at call setup", () => {
     assert.throws(() => readOpenAiConfig({}), /OPENAI_API_KEY/);
     assert.throws(
