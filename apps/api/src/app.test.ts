@@ -5,6 +5,7 @@ import type {
   EvidenceSearchResponse,
   ConfirmedQuestionEvidenceRequest,
   RulingGenerationResponse,
+  PersistedRulingResponse,
   QuestionInterpretResponse,
   SourceStatusResponse,
 } from "@mtg-rules/contracts";
@@ -125,6 +126,7 @@ const receivedRulingRequests: Array<{
   request: ConfirmedQuestionEvidenceRequest;
   clientIp: string;
 }> = [];
+let savedRulingResponse: PersistedRulingResponse | null = null;
 const rulingApp = buildApp({
   generateRuling: (request, clientIp) => {
     receivedRulingRequests.push({ request, clientIp });
@@ -142,6 +144,19 @@ const rulingApp = buildApp({
       promptVersion: "test-prompt",
     } satisfies RulingGenerationResponse);
   },
+  saveRuling: (request, answer) => {
+    savedRulingResponse = {
+      rulingId: "00000000-0000-4000-8000-000000000001",
+      version: 1,
+      createdAt: "2026-10-11T00:00:00.000Z",
+      question: request.question,
+      confirmedCards: request.confirmedCards ?? [],
+      ruling: answer,
+    };
+    return Promise.resolve(savedRulingResponse);
+  },
+  getRuling: (rulingId) =>
+    Promise.resolve(rulingId === savedRulingResponse?.rulingId ? savedRulingResponse : null),
 });
 
 void describe("GET /api/sources/status", () => {
@@ -348,10 +363,37 @@ void describe("POST /api/questions/ruling", () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(response.json<RulingGenerationResponse>().outcome, "uncertain");
+    assert.equal(response.json<PersistedRulingResponse>().ruling.outcome, "uncertain");
     assert.equal(receivedRulingRequests[0]?.clientIp, "127.0.0.1");
     assert.deepEqual(receivedRulingRequests[0]?.request.confirmedCards, [
       { oracleId: "oracle-id", faceIndex: 0, quantity: 1 },
     ]);
+    const rulingId = response.json<PersistedRulingResponse>().rulingId;
+    const sharedResponse = await rulingApp.inject({
+      method: "GET",
+      url: `/api/rulings/${rulingId}`,
+    });
+    assert.equal(sharedResponse.statusCode, 200);
+    assert.equal(
+      sharedResponse.json<PersistedRulingResponse>().question,
+      "What happens when Fixture Creature attacks?",
+    );
+  });
+
+  void it("returns 404 for an unknown shareable ruling ID", async () => {
+    const response = await rulingApp.inject({
+      method: "GET",
+      url: "/api/rulings/00000000-0000-4000-8000-000000000099",
+    });
+    assert.equal(response.statusCode, 404);
+  });
+
+  void it("rejects malformed values that have the length of a UUID", async () => {
+    const response = await rulingApp.inject({
+      method: "GET",
+      url: `/api/rulings/${"-".repeat(36)}`,
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json<{ error: string }>().error, "INVALID_RULING_ID");
   });
 });

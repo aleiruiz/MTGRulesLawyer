@@ -19,11 +19,11 @@ import {
   MAX_CONFIRMED_CARDS,
   questionInterpretRequestSchema,
   questionInterpretResponseSchema,
-  rulingGenerationResponseSchema,
+  persistedRulingResponseSchema,
   type CardLookupResponse,
   type EvidenceSearchResponse,
   type QuestionInterpretResponse,
-  type RulingGenerationResponse,
+  type PersistedRulingResponse,
 } from "@mtg-rules/contracts";
 
 type Card = CardLookupResponse["cards"][number];
@@ -89,7 +89,7 @@ export default function QuestionConfirmationScreen() {
   const [evidence, setEvidence] = useState<EvidenceSearchResponse | null>(null);
   const [isGeneratingRuling, setIsGeneratingRuling] = useState(false);
   const [rulingError, setRulingError] = useState("");
-  const [ruling, setRuling] = useState<RulingGenerationResponse | null>(null);
+  const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
 
   function invalidateConfirmation() {
     evidenceRequestId.current += 1;
@@ -389,7 +389,7 @@ export default function QuestionConfirmationScreen() {
             : "Ruling generation failed";
         throw new Error(`${code}. Check the API connection and try again.`);
       }
-      const result = rulingGenerationResponseSchema.parse(body);
+      const result = persistedRulingResponseSchema.parse(body);
       if (requestId === rulingRequestId.current) setRuling(result);
     } catch (error) {
       if (requestId === rulingRequestId.current) {
@@ -765,22 +765,48 @@ export default function QuestionConfirmationScreen() {
                         {ruling ? (
                           <View accessibilityLiveRegion="polite" style={styles.factsBox}>
                             <Text style={styles.cardTitle}>
-                              Ruling: {ruling.outcome.replaceAll("_", " ")}
+                              Ruling: {ruling.ruling.outcome.replaceAll("_", " ")}
                             </Text>
-                            <Text>{ruling.summary}</Text>
-                            {ruling.summaryCitationIds.length > 0 ? (
+                            <Text>{ruling.ruling.summary}</Text>
+                            <Text selectable>Ruling ID: {ruling.rulingId}</Text>
+                            <Text selectable>
+                              {apiUrl}/api/rulings/{ruling.rulingId}
+                            </Text>
+                            <Text>
+                              Snapshot: {ruling.ruling.snapshot.version} ·{" "}
+                              {ruling.ruling.snapshot.activatedAt
+                                ? new Date(ruling.ruling.snapshot.activatedAt).toLocaleDateString()
+                                : "activation date unavailable"}
+                            </Text>
+                            {displayCards.length > 0 ? (
+                              <View
+                                accessibilityLabel="Cards in this ruling"
+                                style={styles.cardRow}
+                              >
+                                {displayCards.map(({ card }) => (
+                                  <Text key={card.oracleId}>
+                                    {card.name} · ×{counts[card.oracleId] ?? 1}
+                                  </Text>
+                                ))}
+                              </View>
+                            ) : null}
+                            {ruling.ruling.assumptions.map((item) => (
+                              <Text key={item}>Assumption: {item}</Text>
+                            ))}
+                            {ruling.ruling.summaryCitationIds.length > 0 ? (
                               <Text style={styles.helperText}>
                                 Summary evidence:{" "}
-                                {ruling.summaryCitationIds
-                                  .map(
-                                    (id) =>
-                                      ruling.citations.find((citation) => citation.id === id)
-                                        ?.label ?? id,
-                                  )
+                                {ruling.ruling.summaryCitationIds
+                                  .map((id) => {
+                                    const citationIndex = ruling.ruling.citations.findIndex(
+                                      (citation) => citation.id === id,
+                                    );
+                                    return `[${citationIndex + 1}] ${ruling.ruling.citations[citationIndex]?.label ?? id}`;
+                                  })
                                   .join(", ")}
                               </Text>
                             ) : null}
-                            {ruling.reasoningSteps.map((step, index) => (
+                            {ruling.ruling.reasoningSteps.map((step, index) => (
                               <View key={`${index}-${step.text}`}>
                                 <Text>
                                   {index + 1}. {step.text}
@@ -788,25 +814,44 @@ export default function QuestionConfirmationScreen() {
                                 <Text style={styles.helperText}>
                                   Evidence:{" "}
                                   {step.citationIds
-                                    .map(
-                                      (id) =>
-                                        ruling.citations.find((citation) => citation.id === id)
-                                          ?.label ?? id,
-                                    )
+                                    .map((id) => {
+                                      const citationIndex = ruling.ruling.citations.findIndex(
+                                        (citation) => citation.id === id,
+                                      );
+                                      return `[${citationIndex + 1}] ${ruling.ruling.citations[citationIndex]?.label ?? id}`;
+                                    })
                                     .join(", ")}
                                 </Text>
                               </View>
                             ))}
-                            {ruling.clarificationQuestions.map((item) => (
+                            {ruling.ruling.clarificationQuestions.map((item) => (
                               <Text key={item} style={styles.missingText}>
                                 {item}
                               </Text>
                             ))}
-                            {ruling.citations.map((citation) => (
+                            {ruling.ruling.citations.map((citation, index) => (
                               <Text key={citation.id} selectable>
-                                {citation.kind} {citation.label} · Source {citation.sourceId}
+                                [{index + 1}] {citation.kind} {citation.label} · Source{" "}
+                                {citation.sourceId}
+                                {"\n"}
+                                {citation.sourceUrl}
+                                {"\n"}
+                                {citation.excerpt}
                               </Text>
                             ))}
+                            <Pressable
+                              accessibilityRole="button"
+                              disabled={isGeneratingRuling}
+                              onPress={() => void generateVerifiedRuling()}
+                              style={[
+                                styles.secondaryButton,
+                                isGeneratingRuling && styles.disabledButton,
+                              ]}
+                            >
+                              <Text style={styles.secondaryButtonText}>
+                                Rerun ruling with current question and cards
+                              </Text>
+                            </Pressable>
                           </View>
                         ) : null}
                       </View>

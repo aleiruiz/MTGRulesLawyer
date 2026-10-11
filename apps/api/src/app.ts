@@ -10,9 +10,10 @@ import {
   type EvidenceSearchResponse,
   questionInterpretRequestSchema,
   questionInterpretResponseSchema,
-  rulingGenerationResponseSchema,
+  persistedRulingResponseSchema,
   type QuestionInterpretResponse,
   type RulingGenerationResponse,
+  type PersistedRulingResponse,
   type SourceStatusResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
@@ -21,6 +22,7 @@ import { interpretQuestion } from "./questions/interpret.js";
 import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/retrieval.js";
 import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
+import { getRuling, saveRuling } from "./rulings/persistence.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -32,6 +34,11 @@ export interface BuildAppOptions {
     request: ConfirmedQuestionEvidenceRequest,
     clientIp: string,
   ) => Promise<RulingGenerationResponse>;
+  saveRuling?: (
+    request: ConfirmedQuestionEvidenceRequest,
+    answer: RulingGenerationResponse,
+  ) => Promise<PersistedRulingResponse>;
+  getRuling?: (rulingId: string) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
 }
 
@@ -48,6 +55,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const interpret = options.interpretQuestion ?? interpretQuestion;
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
   const createRuling = options.generateRuling ?? generateRuling;
+  const persistRuling = options.saveRuling ?? saveRuling;
+  const readRuling = options.getRuling ?? getRuling;
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
 
   void app.register(cors, { origin: true });
@@ -109,7 +118,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     try {
       const result = await createRuling(parsed.data, request.ip);
-      return reply.send(rulingGenerationResponseSchema.parse(result));
+      return reply.send(
+        persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result)),
+      );
     } catch (error) {
       if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
       if (error instanceof InvalidConfirmedCardsError) {
@@ -121,6 +132,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       );
       return reply.code(502).send({ error: "RULING_GENERATION_UNAVAILABLE" });
     }
+  });
+  app.get<{ Params: { rulingId: string } }>("/api/rulings/:rulingId", async (request, reply) => {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        request.params.rulingId,
+      )
+    ) {
+      return reply.code(400).send({ error: "INVALID_RULING_ID" });
+    }
+    const result = await readRuling(request.params.rulingId);
+    if (!result) return reply.code(404).send({ error: "RULING_NOT_FOUND" });
+    return reply.send(persistedRulingResponseSchema.parse(result));
   });
   return app;
 }

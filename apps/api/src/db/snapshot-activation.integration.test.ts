@@ -75,6 +75,12 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
       const originalFace = await prisma.cardFace.findFirstOrThrow({
         where: { card: { snapshotId: oracle.id } },
       });
+      const rulesSource = await prisma.sourceSnapshot.findFirstOrThrow({
+        where: { snapshotId: oracle.id, kind: SourceKind.COMPREHENSIVE_RULES },
+      });
+      const cardsSource = await prisma.sourceSnapshot.findFirstOrThrow({
+        where: { snapshotId: oracle.id, kind: SourceKind.ORACLE_CARDS },
+      });
       const question = await prisma.question.create({ data: { text: "D04 snapshot test" } });
       questionId = question.id;
       const ruling = await prisma.ruling.create({ data: { questionId: question.id } });
@@ -97,6 +103,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
             label: originalRule.number,
             excerpt: originalRule.text,
             sourceUrl: "https://example.invalid/rules",
+            sourceSnapshotId: rulesSource.id,
           },
           {
             rulingVersionId: rulingVersion.id,
@@ -105,6 +112,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
             label: originalFace.name,
             excerpt: originalFace.oracleText,
             sourceUrl: "https://example.invalid/oracle",
+            sourceSnapshotId: cardsSource.id,
           },
         ],
       });
