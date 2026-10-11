@@ -286,15 +286,15 @@ model RulingCitation {
 }
 
 model AppUser {
-  id              String        @id @default(uuid()) @db.Uuid
-  supabaseUserId  String        @unique
-  role            UserRole      @default(USER)
-  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
-  questions       Question[]
-  challenges      Challenge[]
-  reviewEvents    ReviewEvent[]
-  usageWindows    UsageWindow[]
+  id             String        @id @default(uuid()) @db.Uuid
+  supabaseUserId String        @unique
+  role           UserRole      @default(USER)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  questions      Question[]
+  challenges     Challenge[]
+  reviewEvents   ReviewEvent[]
+  usageWindows   UsageWindow[]
 
   @@index([role, createdAt])
 }
