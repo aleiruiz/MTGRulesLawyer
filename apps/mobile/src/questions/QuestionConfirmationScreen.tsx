@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
-  Platform,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import ConfirmedCardTile from "./ConfirmedCardTile";
+import { apiUrl } from "../api-url";
+import { getPublicRulingUrl } from "../rulings/public-ruling-url";
 import {
   cardLookupResponseSchema,
   confirmedQuestionEvidenceRequestSchema,
@@ -37,9 +39,6 @@ interface DisplayCard {
   card: Card;
   mentionIndexes: number[];
 }
-
-const localApiUrl = Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000";
-const apiUrl = process.env.EXPO_PUBLIC_API_URL || localApiUrl;
 
 function highlightedQuestion(question: string, mentions: Mention[], ignored: Set<number>) {
   const spans = mentions
@@ -801,9 +800,14 @@ export default function QuestionConfirmationScreen() {
                             </Text>
                             <Text>{ruling.ruling.summary}</Text>
                             <Text selectable>Ruling ID: {ruling.rulingId}</Text>
-                            <Text selectable>
-                              {apiUrl}/api/rulings/{ruling.rulingId}
-                            </Text>
+                            <Pressable
+                              accessibilityRole="link"
+                              onPress={() =>
+                                void Linking.openURL(getPublicRulingUrl(ruling.rulingId))
+                              }
+                            >
+                              <Text style={styles.link}>Open public ruling</Text>
+                            </Pressable>
                             <Text>
                               Snapshot: {ruling.ruling.snapshot.version} ·{" "}
                               {ruling.ruling.snapshot.activatedAt
@@ -922,6 +926,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   helperText: { color: "#596d67", fontSize: 13 },
+  link: { color: "#145da0", fontSize: 15, textDecorationLine: "underline" },
   primaryButton: {
     minHeight: 48,
     alignItems: "center",
