@@ -88,16 +88,17 @@ enum AiReservationStatus {
 }
 
 model DataSnapshot {
-  id             String           @id @default(uuid()) @db.Uuid
-  version        String           @unique
-  status         SnapshotStatus   @default(CANDIDATE)
-  notes          String?          @db.Text
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  activatedAt    DateTime?        @db.Timestamptz(6)
+  id             String                @id @default(uuid()) @db.Uuid
+  version        String                @unique
+  status         SnapshotStatus        @default(CANDIDATE)
+  notes          String?               @db.Text
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+  activatedAt    DateTime?             @db.Timestamptz(6)
   sources        SourceSnapshot[]
   rules          Rule[]
   cards          Card[]
   rulingVersions RulingVersion[]
+  rulingCache    VerifiedRulingCache[]
 
   @@index([status, createdAt(sort: Desc)])
 }
@@ -367,6 +368,8 @@ model AiUsageReservation {
   status             AiReservationStatus @default(RESERVED)
   reservedCostMicros BigInt
   actualCostMicros   BigInt?
+  inputTokens        Int?
+  outputTokens       Int?
   createdAt          DateTime            @default(now()) @db.Timestamptz(6)
   expiresAt          DateTime            @db.Timestamptz(6)
   completedAt        DateTime?           @db.Timestamptz(6)
@@ -375,4 +378,16 @@ model AiUsageReservation {
   @@index([ipHash, kind, createdAt])
   @@index([status, expiresAt])
   @@index([createdAt])
+}
+
+model VerifiedRulingCache {
+  key        String       @id @db.Char(64)
+  snapshotId String       @db.Uuid
+  answer     Json
+  createdAt  DateTime     @default(now()) @db.Timestamptz(6)
+  expiresAt  DateTime     @db.Timestamptz(6)
+  snapshot   DataSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, expiresAt])
+  @@index([expiresAt])
 }

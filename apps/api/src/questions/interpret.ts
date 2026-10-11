@@ -5,7 +5,11 @@ import {
 import { z } from "zod";
 import { lookupCardsByExactFaceName } from "../cards/lookup.js";
 import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
-import { readAiUsageConfig, runReservedAiCall } from "../ai/usage.js";
+import {
+  estimateAiTokenCostMicros,
+  readAiUsageConfig,
+  runReservedAiCallWithMetrics,
+} from "../ai/usage.js";
 
 const QUESTION_INTERPRET_PROMPT_VERSION = "question-interpret-v1";
 
@@ -44,6 +48,17 @@ export async function resolveQuestionInterpretation(
   ) => ReturnType<typeof lookupCardsByExactFaceName> = lookupCardsByExactFaceName,
 ): Promise<QuestionInterpretResponse> {
   const interpretation = modelInterpretationSchema.parse(modelOutput);
+  if (!interpretation.inScope) {
+    return questionInterpretResponseSchema.parse({
+      ...interpretation,
+      cardMentions: [],
+      entities: [],
+      events: [],
+      knownFacts: [],
+      missingFacts: [],
+      searchTerms: [],
+    });
+  }
   const usedSpans = new Set<string>();
   const mentions = interpretation.cardMentions.map((mention) => {
     const { start, end, text } = mention;
@@ -94,22 +109,32 @@ export async function resolveQuestionInterpretation(
 export async function interpretQuestion(
   question: string,
   clientIp: string,
+  signal?: AbortSignal,
 ): Promise<QuestionInterpretResponse> {
   // Read provider settings before reserving so a placeholder credential does not consume quota.
   const provider = createOpenAiAdapter(readOpenAiConfig());
   const usageConfig = readAiUsageConfig();
-  const modelOutput = await runReservedAiCall(
+  const result = await runReservedAiCallWithMetrics(
     { kind: "INTERPRETATION", identity: { clientIp } },
-    async () => ({
-      value: await provider.generateStructuredOutput({
-        schema: modelInterpretationSchema,
-        schemaName: "mtg_question_interpretation",
-        systemPrompt: SYSTEM_PROMPT,
-        userPrompt: JSON.stringify({ question }),
-        promptVersion: QUESTION_INTERPRET_PROMPT_VERSION,
-      }),
-    }),
-    { config: usageConfig },
+    async (providerSignal) => {
+      const generated = await provider.generateStructuredOutputWithUsage(
+        {
+          schema: modelInterpretationSchema,
+          schemaName: "mtg_question_interpretation",
+          systemPrompt: SYSTEM_PROMPT,
+          userPrompt: JSON.stringify({ question }),
+          promptVersion: QUESTION_INTERPRET_PROMPT_VERSION,
+        },
+        providerSignal,
+      );
+      return {
+        value: generated.value,
+        inputTokens: generated.inputTokens,
+        outputTokens: generated.outputTokens,
+        actualCostMicros: estimateAiTokenCostMicros(generated.inputTokens, generated.outputTokens),
+      };
+    },
+    { config: usageConfig, signal },
   );
-  return resolveQuestionInterpretation(question, modelOutput);
+  return resolveQuestionInterpretation(question, result.value);
 }

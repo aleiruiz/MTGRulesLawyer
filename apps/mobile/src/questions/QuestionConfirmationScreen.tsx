@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -68,6 +68,8 @@ export default function QuestionConfirmationScreen() {
   const searchRequestId = useRef(0);
   const evidenceRequestId = useRef(0);
   const rulingRequestId = useRef(0);
+  const interpretationAbortController = useRef<AbortController | null>(null);
+  const rulingAbortController = useRef<AbortController | null>(null);
   const [question, setQuestion] = useState("");
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -91,9 +93,19 @@ export default function QuestionConfirmationScreen() {
   const [rulingError, setRulingError] = useState("");
   const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
 
+  useEffect(
+    () => () => {
+      interpretationAbortController.current?.abort();
+      rulingAbortController.current?.abort();
+    },
+    [],
+  );
+
   function invalidateConfirmation() {
     evidenceRequestId.current += 1;
     rulingRequestId.current += 1;
+    rulingAbortController.current?.abort();
+    rulingAbortController.current = null;
     setConfirmed(false);
     setIsRetrieving(false);
     setRetrievalError("");
@@ -150,6 +162,9 @@ export default function QuestionConfirmationScreen() {
 
   async function submitQuestion() {
     const requestId = ++interpretationRequestId.current;
+    interpretationAbortController.current?.abort();
+    const abortController = new AbortController();
+    interpretationAbortController.current = abortController;
     setIsInterpreting(true);
     setRequestError("");
     setInterpretation(null);
@@ -168,6 +183,7 @@ export default function QuestionConfirmationScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: submittedQuestion }),
+        signal: abortController.signal,
       });
       const body: unknown = await response.json();
       if (!response.ok) {
@@ -196,13 +212,16 @@ export default function QuestionConfirmationScreen() {
         ),
       );
     } catch (error) {
-      if (requestId === interpretationRequestId.current) {
+      if (requestId === interpretationRequestId.current && !abortController.signal.aborted) {
         setRequestError(
           error instanceof Error ? error.message : "Unable to interpret the question.",
         );
       }
     } finally {
-      if (requestId === interpretationRequestId.current) setIsInterpreting(false);
+      if (requestId === interpretationRequestId.current) {
+        interpretationAbortController.current = null;
+        setIsInterpreting(false);
+      }
     }
   }
 
@@ -369,6 +388,9 @@ export default function QuestionConfirmationScreen() {
 
   async function generateVerifiedRuling() {
     const requestId = ++rulingRequestId.current;
+    rulingAbortController.current?.abort();
+    const abortController = new AbortController();
+    rulingAbortController.current = abortController;
     setIsGeneratingRuling(true);
     setRulingError("");
     setRuling(null);
@@ -377,6 +399,7 @@ export default function QuestionConfirmationScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(createEvidenceRequest()),
+        signal: abortController.signal,
       });
       const body: unknown = await response.json();
       if (!response.ok) {
@@ -392,11 +415,14 @@ export default function QuestionConfirmationScreen() {
       const result = persistedRulingResponseSchema.parse(body);
       if (requestId === rulingRequestId.current) setRuling(result);
     } catch (error) {
-      if (requestId === rulingRequestId.current) {
+      if (requestId === rulingRequestId.current && !abortController.signal.aborted) {
         setRulingError(error instanceof Error ? error.message : "Unable to generate a ruling.");
       }
     } finally {
-      if (requestId === rulingRequestId.current) setIsGeneratingRuling(false);
+      if (requestId === rulingRequestId.current) {
+        rulingAbortController.current = null;
+        setIsGeneratingRuling(false);
+      }
     }
   }
 

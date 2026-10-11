@@ -63,7 +63,16 @@ export interface OpenAiResponse {
   outputTokens?: number;
 }
 
-export type OpenAiTransport = (request: OpenAiRequest) => Promise<OpenAiResponse>;
+export type OpenAiTransport = (
+  request: OpenAiRequest,
+  signal?: AbortSignal,
+) => Promise<OpenAiResponse>;
+
+export interface StructuredOutputResult<T> {
+  value: T;
+  inputTokens?: number;
+  outputTokens?: number;
+}
 
 export type OpenAiLogger = (metadata: Record<string, unknown>, message: string) => void;
 
@@ -81,21 +90,24 @@ function createDefaultLogger(writeLine: (line: string) => void): OpenAiLogger {
 
 function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
   const client = new OpenAI({ apiKey: config.apiKey, timeout: config.timeoutMs, maxRetries: 0 });
-  return async (request) => {
-    const response = await client.responses.create({
-      model: request.model,
-      input: request.input,
-      max_output_tokens: request.maxOutputTokens,
-      reasoning: { effort: request.reasoningEffort },
-      text: {
-        format: {
-          type: "json_schema",
-          name: request.schemaName,
-          strict: true,
-          schema: request.schema,
+  return async (request, signal) => {
+    const response = await client.responses.create(
+      {
+        model: request.model,
+        input: request.input,
+        max_output_tokens: request.maxOutputTokens,
+        reasoning: { effort: request.reasoningEffort },
+        text: {
+          format: {
+            type: "json_schema",
+            name: request.schemaName,
+            strict: true,
+            schema: request.schema,
+          },
         },
       },
-    });
+      { signal },
+    );
 
     if (response.status === "incomplete") {
       throw new Error(
@@ -120,7 +132,14 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
   return {
     async generateStructuredOutput<TSchema extends z.ZodType>(
       request: GenerateStructuredOutputOptions<TSchema>,
+      signal?: AbortSignal,
     ): Promise<z.infer<TSchema>> {
+      return (await this.generateStructuredOutputWithUsage(request, signal)).value;
+    },
+    async generateStructuredOutputWithUsage<TSchema extends z.ZodType>(
+      request: GenerateStructuredOutputOptions<TSchema>,
+      signal?: AbortSignal,
+    ): Promise<StructuredOutputResult<z.infer<TSchema>>> {
       if (!request.systemPrompt.trim() || request.systemPrompt.length > 8_000) {
         throw new Error("System prompt must contain 1 to 8000 characters.");
       }
@@ -136,17 +155,20 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       log({ ...metadata, event: "openai.request.started" }, "OpenAI request started");
 
       try {
-        const result = await transport({
-          model: config.model,
-          input: [
-            { role: "system", content: request.systemPrompt },
-            { role: "user", content: request.userPrompt },
-          ],
-          maxOutputTokens: config.maxOutputTokens,
-          reasoningEffort: config.reasoningEffort,
-          schemaName: request.schemaName,
-          schema: z.toJSONSchema(request.schema),
-        });
+        const result = await transport(
+          {
+            model: config.model,
+            input: [
+              { role: "system", content: request.systemPrompt },
+              { role: "user", content: request.userPrompt },
+            ],
+            maxOutputTokens: config.maxOutputTokens,
+            reasoningEffort: config.reasoningEffort,
+            schemaName: request.schemaName,
+            schema: z.toJSONSchema(request.schema),
+          },
+          signal,
+        );
         const parsed: unknown = JSON.parse(result.outputText);
         const validated = request.schema.parse(parsed);
         log(
@@ -160,7 +182,11 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
           },
           "OpenAI request completed",
         );
-        return validated;
+        return {
+          value: validated,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        };
       } catch (error) {
         log(
           { ...metadata, event: "openai.request.failed", durationMs: Date.now() - startedAt },

@@ -33,6 +33,33 @@ export interface AiUsageRequest {
   kind: UsageKind;
 }
 
+export function estimateAiTokenCostMicros(
+  inputTokens: number | undefined,
+  outputTokens: number | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): bigint | undefined {
+  const inputRate = env.AI_INPUT_COST_PER_MILLION_MICROS;
+  const outputRate = env.AI_OUTPUT_COST_PER_MILLION_MICROS;
+  if (!inputRate || !outputRate || inputTokens === undefined || outputTokens === undefined) {
+    return undefined;
+  }
+  const inputRateMicros = Number(inputRate);
+  const outputRateMicros = Number(outputRate);
+  if (
+    !Number.isSafeInteger(inputRateMicros) ||
+    inputRateMicros < 0 ||
+    !Number.isSafeInteger(outputRateMicros) ||
+    outputRateMicros < 0
+  ) {
+    throw new Error(
+      "AI token cost rates must be non-negative integer micro-units per million tokens.",
+    );
+  }
+  const numerator =
+    BigInt(inputTokens) * BigInt(inputRateMicros) + BigInt(outputTokens) * BigInt(outputRateMicros);
+  return (numerator + 999_999n) / 1_000_000n;
+}
+
 export class AiUsageLimitError extends Error {
   constructor(
     public readonly code:
@@ -167,7 +194,10 @@ async function acquireGlobalReservationLock(tx: Prisma.TransactionClient): Promi
 export interface AiReservation {
   id: string;
   beginProviderCall(): Promise<void>;
-  complete(actualCostMicros?: bigint): Promise<void>;
+  complete(
+    actualCostMicros?: bigint,
+    tokenUsage?: { inputTokens?: number; outputTokens?: number },
+  ): Promise<void>;
   releaseBeforeProviderCall(): Promise<void>;
 }
 
@@ -175,6 +205,7 @@ export interface ReserveAiUsageOptions {
   client?: PrismaClient;
   config?: AiUsageConfig;
   now?: Date;
+  signal?: AbortSignal;
 }
 
 export async function reserveAiUsage(
@@ -314,7 +345,11 @@ export async function reserveAiUsage(
     }
   }
 
-  async function transition(status: "COMPLETED" | "RELEASED", actualCostMicros?: bigint) {
+  async function transition(
+    status: "COMPLETED" | "RELEASED",
+    actualCostMicros?: bigint,
+    tokenUsage?: { inputTokens?: number; outputTokens?: number },
+  ) {
     if (actualCostMicros !== undefined && actualCostMicros < 0n) {
       throw new Error("actualCostMicros cannot be negative.");
     }
@@ -325,7 +360,13 @@ export async function reserveAiUsage(
           id: reservation.id,
           status: status === "COMPLETED" ? "IN_PROGRESS" : "RESERVED",
         },
-        data: { status, actualCostMicros, completedAt: new Date() },
+        data: {
+          status,
+          actualCostMicros,
+          inputTokens: tokenUsage?.inputTokens,
+          outputTokens: tokenUsage?.outputTokens,
+          completedAt: new Date(),
+        },
       });
     });
     if (result.count !== 1) {
@@ -336,17 +377,31 @@ export async function reserveAiUsage(
   return {
     id: reservation.id,
     beginProviderCall,
-    complete: (actualCostMicros?: bigint) => transition("COMPLETED", actualCostMicros),
+    complete: (
+      actualCostMicros?: bigint,
+      tokenUsage?: { inputTokens?: number; outputTokens?: number },
+    ) => transition("COMPLETED", actualCostMicros, tokenUsage),
     releaseBeforeProviderCall: () => transition("RELEASED"),
   };
 }
 
-export async function runReservedAiCall<T>(
+export interface ReservedAiCallResult<T> {
+  value: T;
+  actualCostMicros?: bigint;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export async function runReservedAiCallWithMetrics<T>(
   request: AiUsageRequest,
-  callProvider: () => Promise<{ value: T; actualCostMicros?: bigint }>,
+  callProvider: (signal?: AbortSignal) => Promise<ReservedAiCallResult<T>>,
   options: ReserveAiUsageOptions = {},
-): Promise<T> {
+): Promise<ReservedAiCallResult<T>> {
   const reservation = await reserveAiUsage(request, options);
+  if (options.signal?.aborted) {
+    await reservation.releaseBeforeProviderCall();
+    throw options.signal.reason ?? new Error("AI request cancelled before provider call.");
+  }
   try {
     await reservation.beginProviderCall();
   } catch (error) {
@@ -354,14 +409,25 @@ export async function runReservedAiCall<T>(
     throw error;
   }
   try {
-    const result = await callProvider();
-    await reservation.complete(result.actualCostMicros);
-    return result.value;
+    const result = await callProvider(options.signal);
+    await reservation.complete(result.actualCostMicros, {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+    });
+    return result;
   } catch (error) {
     // Once the provider call begins, errors still consume a request and the reserved cost.
     await reservation.complete().catch(() => undefined);
     throw error;
   }
+}
+
+export async function runReservedAiCall<T>(
+  request: AiUsageRequest,
+  callProvider: (signal?: AbortSignal) => Promise<ReservedAiCallResult<T>>,
+  options: ReserveAiUsageOptions = {},
+): Promise<T> {
+  return (await runReservedAiCallWithMetrics(request, callProvider, options)).value;
 }
 
 export function sendAiUsageLimitError(reply: FastifyReply, error: AiUsageLimitError) {
