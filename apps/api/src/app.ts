@@ -10,7 +10,9 @@ import {
   type EvidenceSearchResponse,
   questionInterpretRequestSchema,
   questionInterpretResponseSchema,
+  rulingGenerationResponseSchema,
   type QuestionInterpretResponse,
+  type RulingGenerationResponse,
   type SourceStatusResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
@@ -18,6 +20,7 @@ import { lookupCardsByExactFaceName } from "./cards/lookup.js";
 import { interpretQuestion } from "./questions/interpret.js";
 import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/retrieval.js";
 import { getSourceStatus } from "./sources/status.js";
+import { generateRuling } from "./rulings/generate.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -25,6 +28,10 @@ export interface BuildAppOptions {
   assembleQuestionEvidence?: (
     request: ConfirmedQuestionEvidenceRequest,
   ) => Promise<EvidenceSearchResponse>;
+  generateRuling?: (
+    request: ConfirmedQuestionEvidenceRequest,
+    clientIp: string,
+  ) => Promise<RulingGenerationResponse>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
 }
 
@@ -40,6 +47,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const lookupCards = options.lookupCardsByExactFaceName ?? lookupCardsByExactFaceName;
   const interpret = options.interpretQuestion ?? interpretQuestion;
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
+  const createRuling = options.generateRuling ?? generateRuling;
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
 
   void app.register(cors, { origin: true });
@@ -92,6 +100,26 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         "Question evidence assembly failed",
       );
       return reply.code(503).send({ error: "EVIDENCE_UNAVAILABLE" });
+    }
+  });
+  app.post("/api/questions/ruling", async (request, reply) => {
+    const parsed = confirmedQuestionEvidenceRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "INVALID_RULING_REQUEST" });
+    }
+    try {
+      const result = await createRuling(parsed.data, request.ip);
+      return reply.send(rulingGenerationResponseSchema.parse(result));
+    } catch (error) {
+      if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
+      if (error instanceof InvalidConfirmedCardsError) {
+        return reply.code(400).send({ error: "CONFIRMED_CARD_UNAVAILABLE" });
+      }
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Ruling generation failed",
+      );
+      return reply.code(502).send({ error: "RULING_GENERATION_UNAVAILABLE" });
     }
   });
   return app;
