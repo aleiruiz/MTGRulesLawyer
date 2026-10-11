@@ -1,4 +1,17 @@
 import { spawn } from "node:child_process";
+import { basename, dirname, resolve, sep } from "node:path";
+
+const postgresEnvironmentKeys = [
+  "PGHOST",
+  "PGPORT",
+  "PGDATABASE",
+  "PGUSER",
+  "PGPASSWORD",
+  "PGSSLMODE",
+  "PGSSLROOTCERT",
+  "PGSSLCERT",
+  "PGSSLKEY",
+];
 
 export function postgresConnectionEnv(connectionString) {
   const url = new URL(connectionString);
@@ -26,10 +39,61 @@ export function postgresDatabaseName(connectionString) {
   return database;
 }
 
-export function runPostgresTool(command, args, connectionString) {
+export function createPostgresToolInvocation(command, args, connectionString, dockerImage) {
   const env = postgresConnectionEnv(connectionString);
+  if (!dockerImage) return { command, args, env };
+
+  const certificatePathKeys = ["PGSSLROOTCERT", "PGSSLCERT", "PGSSLKEY"];
+  if (certificatePathKeys.some((key) => env[key])) {
+    throw new Error(
+      "Dockerized PostgreSQL clients do not support file-based TLS certificates; install native PostgreSQL client tools instead.",
+    );
+  }
+
+  if (["localhost", "127.0.0.1", "::1"].includes(env.PGHOST)) {
+    env.PGHOST = "host.docker.internal";
+  }
+
+  const backupPathIndex =
+    command === "pg_dump"
+      ? args.findIndex((argument) => argument.startsWith("--file="))
+      : command === "pg_restore"
+        ? args.length - 1
+        : -1;
+  let mappedArgs = args;
+  const dockerArgs = ["run", "--rm", "--add-host=host.docker.internal:host-gateway"];
+
+  if (backupPathIndex >= 0) {
+    const argument = args[backupPathIndex];
+    const hasFileFlag = argument.startsWith("--file=");
+    const hostPath = resolve(hasFileFlag ? argument.slice("--file=".length) : argument);
+    const directory = dirname(hostPath);
+    const containerPath = `/work/${basename(hostPath)}`;
+    const mountSource = directory.split(sep).join("/");
+    dockerArgs.push("--mount", `type=bind,source=${mountSource},target=/work`);
+    mappedArgs = [...args];
+    mappedArgs[backupPathIndex] = hasFileFlag ? `--file=${containerPath}` : containerPath;
+  }
+
+  for (const key of postgresEnvironmentKeys) {
+    if (env[key] !== undefined) dockerArgs.push("--env", key);
+  }
+  dockerArgs.push(dockerImage, command, ...mappedArgs);
+  return { command: "docker", args: dockerArgs, env };
+}
+
+export function runPostgresTool(command, args, connectionString) {
+  const invocation = createPostgresToolInvocation(
+    command,
+    args,
+    connectionString,
+    process.env.POSTGRES_CLIENT_IMAGE?.trim(),
+  );
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(invocation.command, invocation.args, {
+      env: invocation.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));

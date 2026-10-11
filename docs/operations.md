@@ -12,7 +12,7 @@
 
 For a hosted database, enable the provider's automated daily backups and point-in-time recovery. Set an alert for a failed backup or a missing successful backup in the retention window. Keep backups in encrypted, access-controlled storage separate from the database and retain them according to the deployment's privacy and recovery requirements.
 
-The manual custom-format backup command requires PostgreSQL client tools (`pg_dump`, `pg_restore`) on `PATH`:
+The manual custom-format backup command uses PostgreSQL client tools (`pg_dump`, `pg_restore`) on `PATH` by default. If they are not installed, set `POSTGRES_CLIENT_IMAGE=postgres:17-alpine` to run the tools in Docker. The Docker client mode expects a database reachable from the container; `localhost` is mapped to Docker Desktop's `host.docker.internal`. It does not support file-based TLS certificates, so use native client tools for those connections.
 
 ```powershell
 pnpm db:backup
