@@ -20,6 +20,8 @@ Never commit credentials, generated build output, imported bulk card data, or lo
 
 Add a focused test when a change alters behavior that can regress: malformed input handling, source import rollback, card-face resolution, citations, authorization, quota accounting, or review transitions. Keep fixtures small and synthetic where possible. Do not add real user questions, private data, or unreviewed rulings as training data.
 
+When changing ruling prompts, schemas, or citation verification, run `pnpm eval:rulings`; CI runs this credential-free replay against expected outcome categories and Comprehensive Rules citations. For a prompt or model change, also run `pnpm eval:rulings:live` with `OPENAI_API_KEY` set to test the current model against the same reviewed layers, replacement effects, triggers, multiplayer, and missing-fact cases. The live check makes model requests and may incur provider usage. The seed-set rule references are checked against the cited official rules edition; update expected results only with an explanation and source review in the pull request.
+
 ## Rules and card sources
 
 Before adding imported rules, cards, or images, review the current [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy), [Scryfall bulk data documentation](https://scryfall.com/docs/api/bulk-data), and [Scryfall API access guidance](https://scryfall.com/docs/faqs/i-m-having-trouble-accessing-the-scryfall-api-or-i-m-blocked-17). Record applicable attribution, source date, and use/display limits in the source decision record required by D01. Do not infer that a link to a source grants permission to redistribute its content.
