@@ -102,7 +102,12 @@ export async function reuseVerifiedRuling(
   const lockId = BigInt.asIntN(64, BigInt(`0x${key.slice(0, 16)}`));
   return prisma.$transaction(
     async (transaction) => {
-      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+      await transaction.$queryRaw`
+        WITH acquired AS MATERIALIZED (
+          SELECT pg_advisory_xact_lock(${lockId})
+        )
+        SELECT TRUE AS locked FROM acquired
+      `;
       const existing = await getCachedVerifiedRuling(key, transaction);
       if (existing) return existing;
 
