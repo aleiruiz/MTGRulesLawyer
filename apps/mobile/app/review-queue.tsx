@@ -10,7 +10,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { reviewQueueResponseSchema, type ReviewQueueResponse } from "@mtg-rules/contracts";
+import {
+  reviewDecisionRequestSchema,
+  reviewQueueResponseSchema,
+  type ReviewDecisionRequest,
+  type ReviewQueueResponse,
+} from "@mtg-rules/contracts";
 import { useAuth } from "../src/auth/AuthProvider";
 import { apiUrl } from "../src/api-url";
 
@@ -20,6 +25,17 @@ export default function ReviewQueueScreen() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
+  const [corrections, setCorrections] = useState<
+    Record<
+      string,
+      {
+        outcome: "resolved" | "conditional" | "needs_information" | "uncertain";
+        summary: string;
+        reasoning: string;
+      }
+    >
+  >({});
 
   const loadQueue = useCallback(async () => {
     if (!session) {
@@ -80,6 +96,64 @@ export default function ReviewQueueScreen() {
       await loadQueue();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The request could not be saved.");
+    }
+  }
+
+  async function decide(challengeId: string, decision: "approve" | "reject") {
+    if (!session) return;
+    const reason = decisionReasons[challengeId]?.trim() ?? "";
+    const correction = corrections[challengeId] ?? {
+      outcome: "resolved" as const,
+      summary: "",
+      reasoning: "",
+    };
+    let payload: ReviewDecisionRequest;
+    try {
+      payload = reviewDecisionRequestSchema.parse(
+        decision === "approve"
+          ? {
+              decision,
+              reason,
+              correction: {
+                outcome: correction.outcome,
+                summary: correction.summary,
+                reasoningSteps: [correction.reasoning],
+                assumptions: [],
+              },
+            }
+          : { decision, reason },
+      );
+    } catch {
+      setMessage(
+        decision === "approve"
+          ? "Provide a decision reason, corrected summary, and reasoning step."
+          : "Provide at least 10 characters explaining the rejection.",
+      );
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/admin/challenges/${encodeURIComponent(challengeId)}/decision`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${session.access_token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (response.status === 403)
+        throw new Error("Admin access is required to review challenges.");
+      if (response.status === 409)
+        throw new Error("This challenge was already decided. Refresh the queue.");
+      if (!response.ok) throw new Error("The decision could not be saved.");
+      setMessage(
+        decision === "approve" ? "Correction approved and saved." : "Challenge rejected and saved.",
+      );
+      await loadQueue();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The decision could not be saved.");
     }
   }
 
@@ -199,6 +273,110 @@ export default function ReviewQueueScreen() {
             >
               <Text style={styles.buttonText}>Request more information</Text>
             </Pressable>
+            <Text style={styles.sectionTitle}>Record a decision</Text>
+            <TextInput
+              accessibilityLabel={`Decision reason for challenge ${item.challengeId}`}
+              multiline
+              maxLength={2_000}
+              value={decisionReasons[item.challengeId] ?? ""}
+              onChangeText={(value) =>
+                setDecisionReasons((current) => ({ ...current, [item.challengeId]: value }))
+              }
+              placeholder="Required reason for approval or rejection."
+              style={styles.input}
+            />
+            <Text style={styles.meta}>For approval, write the corrected answer:</Text>
+            <View style={styles.choices}>
+              {(["resolved", "conditional", "needs_information", "uncertain"] as const).map(
+                (outcome) => (
+                  <Pressable
+                    key={outcome}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      selected: (corrections[item.challengeId]?.outcome ?? "resolved") === outcome,
+                    }}
+                    onPress={() =>
+                      setCorrections((current) => ({
+                        ...current,
+                        [item.challengeId]: {
+                          ...(current[item.challengeId] ?? {
+                            outcome: "resolved",
+                            summary: "",
+                            reasoning: "",
+                          }),
+                          outcome,
+                        },
+                      }))
+                    }
+                    style={[
+                      styles.choice,
+                      (corrections[item.challengeId]?.outcome ?? "resolved") === outcome &&
+                        styles.selectedChoice,
+                    ]}
+                  >
+                    <Text style={styles.choiceText}>{outcome.replaceAll("_", " ")}</Text>
+                  </Pressable>
+                ),
+              )}
+            </View>
+            <TextInput
+              accessibilityLabel={`Corrected ruling summary for challenge ${item.challengeId}`}
+              multiline
+              maxLength={1_200}
+              value={corrections[item.challengeId]?.summary ?? ""}
+              onChangeText={(summary) =>
+                setCorrections((current) => ({
+                  ...current,
+                  [item.challengeId]: {
+                    ...(current[item.challengeId] ?? {
+                      outcome: "resolved",
+                      summary: "",
+                      reasoning: "",
+                    }),
+                    summary,
+                  },
+                }))
+              }
+              placeholder="Corrected answer summary."
+              style={styles.input}
+            />
+            <TextInput
+              accessibilityLabel={`Corrected ruling reasoning for challenge ${item.challengeId}`}
+              multiline
+              maxLength={800}
+              value={corrections[item.challengeId]?.reasoning ?? ""}
+              onChangeText={(reasoning) =>
+                setCorrections((current) => ({
+                  ...current,
+                  [item.challengeId]: {
+                    ...(current[item.challengeId] ?? {
+                      outcome: "resolved",
+                      summary: "",
+                      reasoning: "",
+                    }),
+                    reasoning,
+                  },
+                }))
+              }
+              placeholder="Explain the corrected result."
+              style={styles.input}
+            />
+            <View style={styles.actions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void decide(item.challengeId, "approve")}
+                style={styles.button}
+              >
+                <Text style={styles.buttonText}>Approve correction</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void decide(item.challengeId, "reject")}
+                style={styles.rejectButton}
+              >
+                <Text style={styles.buttonText}>Reject challenge</Text>
+              </Pressable>
+            </View>
           </View>
         ))}
       </ScrollView>
@@ -217,6 +395,26 @@ const styles = StyleSheet.create({
   meta: { color: "#5b5a55", fontSize: 12, lineHeight: 18 },
   citation: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: "#f7f6f2" },
   section: { gap: 8, paddingTop: 8 },
+  choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  choice: {
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "#a5b4ab",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  selectedChoice: { borderColor: "#1f5d50", backgroundColor: "#e1efe7" },
+  choiceText: { color: "#18312f", fontSize: 12, textTransform: "capitalize" },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  rejectButton: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderRadius: 9,
+    backgroundColor: "#8b3028",
+  },
   input: {
     minHeight: 82,
     padding: 10,

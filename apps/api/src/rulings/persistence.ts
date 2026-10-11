@@ -103,6 +103,7 @@ export async function saveRuling(
 export async function getRuling(
   rulingId: string,
   client: PrismaClient = prisma,
+  versionNumber?: number,
 ): Promise<PersistedRulingResponse | null> {
   const ruling = await client.ruling.findUnique({
     where: { id: rulingId },
@@ -113,8 +114,9 @@ export async function getRuling(
         },
       },
       versions: {
-        orderBy: { version: "desc" },
-        take: 1,
+        ...(versionNumber === undefined
+          ? { orderBy: { version: "desc" as const }, take: 1 }
+          : { where: { version: versionNumber }, take: 1 }),
         include: { snapshot: { include: { sources: true } }, citations: true },
       },
     },

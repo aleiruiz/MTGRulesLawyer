@@ -77,8 +77,34 @@ export default function MyChallengesScreen() {
                     </Text>
                   </View>
                 ) : null}
+                {challenge.latestDecision ? (
+                  <View accessibilityLiveRegion="polite" style={styles.infoRequest}>
+                    <Text style={styles.infoTitle}>
+                      Challenge{" "}
+                      {challenge.latestDecision.decision === "approve" ? "approved" : "rejected"}
+                    </Text>
+                    <Text>{challenge.latestDecision.reason}</Text>
+                    {challenge.latestDecision.correctedRulingVersion ? (
+                      <Link
+                        href={{
+                          pathname: "/rulings",
+                          params: {
+                            id: challenge.rulingId,
+                            version: String(challenge.latestDecision.correctedRulingVersion),
+                          },
+                        }}
+                        style={styles.link}
+                      >
+                        Read the corrected answer
+                      </Link>
+                    ) : null}
+                  </View>
+                ) : null}
                 <Link
-                  href={`/rulings?id=${encodeURIComponent(challenge.rulingId)}`}
+                  href={{
+                    pathname: "/rulings",
+                    params: { id: challenge.rulingId, version: String(challenge.rulingVersion) },
+                  }}
                   style={styles.link}
                 >
                   Open original ruling

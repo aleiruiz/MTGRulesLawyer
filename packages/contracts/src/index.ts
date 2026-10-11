@@ -248,12 +248,22 @@ export const challengeSubmissionRequestSchema = z.object({
 export const challengeResponseSchema = z.object({
   challengeId: z.string().uuid(),
   rulingId: z.string().uuid(),
+  rulingVersion: z.number().int().positive(),
   question: z.string().max(4_000),
   explanation: z.string().max(4_000),
   proposedOutcome: rulingGenerationResponseSchema.shape.outcome.nullable(),
   status: z.enum(["open", "needs_information", "approved", "rejected"]),
   latestInformationRequest: z
     .object({ reason: z.string().max(2_000), createdAt: z.string().datetime() })
+    .nullable(),
+  latestDecision: z
+    .object({
+      decision: z.enum(["approve", "reject"]),
+      reason: z.string().max(2_000),
+      createdAt: z.string().datetime(),
+      correctedRulingId: z.string().uuid().nullable(),
+      correctedRulingVersion: z.number().int().positive().nullable(),
+    })
     .nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -319,6 +329,33 @@ export const requestChallengeInformationSchema = z.object({
 
 export type ReviewQueueResponse = z.infer<typeof reviewQueueResponseSchema>;
 export type RequestChallengeInformation = z.infer<typeof requestChallengeInformationSchema>;
+
+const reviewDecisionReasonSchema = z.string().trim().min(10).max(2_000);
+const correctedRulingDraftSchema = z.object({
+  outcome: rulingGenerationResponseSchema.shape.outcome,
+  summary: z.string().trim().min(1).max(1_200),
+  reasoningSteps: z.array(z.string().trim().min(1).max(800)).min(1).max(12),
+  assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
+});
+
+export const reviewDecisionRequestSchema = z.discriminatedUnion("decision", [
+  z.object({
+    decision: z.literal("approve"),
+    reason: reviewDecisionReasonSchema,
+    correction: correctedRulingDraftSchema,
+  }),
+  z.object({ decision: z.literal("reject"), reason: reviewDecisionReasonSchema }),
+]);
+
+export const reviewDecisionResponseSchema = z.object({
+  challengeId: z.string().uuid(),
+  status: z.enum(["approved", "rejected"]),
+  correctedRulingId: z.string().uuid().nullable(),
+  correctedRulingVersion: z.number().int().positive().nullable(),
+});
+
+export type ReviewDecisionRequest = z.infer<typeof reviewDecisionRequestSchema>;
+export type ReviewDecisionResponse = z.infer<typeof reviewDecisionResponseSchema>;
 
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z
