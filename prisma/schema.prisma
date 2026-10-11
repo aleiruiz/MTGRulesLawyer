@@ -80,6 +80,13 @@ enum UsageKind {
   RULING
 }
 
+enum AiReservationStatus {
+  RESERVED
+  IN_PROGRESS
+  COMPLETED
+  RELEASED
+}
+
 model DataSnapshot {
   id             String           @id @default(uuid()) @db.Uuid
   version        String           @unique
@@ -343,4 +350,22 @@ model UsageWindow {
   @@index([principalHash, kind, windowStartedAt])
   @@index([userId, kind, windowStartedAt])
   @@index([windowEndsAt])
+}
+
+model AiUsageReservation {
+  id                 String              @id @default(uuid()) @db.Uuid
+  accountHash        String?
+  ipHash             String
+  kind               UsageKind
+  status             AiReservationStatus @default(RESERVED)
+  reservedCostMicros BigInt
+  actualCostMicros   BigInt?
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  expiresAt          DateTime            @db.Timestamptz(6)
+  completedAt        DateTime?           @db.Timestamptz(6)
+
+  @@index([accountHash, kind, createdAt])
+  @@index([ipHash, kind, createdAt])
+  @@index([status, expiresAt])
+  @@index([createdAt])
 }
