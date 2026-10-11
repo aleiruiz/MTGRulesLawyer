@@ -24,6 +24,11 @@ import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
 import { getRuling, saveRuling } from "./rulings/persistence.js";
 import { prisma } from "./db/client.js";
+import { registerAuthentication, type AppUserResolver } from "./auth/authorization.js";
+import {
+  createSupabaseAccessTokenVerifier,
+  type AccessTokenVerifier,
+} from "./auth/supabase-auth.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -47,6 +52,8 @@ export interface BuildAppOptions {
   getRuling?: (rulingId: string) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
   checkDatabase?: () => Promise<void>;
+  verifyAccessToken?: AccessTokenVerifier;
+  resolveAppUser?: AppUserResolver;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -84,6 +91,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
   const checkDatabase =
     options.checkDatabase ?? (() => prisma.$queryRaw`SELECT 1`.then(() => undefined));
+  const verifyAccessToken =
+    options.verifyAccessToken ??
+    createSupabaseAccessTokenVerifier({
+      url: process.env.SUPABASE_URL ?? "https://your-project.supabase.co",
+      publishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? "replace-me",
+    });
+  const resolveAppUser =
+    options.resolveAppUser ??
+    (async (subject) => {
+      const user = await prisma.appUser.upsert({
+        where: { supabaseUserId: subject },
+        create: { supabaseUserId: subject },
+        update: {},
+        select: { id: true, role: true },
+      });
+      return user;
+    });
+
+  registerAuthentication(app, verifyAccessToken, resolveAppUser);
 
   void app.register(cors, { origin: true });
   app.addHook("onResponse", (request, reply, done) => {
@@ -103,6 +129,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
   app.get("/health", async (_request, reply) =>
     reply.send(healthResponseSchema.parse({ status: "ok", service: "mtg-rules-api" })),
+  );
+  app.get("/api/auth/me", async (request, reply) =>
+    reply.send({ userId: request.appUser?.id, role: request.appUser?.role }),
   );
   app.get("/ready", async (request, reply) => {
     try {
