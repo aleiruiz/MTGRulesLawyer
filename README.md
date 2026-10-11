@@ -82,7 +82,7 @@ pnpm dev:mobile
 
 Replace the example address with the computer’s LAN address. The device and computer must be on the same network, and the API listens on `0.0.0.0` by default.
 
-Check the API directly at `http://localhost:3000/health`. Stop the database with `docker compose down`; `docker compose down -v` also removes its local data.
+Check the API directly at `http://localhost:3000/health`. `POST /api/questions/interpret` accepts a JSON body such as `{"question":"Can I respond to a spell in Magic?"}` and returns an in-scope decision, scenario facts, highlighted mention spans, and exact Oracle card choices. Calling it requires the server-side OpenAI and AI quota settings from `.env`; the API and mobile app still start with the example placeholders. Stop the database with `docker compose down`; `docker compose down -v` also removes its local data.
 
 ## Common commands
 

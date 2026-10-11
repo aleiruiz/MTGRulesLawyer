@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
-import type { CardLookupResponse, SourceStatusResponse } from "@mtg-rules/contracts";
+import type {
+  CardLookupResponse,
+  QuestionInterpretResponse,
+  SourceStatusResponse,
+} from "@mtg-rules/contracts";
 import type { LightMyRequestResponse } from "fastify";
+import { AiUsageLimitError } from "./ai/usage.js";
 import { buildApp } from "./app.js";
 
 const app = buildApp({
@@ -72,6 +77,23 @@ const app = buildApp({
           }
         : { cards: [] },
     ),
+  interpretQuestion: (question, clientIp): Promise<QuestionInterpretResponse> => {
+    if (question === "limited") {
+      return Promise.reject(new AiUsageLimitError("AI_DAILY_LIMIT", 429, 23));
+    }
+    return Promise.resolve({
+      inScope: question.toLowerCase().includes("magic"),
+      scopeReason: question.toLowerCase().includes("magic")
+        ? "This asks about Magic rules."
+        : "This is not about Magic rules.",
+      cardMentions: [],
+      entities: [],
+      events: [],
+      knownFacts: [`Question received: ${question}`, `Client IP: ${clientIp}`],
+      missingFacts: [],
+      searchTerms: [],
+    });
+  },
 });
 
 void describe("GET /api/sources/status", () => {
@@ -120,5 +142,74 @@ void describe("GET /api/cards/lookup", () => {
       url: "/api/cards/lookup?name=Front&name=Back",
     });
     assert.equal(response.statusCode, 400);
+  });
+});
+
+void describe("POST /api/questions/interpret", () => {
+  void it("returns schema-shaped scenario facts and scope status", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/questions/interpret",
+      payload: { question: "In Magic, can I respond to a spell?" },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json<QuestionInterpretResponse>().inScope, true);
+    assert.equal(response.json<QuestionInterpretResponse>().knownFacts[1], "Client IP: 127.0.0.1");
+  });
+
+  void it("strips unsafe control characters before calling the interpreter", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/questions/interpret",
+      payload: { question: "In Magic,\u0000 can I\trespond?\u0007" },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(
+      response.json<QuestionInterpretResponse>().knownFacts[0],
+      "Question received: In Magic, can I\trespond?",
+    );
+  });
+
+  void it("returns an out-of-scope classification without starting ruling work", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/questions/interpret",
+      payload: { question: "What is the capital of France?" },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json<QuestionInterpretResponse>().inScope, false);
+    assert.equal(response.json<QuestionInterpretResponse>().cardMentions.length, 0);
+  });
+
+  void it("returns quota errors with Retry-After metadata", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/questions/interpret",
+      payload: { question: "limited" },
+    });
+
+    assert.equal(response.statusCode, 429);
+    assert.equal(response.headers["retry-after"], "23");
+    assert.deepEqual(response.json(), { error: "AI_DAILY_LIMIT", retryAfterSeconds: 23 });
+  });
+
+  void it("rejects missing, blank, oversized, or repeated body input", async () => {
+    const invalidBodies: Array<{ question?: string | string[] }> = [
+      {},
+      { question: "   " },
+      { question: "x".repeat(4_001) },
+      { question: ["first", "second"] },
+    ];
+    for (const payload of invalidBodies) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/questions/interpret",
+        payload,
+      });
+      assert.equal(response.statusCode, 400);
+    }
   });
 });

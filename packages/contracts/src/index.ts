@@ -43,6 +43,53 @@ export const cardLookupResponseSchema = z.object({
 
 export type CardLookupResponse = z.infer<typeof cardLookupResponseSchema>;
 
+function stripUnsafeControlCharacters(value: string): string {
+  return [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      const isControl = code < 0x20 || (code >= 0x7f && code <= 0x9f);
+      return !isControl || code === 0x09 || code === 0x0a || code === 0x0d;
+    })
+    .join("");
+}
+
+export const questionInterpretRequestSchema = z.object({
+  question: z
+    .string()
+    .transform(stripUnsafeControlCharacters)
+    .pipe(
+      z
+        .string()
+        .min(1)
+        .max(4_000)
+        .refine((question) => question.trim().length > 0),
+    ),
+});
+
+export type QuestionInterpretRequest = z.infer<typeof questionInterpretRequestSchema>;
+
+export const questionInterpretResponseSchema = z.object({
+  inScope: z.boolean(),
+  scopeReason: z.string().max(300),
+  cardMentions: z
+    .array(
+      z.object({
+        text: z.string().min(1).max(200),
+        start: z.number().int().nonnegative(),
+        end: z.number().int().positive(),
+        candidates: z.array(cardLookupResponseSchema.shape.cards.element).max(10),
+      }),
+    )
+    .max(10),
+  entities: z.array(z.string().min(1).max(200)).max(12),
+  events: z.array(z.string().min(1).max(300)).max(12),
+  knownFacts: z.array(z.string().min(1).max(500)).max(12),
+  missingFacts: z.array(z.string().min(1).max(300)).max(12),
+  searchTerms: z.array(z.string().min(1).max(100)).max(10),
+});
+
+export type QuestionInterpretResponse = z.infer<typeof questionInterpretResponseSchema>;
+
 export const evidenceSearchRequestSchema = z.object({
   question: z.string().trim().min(1).max(4000),
   cardNames: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
