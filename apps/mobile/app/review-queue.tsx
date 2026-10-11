@@ -39,7 +39,7 @@ export default function ReviewQueueScreen() {
           | "outdated_source"
           | "presentation";
         includeInEvaluation: boolean;
-        evaluationQuestion: string;
+        evaluationFixtureJson: string;
         summary: string;
         reasoning: string;
       }
@@ -115,12 +115,16 @@ export default function ReviewQueueScreen() {
       outcome: "resolved" as const,
       errorCategory: "reasoning" as const,
       includeInEvaluation: false,
-      evaluationQuestion: "",
+      evaluationFixtureJson: "",
       summary: "",
       reasoning: "",
     };
     let payload: ReviewDecisionRequest;
+    let evaluationFixture: unknown;
     try {
+      if (correction.includeInEvaluation) {
+        evaluationFixture = JSON.parse(correction.evaluationFixtureJson) as unknown;
+      }
       payload = reviewDecisionRequestSchema.parse(
         decision === "approve"
           ? {
@@ -129,9 +133,7 @@ export default function ReviewQueueScreen() {
               correction: {
                 errorCategory: correction.errorCategory,
                 includeInEvaluation: correction.includeInEvaluation,
-                ...(correction.includeInEvaluation
-                  ? { evaluationQuestion: correction.evaluationQuestion }
-                  : {}),
+                ...(correction.includeInEvaluation ? { evaluationFixture } : {}),
                 outcome: correction.outcome,
                 summary: correction.summary,
                 reasoningSteps: [correction.reasoning],
@@ -143,7 +145,7 @@ export default function ReviewQueueScreen() {
     } catch {
       setMessage(
         decision === "approve"
-          ? "Provide a decision reason, error category, corrected summary, and reasoning step. If including this case, use a sanitized scenario and confirm the player opted in."
+          ? "Provide a valid corrected answer. For evaluation, include a complete valid JSON fixture and confirm the player opted in."
           : "Provide at least 10 characters explaining the rejection.",
       );
       return;
@@ -338,7 +340,7 @@ export default function ReviewQueueScreen() {
                           outcome: "resolved",
                           errorCategory: "reasoning",
                           includeInEvaluation: false,
-                          evaluationQuestion: "",
+                          evaluationFixtureJson: "",
                           summary: "",
                           reasoning: "",
                         }),
@@ -369,7 +371,7 @@ export default function ReviewQueueScreen() {
                     outcome: "resolved" as const,
                     errorCategory: "reasoning" as const,
                     includeInEvaluation: false,
-                    evaluationQuestion: "",
+                    evaluationFixtureJson: "",
                     summary: "",
                     reasoning: "",
                   };
@@ -379,7 +381,9 @@ export default function ReviewQueueScreen() {
                     [item.challengeId]: {
                       ...previous,
                       includeInEvaluation,
-                      evaluationQuestion: includeInEvaluation ? previous.evaluationQuestion : "",
+                      evaluationFixtureJson: includeInEvaluation
+                        ? previous.evaluationFixtureJson
+                        : "",
                     },
                   };
                 })
@@ -392,30 +396,39 @@ export default function ReviewQueueScreen() {
               </Text>
             </Pressable>
             {corrections[item.challengeId]?.includeInEvaluation ? (
-              <TextInput
-                accessibilityLabel={`Sanitized evaluation scenario for challenge ${item.challengeId}`}
-                multiline
-                maxLength={4_000}
-                value={corrections[item.challengeId]?.evaluationQuestion ?? ""}
-                onChangeText={(evaluationQuestion) =>
-                  setCorrections((current) => ({
-                    ...current,
-                    [item.challengeId]: {
-                      ...(current[item.challengeId] ?? {
-                        outcome: "resolved",
-                        errorCategory: "reasoning",
-                        includeInEvaluation: true,
-                        evaluationQuestion: "",
-                        summary: "",
-                        reasoning: "",
-                      }),
-                      evaluationQuestion,
-                    },
-                  }))
-                }
-                placeholder="Rewrite the scenario without names, account details, or other personal information."
-                style={styles.input}
-              />
+              <>
+                <Text style={styles.meta}>
+                  Write the complete fixture for the rewritten scenario. Include only cards, rules,
+                  expected answer text, and citations you reviewed for accuracy and privacy. The
+                  exporter uses this fixture as a unit and does not copy content from the challenge.
+                </Text>
+                <TextInput
+                  accessibilityLabel={`Complete reviewed evaluation fixture JSON for challenge ${item.challengeId}`}
+                  multiline
+                  maxLength={20_000}
+                  value={corrections[item.challengeId]?.evaluationFixtureJson ?? ""}
+                  onChangeText={(evaluationFixtureJson) =>
+                    setCorrections((current) => ({
+                      ...current,
+                      [item.challengeId]: {
+                        ...(current[item.challengeId] ?? {
+                          outcome: "resolved",
+                          errorCategory: "reasoning",
+                          includeInEvaluation: true,
+                          evaluationFixtureJson: "",
+                          summary: "",
+                          reasoning: "",
+                        }),
+                        evaluationFixtureJson,
+                      },
+                    }))
+                  }
+                  placeholder={
+                    '{"question":"...","cards":[],"rules":[],"expectedOutcome":"uncertain","expectedRuleNumbers":[],"expectedClarificationCount":0,"modelOutput":{"outcome":"uncertain","summary":"...","summarySupport":"UNSUPPORTED","summaryCitationNumbers":[],"reasoningSteps":[],"assumptions":[],"clarificationQuestions":[]}}'
+                  }
+                  style={styles.input}
+                />
+              </>
             ) : null}
             <View style={styles.choices}>
               {(["resolved", "conditional", "needs_information", "uncertain"] as const).map(
@@ -434,7 +447,7 @@ export default function ReviewQueueScreen() {
                             outcome: "resolved",
                             errorCategory: "reasoning",
                             includeInEvaluation: false,
-                            evaluationQuestion: "",
+                            evaluationFixtureJson: "",
                             summary: "",
                             reasoning: "",
                           }),
@@ -466,7 +479,7 @@ export default function ReviewQueueScreen() {
                       outcome: "resolved",
                       errorCategory: "reasoning",
                       includeInEvaluation: false,
-                      evaluationQuestion: "",
+                      evaluationFixtureJson: "",
                       summary: "",
                       reasoning: "",
                     }),
@@ -490,7 +503,7 @@ export default function ReviewQueueScreen() {
                       outcome: "resolved",
                       errorCategory: "reasoning",
                       includeInEvaluation: false,
-                      evaluationQuestion: "",
+                      evaluationFixtureJson: "",
                       summary: "",
                       reasoning: "",
                     }),

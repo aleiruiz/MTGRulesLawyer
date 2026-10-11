@@ -423,7 +423,30 @@ void describe("admin challenge review routes", () => {
         reason: "The challenge correctly identifies the replacement effect.",
         correction: {
           errorCategory: "reasoning",
-          includeInEvaluation: false,
+          includeInEvaluation: true,
+          evaluationFixture: {
+            question: "Which player chooses between two replacement effects that modify one event?",
+            cards: [],
+            rules: [{ number: "616.1", text: "The affected player chooses among these effects." }],
+            expectedOutcome: "conditional",
+            expectedRuleNumbers: ["616.1"],
+            expectedClarificationCount: 0,
+            modelOutput: {
+              outcome: "conditional",
+              summary: "The affected player chooses one applicable effect.",
+              summarySupport: "SUPPORTED",
+              summaryCitationNumbers: ["616.1"],
+              reasoningSteps: [
+                {
+                  text: "Rule 616.1 gives the affected player this choice.",
+                  support: "SUPPORTED",
+                  citationNumbers: ["616.1"],
+                },
+              ],
+              assumptions: [],
+              clarificationQuestions: [],
+            },
+          },
           outcome: "conditional",
           summary: "The spell resolves conditionally when the replacement effect applies.",
           reasoningSteps: ["Apply the replacement effect before determining the result."],
@@ -434,6 +457,13 @@ void describe("admin challenge review routes", () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.json<ReviewDecisionResponse>().correctedRulingVersion, 2);
     assert.equal(reviewDecisions[0]?.reviewerId, "admin-token");
+    assert.equal(reviewDecisions[0]?.decision.decision, "approve");
+    if (reviewDecisions[0]?.decision.decision === "approve") {
+      assert.equal(
+        reviewDecisions[0].decision.correction.evaluationFixture?.question,
+        "Which player chooses between two replacement effects that modify one event?",
+      );
+    }
     const denied = await reviewApp.inject({
       method: "POST",
       url: `/api/admin/challenges/${challengeId}/decision`,
@@ -457,6 +487,46 @@ void describe("admin challenge review routes", () => {
           outcome: "resolved",
           summary: "The affected player chooses the replacement effect.",
           reasoningSteps: ["Apply rule 616.1."],
+          assumptions: [],
+        },
+      },
+    });
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(response.json(), { error: "INVALID_REVIEW_DECISION" });
+  });
+
+  void it("rejects evaluation fixtures with private fields or citations outside their evidence", async () => {
+    const response = await reviewApp.inject({
+      method: "POST",
+      url: "/api/admin/challenges/00000000-0000-4000-8000-000000000010/decision",
+      headers: { authorization: "Bearer admin-token" },
+      payload: {
+        decision: "approve",
+        reason: "The correction is supported by the cited rule.",
+        correction: {
+          errorCategory: "reasoning",
+          includeInEvaluation: true,
+          evaluationFixture: {
+            question: "A sanitized scenario with a citation that is not in the reviewed evidence?",
+            cards: [],
+            rules: [],
+            expectedOutcome: "resolved",
+            expectedRuleNumbers: ["616.1"],
+            expectedClarificationCount: 0,
+            modelOutput: {
+              outcome: "resolved",
+              summary: "The cited rule determines the outcome.",
+              summarySupport: "SUPPORTED",
+              summaryCitationNumbers: ["616.1"],
+              reasoningSteps: [],
+              assumptions: [],
+              clarificationQuestions: [],
+            },
+            challengeId: "private-id-must-not-be-accepted",
+          },
+          outcome: "resolved",
+          summary: "The corrected answer follows the public rules text.",
+          reasoningSteps: ["Apply the relevant rule to the stated facts."],
           assumptions: [],
         },
       },

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient, SnapshotStatus } from "@prisma/client";
+import type { ReviewDecisionRequest } from "@mtg-rules/contracts";
 import { after, describe, it } from "node:test";
 import { listMyChallenges, submitChallenge } from "../challenges/service.js";
 import { getRuling } from "../rulings/persistence.js";
@@ -15,6 +16,37 @@ import {
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const prisma = new PrismaClient();
+const reviewedFixture = {
+  question:
+    "Two replacement effects would exile a card instead of putting it into a graveyard. Who chooses between them?",
+  cards: [],
+  rules: [
+    {
+      number: "616.1",
+      text: "The affected object's controller or owner, or the affected player, chooses among applicable replacement and prevention effects.",
+    },
+  ],
+  expectedOutcome: "conditional",
+  expectedRuleNumbers: ["616.1"],
+  expectedClarificationCount: 0,
+  modelOutput: {
+    outcome: "conditional",
+    summary: "The affected player chooses which applicable replacement effect to apply.",
+    summarySupport: "SUPPORTED",
+    summaryCitationNumbers: ["616.1"],
+    reasoningSteps: [
+      {
+        text: "The affected player chooses among replacement effects that modify the same event.",
+        support: "SUPPORTED",
+        citationNumbers: ["616.1"],
+      },
+    ],
+    assumptions: [],
+    clarificationQuestions: [],
+  },
+} satisfies NonNullable<
+  Extract<ReviewDecisionRequest, { decision: "approve" }>["correction"]["evaluationFixture"]
+>;
 
 void after(async () => prisma.$disconnect());
 
@@ -162,8 +194,7 @@ void describe("review service integration", { skip: !enabled }, () => {
             correction: {
               errorCategory: "reasoning",
               includeInEvaluation: true,
-              evaluationQuestion:
-                "A public, anonymized scenario about two replacement effects affecting one event.",
+              evaluationFixture: reviewedFixture,
               outcome: "conditional",
               summary: "The spell resolves conditionally after applying the replacement effect.",
               reasoningSteps: ["Apply the replacement effect before determining the final result."],
@@ -197,10 +228,7 @@ void describe("review service integration", { skip: !enabled }, () => {
       if (approvalEvent) {
         assert.equal(approvalEvent.errorCategory, "REASONING");
         assert.equal(approvalEvent.includeInEvaluation, true);
-        assert.equal(
-          approvalEvent.evaluationQuestion,
-          "Two replacement effects would exile a card instead of putting it into a graveyard. Who chooses between them?",
-        );
+        assert.deepEqual(approvalEvent.evaluationFixture, reviewedFixture);
       }
       assert.ok(finalChallenge.status === "APPROVED" || finalChallenge.status === "REJECTED");
       if (finalChallenge.status === "APPROVED") {
@@ -214,8 +242,14 @@ void describe("review service integration", { skip: !enabled }, () => {
         assert.equal(reviewedCase.reviewSource, "approved_challenge");
         assert.equal(reviewedCase.expectedOutcome, "conditional");
         assert.deepEqual(reviewedCase.expectedRuleNumbers, ["616.1"]);
+        assert.deepEqual(reviewedCase.cards, []);
+        assert.equal(
+          reviewedCase.modelOutput.summary,
+          "The affected player chooses which applicable replacement effect to apply.",
+        );
         assert.equal(JSON.stringify(reviewedCase).includes(challenge.challengeId), false);
         assert.equal(JSON.stringify(reviewedCase).includes("C04 review fixture question"), false);
+        assert.equal(JSON.stringify(reviewedCase).includes("C04 original answer"), false);
         const original = await getRuling(ruling.id, prisma, 1);
         const corrected = await getRuling(ruling.id, prisma, 2);
         assert.equal(original?.ruling.summary, "C04 original answer");
@@ -293,7 +327,7 @@ void describe("review service integration", { skip: !enabled }, () => {
             correction: {
               errorCategory: "reasoning",
               includeInEvaluation: true,
-              evaluationQuestion: "A sanitized question about a publicly known card interaction.",
+              evaluationFixture: reviewedFixture,
               outcome: "resolved",
               summary: "The corrected answer follows the public rules text.",
               reasoningSteps: ["Apply the relevant rule to the stated facts."],

@@ -10,7 +10,7 @@ CREATE TYPE "ReviewErrorCategory" AS ENUM (
 ALTER TABLE "ReviewEvent"
 ADD COLUMN "errorCategory" "ReviewErrorCategory",
 ADD COLUMN "includeInEvaluation" BOOLEAN NOT NULL DEFAULT FALSE,
-ADD COLUMN "evaluationQuestion" TEXT;
+ADD COLUMN "evaluationFixture" JSONB;
 
 ALTER TABLE "Challenge"
 ADD COLUMN "evaluationConsent" BOOLEAN NOT NULL DEFAULT FALSE;

@@ -335,7 +335,7 @@ model ReviewEvent {
   decision            ReviewDecision
   errorCategory       ReviewErrorCategory?
   includeInEvaluation Boolean              @default(false)
-  evaluationQuestion  String?              @db.Text
+  evaluationFixture   Json?
   fromStatus          ChallengeStatus?
   toStatus            ChallengeStatus
   reason              String               @db.Text

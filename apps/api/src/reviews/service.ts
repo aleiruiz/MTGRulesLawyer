@@ -308,10 +308,11 @@ export async function decideChallenge(
             : null,
         includeInEvaluation:
           decision.decision === "approve" && decision.correction.includeInEvaluation,
-        evaluationQuestion:
-          decision.decision === "approve" && decision.correction.includeInEvaluation
-            ? decision.correction.evaluationQuestion
-            : null,
+        ...(decision.decision === "approve" && decision.correction.includeInEvaluation
+          ? {
+              evaluationFixture: decision.correction.evaluationFixture,
+            }
+          : {}),
         fromStatus: challenge.status,
         toStatus,
         reason: decision.reason,
