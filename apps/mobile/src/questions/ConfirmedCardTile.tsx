@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
 
 type Card = CardLookupResponse["cards"][number];
@@ -8,8 +8,6 @@ interface ConfirmedCardTileProps {
   mentionCount: number;
   copyCount: number;
   faceIndex: number;
-  imageFailed: boolean;
-  onImageError: () => void;
   onSwitchFace: () => void;
   onChangeCount: (delta: number) => void;
   onReplace: () => void;
@@ -21,8 +19,6 @@ export default function ConfirmedCardTile({
   mentionCount,
   copyCount,
   faceIndex,
-  imageFailed,
-  onImageError,
   onSwitchFace,
   onChangeCount,
   onReplace,
@@ -34,25 +30,6 @@ export default function ConfirmedCardTile({
   return (
     <View style={styles.cardTile}>
       <Text style={styles.cardTitle}>{card.name}</Text>
-      {face.imageUri && !imageFailed ? (
-        <Image
-          accessibilityLabel={`${face.name} card image`}
-          onError={onImageError}
-          resizeMode="contain"
-          source={{ uri: face.imageUri }}
-          style={styles.cardImage}
-        />
-      ) : (
-        <View
-          accessibilityRole="image"
-          accessibilityLabel={`${face.name} card image unavailable`}
-          style={styles.imageFallback}
-        >
-          <Text style={styles.fallbackName}>{face.name}</Text>
-          <Text>{face.typeLine}</Text>
-          <Text>{face.oracleText}</Text>
-        </View>
-      )}
       <Text style={styles.faceName}>{face.name}</Text>
       <Text numberOfLines={4} style={styles.oracleText}>
         {face.oracleText || face.typeLine}
@@ -126,18 +103,6 @@ const styles = StyleSheet.create({
     borderColor: "#d3d9d3",
   },
   cardTitle: { color: "#18312f", fontSize: 16, fontWeight: "700" },
-  cardImage: { width: "100%", height: 300, backgroundColor: "#f4f4f1" },
-  imageFallback: {
-    minHeight: 210,
-    justifyContent: "center",
-    gap: 8,
-    padding: 14,
-    backgroundColor: "#f4f4f1",
-    borderWidth: 1,
-    borderColor: "#ccd2ca",
-    borderRadius: 9,
-  },
-  fallbackName: { fontSize: 19, fontWeight: "700", textAlign: "center" },
   faceName: { color: "#18312f", fontWeight: "700" },
   oracleText: { color: "#33443f", minHeight: 52 },
   secondaryButton: {
