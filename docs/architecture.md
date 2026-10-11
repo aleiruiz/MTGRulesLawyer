@@ -8,7 +8,7 @@ apps/api/           Fastify HTTP application and server entry point
 packages/contracts/ Zod schemas shared at API and mobile boundaries
 ```
 
-The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. The API currently implements `GET /health` and `GET /api/cards/lookup?name=...`; rules and Oracle imports create versioned snapshots, while question interpretation and authentication remain in development.
+The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. It currently implements `GET /health` and `GET /api/cards/lookup?name=...`; its bounded evidence assembly service uses local PostgreSQL card and rule snapshots. Rules and Oracle imports create versioned snapshots, while question interpretation and authentication remain in development.
 
 ## Planned data flow
 
@@ -23,6 +23,8 @@ flowchart LR
 ```
 
 The contract package defines external request and response shapes. API routes should validate input before calling domain services. Domain services should accept ordinary typed values rather than Fastify or React Native objects. Database queries, source imports, retrieval, model calls, and authorization decisions belong on the server.
+
+`apps/api/src/search/retrieval.ts` performs case-insensitive exact face matching against an indexed name, full-text rule matching through PostgreSQL, and bounded expansion of matched rules' parents and outbound references. The evidence packet identifies its immutable snapshot and source metadata so later ruling operations can persist citations to the exact imported records.
 
 ## Repository locations
 

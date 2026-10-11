@@ -30,6 +30,5 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.send(cardLookupResponseSchema.parse(await lookupCards(name)));
     },
   );
-
   return app;
 }

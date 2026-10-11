@@ -12,6 +12,7 @@ import {
 import { describe, it } from "node:test";
 import { PrismaOracleSnapshotWriter } from "../cards/oracle-import.js";
 import { PrismaRulesSnapshotWriter } from "../rules/import.js";
+import { assembleEvidence } from "../search/retrieval.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 
@@ -19,6 +20,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
   void it("keeps the last good snapshot active on failure and retains old citations on refresh", async () => {
     const prisma = new PrismaClient();
     const testSnapshots: string[] = [];
+    let questionId: string | undefined;
     const originallyActive = await prisma.dataSnapshot.findMany({
       where: { status: SnapshotStatus.ACTIVE },
       select: { id: true },
@@ -38,15 +40,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         sourcePublishedAt: now,
         checksumSha256: checksum("1"),
         importedAt: now,
-        rules: [
-          {
-            number: "100",
-            text: "General rules.",
-            sortOrder: 0,
-            parentNumber: null,
-            references: [],
-          },
-        ],
+        rules: fixtureRules(),
       });
       testSnapshots.push(baseline.id);
 
@@ -69,6 +63,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         where: { card: { snapshotId: oracle.id } },
       });
       const question = await prisma.question.create({ data: { text: "D04 snapshot test" } });
+      questionId = question.id;
       const ruling = await prisma.ruling.create({ data: { questionId: question.id } });
       const rulingVersion = await prisma.rulingVersion.create({
         data: {
@@ -151,17 +146,26 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         sourcePublishedAt: now,
         checksumSha256: checksum("4"),
         importedAt: now,
-        rules: [
-          {
-            number: "100",
-            text: "General rules, refreshed.",
-            sortOrder: 0,
-            parentNumber: null,
-            references: [],
-          },
-        ],
+        rules: fixtureRules(true, true),
       });
       testSnapshots.push(refreshed.id);
+      const unchangedOracle = await cardsWriter.activateOracleSnapshot({
+        version: `d04-oracle-v2-retry-${randomUUID()}`,
+        sourceVersion: "2026-10-10T00:00:00.000Z",
+        sourceUrl: "https://example.invalid/oracle.jsonl.gz",
+        sourcePublishedAt: now,
+        checksumSha256: checksum("2"),
+        importerRevision: 2,
+        importedAt: now,
+        minimumCardCount: 1,
+        cards: oneCard(),
+      });
+      testSnapshots.push(unchangedOracle.id);
+      assert.equal(
+        unchangedOracle.id,
+        refreshed.id,
+        "unchanged Oracle data remains a no-op after rules refresh",
+      );
       assert.equal(
         await prisma.card.count({ where: { snapshotId: refreshed.id } }),
         1,
@@ -177,6 +181,38 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
           where: { snapshotId: refreshed.id, kind: SourceKind.ORACLE_CARDS },
         }),
       );
+      const packet = await assembleEvidence(
+        { question: "How is damage assigned in order?", cardNames: ["D04 Fixture Card"] },
+        prisma,
+      );
+      assert.equal(packet.snapshot.id, refreshed.id);
+      assert.equal(packet.cards[0]?.matchedFace.name, "D04 Fixture Card");
+      assert.ok(
+        packet.rules.some((rule) => rule.number === "100.1" && rule.includedBecause === "MATCH"),
+      );
+      assert.ok(
+        packet.rules.some(
+          (rule) => rule.number === "200.1" && rule.includedBecause === "REFERENCE",
+        ),
+      );
+      assert.ok(
+        packet.rules.some((rule) => rule.number === "100" && rule.includedBecause === "PARENT"),
+      );
+      const overloadedPacket = await assembleEvidence(
+        { question: "damage assigned", cardNames: [] },
+        prisma,
+      );
+      assert.equal(overloadedPacket.truncated, true, "omitted matching rules are reported");
+      const referenceOverflowPacket = await assembleEvidence(
+        { question: "400", cardNames: [] },
+        prisma,
+      );
+      assert.equal(referenceOverflowPacket.truncated, true, "excess references are reported");
+      const expansionOverflowPacket = await assembleEvidence(
+        { question: "500 501", cardNames: [] },
+        prisma,
+      );
+      assert.equal(expansionOverflowPacket.truncated, true, "unexpanded evidence is reported");
       assert.ok(await prisma.rule.findUnique({ where: { id: originalRule.id } }));
       assert.ok(await prisma.cardFace.findUnique({ where: { id: originalFace.id } }));
       assert.equal(
@@ -188,22 +224,113 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
           .snapshotId,
         oracle.id,
       );
-
-      await prisma.question.delete({ where: { id: question.id } });
     } finally {
-      await prisma.rulingCitation.deleteMany({
-        where: { rulingVersion: { snapshotId: { in: testSnapshots } } },
-      });
-      await prisma.rulingVersion.deleteMany({ where: { snapshotId: { in: testSnapshots } } });
-      await prisma.dataSnapshot.deleteMany({ where: { id: { in: testSnapshots } } });
-      await prisma.dataSnapshot.updateMany({
-        where: { id: { in: originallyActive.map(({ id }) => id) } },
-        data: { status: SnapshotStatus.ACTIVE },
-      });
-      await prisma.$disconnect();
+      try {
+        if (questionId) await prisma.question.deleteMany({ where: { id: questionId } });
+        await prisma.rulingCitation.deleteMany({
+          where: { rulingVersion: { snapshotId: { in: testSnapshots } } },
+        });
+        await prisma.rulingVersion.deleteMany({ where: { snapshotId: { in: testSnapshots } } });
+        await prisma.dataSnapshot.deleteMany({ where: { id: { in: testSnapshots } } });
+      } finally {
+        try {
+          await prisma.dataSnapshot.updateMany({
+            where: { id: { in: originallyActive.map(({ id }) => id) } },
+            data: { status: SnapshotStatus.ACTIVE },
+          });
+        } finally {
+          await prisma.$disconnect();
+        }
+      }
     }
   });
 });
+
+function fixtureRules(refreshed = false, overloadSearch = false) {
+  const rules: Array<{
+    number: string;
+    text: string;
+    sortOrder: number;
+    parentNumber: string | null;
+    references: string[];
+  }> = [
+    { number: "100", text: "General rules.", sortOrder: 0, parentNumber: null, references: [] },
+    {
+      number: "100.1",
+      text: refreshed
+        ? "Damage is assigned in order after refresh."
+        : "Damage is assigned in order.",
+      sortOrder: 1,
+      parentNumber: "100",
+      references: ["200.1"],
+    },
+    { number: "200", text: "Combat rules.", sortOrder: 2, parentNumber: null, references: [] },
+    {
+      number: "200.1",
+      text: "An attacking creature is an attacker.",
+      sortOrder: 3,
+      parentNumber: "200",
+      references: [],
+    },
+  ];
+  if (overloadSearch) {
+    rules.push({
+      number: "300",
+      text: "Additional damage rules.",
+      sortOrder: 4,
+      parentNumber: null,
+      references: [],
+    });
+    for (let index = 1; index <= 9; index += 1) {
+      rules.push({
+        number: `300.${index}`,
+        text: `Damage is assigned under additional rule ${index}.`,
+        sortOrder: 4 + index,
+        parentNumber: "300",
+        references: [],
+      });
+    }
+    rules.push({
+      number: "400",
+      text: "A rule with many references.",
+      sortOrder: 14,
+      parentNumber: null,
+      references: Array.from({ length: 13 }, (_, index) => `${401 + index}`),
+    });
+    for (let number = 401; number <= 413; number += 1) {
+      rules.push({
+        number: `${number}`,
+        text: `Reference target ${number}.`,
+        sortOrder: 14 + number - 400,
+        parentNumber: null,
+        references: [],
+      });
+    }
+    for (const [root, firstTarget] of [
+      [500, 510],
+      [501, 530],
+    ] as const) {
+      rules.push({
+        number: `${root}`,
+        text: `A rule with expansion targets ${root}.`,
+        sortOrder: 30 + root - 500,
+        parentNumber: null,
+        references: Array.from({ length: 12 }, (_, index) => `${firstTarget + index}`),
+      });
+      for (let index = 0; index < 12; index += 1) {
+        const number = firstTarget + index;
+        rules.push({
+          number: `${number}`,
+          text: `Expansion target ${number}.`,
+          sortOrder: 32 + number - 510,
+          parentNumber: null,
+          references: [],
+        });
+      }
+    }
+  }
+  return rules;
+}
 
 function oneCard() {
   return Readable.from([
