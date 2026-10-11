@@ -14,6 +14,7 @@ import { AiUsageLimitError } from "./ai/usage.js";
 import { buildApp } from "./app.js";
 
 const app = buildApp({
+  checkDatabase: () => Promise.resolve(),
   getSourceStatus: (): Promise<SourceStatusResponse> =>
     Promise.resolve({
       activeSnapshot: { id: "snapshot-id", version: "rules-test", activatedAt: null },
@@ -181,6 +182,23 @@ void describe("GET /health", () => {
 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json(), { status: "ok", service: "mtg-rules-api" });
+  });
+
+  void it("reports PostgreSQL readiness separately from process liveness", async () => {
+    const readyResponse = await app.inject({ method: "GET", url: "/ready" });
+    assert.equal(readyResponse.statusCode, 200);
+    assert.deepEqual(readyResponse.json(), { status: "ok", database: "ok" });
+
+    const unavailableApp = buildApp({
+      checkDatabase: () => Promise.reject(new Error("database offline")),
+    });
+    try {
+      const unavailable = await unavailableApp.inject({ method: "GET", url: "/ready" });
+      assert.equal(unavailable.statusCode, 503);
+      assert.deepEqual(unavailable.json(), { status: "unavailable", database: "unavailable" });
+    } finally {
+      await unavailableApp.close();
+    }
   });
 });
 

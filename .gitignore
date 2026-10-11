@@ -6,6 +6,7 @@ apps/api/src/generated/
 .env.*
 !.env.example
 coverage/
+.backups/
 *.log
 npm-debug.log*
 pnpm-debug.log*

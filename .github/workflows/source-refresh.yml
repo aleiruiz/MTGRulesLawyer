@@ -15,6 +15,8 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SOURCE_STALE_AFTER_HOURS: ${{ vars.SOURCE_STALE_AFTER_HOURS || '72' }}
+      AI_GLOBAL_DAILY_COST_LIMIT_MICROS: ${{ vars.AI_GLOBAL_DAILY_COST_LIMIT_MICROS || '5000000' }}
+      AI_DAILY_COST_ALERT_MICROS: ${{ vars.AI_DAILY_COST_ALERT_MICROS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,9 +36,16 @@ jobs:
       - name: Apply source tracking migrations
         run: pnpm db:migrate
 
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
       - name: Check sources and activate changes
         run: pnpm sources:refresh
 
       - name: Alert on stale sources or failed refreshes
         if: always()
         run: pnpm sources:check
+
+      - name: Alert on daily AI cost threshold
+        if: always()
+        run: pnpm ops:ai-usage
