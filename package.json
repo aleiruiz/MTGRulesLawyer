@@ -20,6 +20,8 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm db:generate && pnpm --filter @mtg-rules/contracts build && pnpm -r --if-present typecheck",
     "test": "pnpm --filter @mtg-rules/contracts build && pnpm --filter @mtg-rules/api test",
+    "eval:rulings": "pnpm --filter @mtg-rules/api eval:rulings",
+    "eval:rulings:live": "pnpm --filter @mtg-rules/api eval:rulings:live",
     "audit:check": "node scripts/audit-dependencies.mjs",
     "db:generate": "prisma generate",
     "db:format": "prisma format",
