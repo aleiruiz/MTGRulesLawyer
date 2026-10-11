@@ -11,6 +11,9 @@ const keyInput = {
   snapshotId: "snapshot-a",
   modelName: "gpt-6-luna",
   promptVersion: "verified-ruling-v1",
+  reasoningEffort: "low",
+  maxOutputTokens: 1_200,
+  schemaFingerprint: "schema-v1",
   systemPrompt: "Use only the supplied evidence.",
   userPrompt: JSON.stringify({ question: "Does this resolve?", confirmedCards: ["card-a"] }),
 };
@@ -62,6 +65,12 @@ void describe("verified ruling cache", () => {
     assert.notEqual(createVerifiedRulingCacheKey({ ...keyInput, snapshotId: "snapshot-b" }), key);
     assert.notEqual(
       createVerifiedRulingCacheKey({ ...keyInput, userPrompt: keyInput.userPrompt + " " }),
+      key,
+    );
+    assert.notEqual(createVerifiedRulingCacheKey({ ...keyInput, reasoningEffort: "high" }), key);
+    assert.notEqual(createVerifiedRulingCacheKey({ ...keyInput, maxOutputTokens: 1_500 }), key);
+    assert.notEqual(
+      createVerifiedRulingCacheKey({ ...keyInput, schemaFingerprint: "schema-v2" }),
       key,
     );
   });

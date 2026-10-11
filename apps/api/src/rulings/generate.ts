@@ -4,6 +4,7 @@ import {
   rulingGenerationResponseSchema,
   type RulingGenerationResponse,
 } from "@mtg-rules/contracts";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   estimateAiTokenCostMicros,
@@ -223,12 +224,27 @@ export async function generateRuling(
     .min(1)
     .max(100)
     .parse(process.env.OPENAI_MODEL ?? OPENAI_DEFAULT_MODEL);
+  const maxOutputTokens = z
+    .number()
+    .int()
+    .min(1)
+    .max(4_000)
+    .parse(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS ?? 1_200));
+  const reasoningEffort = z
+    .enum(["none", "low", "medium", "high", "xhigh", "max"])
+    .parse(process.env.OPENAI_REASONING_EFFORT ?? "low");
   const systemPrompt = RULING_SYSTEM_PROMPT;
   const userPrompt = buildModelPrompt(request, evidence);
+  const schemaFingerprint = createHash("sha256")
+    .update(JSON.stringify(z.toJSONSchema(modelRulingSchema)))
+    .digest("hex");
   const cacheKey = createVerifiedRulingCacheKey({
     snapshotId: evidence.snapshot.id,
     modelName,
     promptVersion: RULING_PROMPT_VERSION,
+    reasoningEffort,
+    maxOutputTokens,
+    schemaFingerprint,
     systemPrompt,
     userPrompt,
   });

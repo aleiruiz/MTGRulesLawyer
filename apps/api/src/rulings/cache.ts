@@ -3,16 +3,20 @@ import {
   rulingGenerationResponseSchema,
   type RulingGenerationResponse,
 } from "@mtg-rules/contracts";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../db/client.js";
 
 const DEFAULT_CACHE_TTL_MS = 6 * 60 * 60 * 1_000;
 const MAX_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+type CacheDatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 export function createVerifiedRulingCacheKey(input: {
   snapshotId: string;
   modelName: string;
   promptVersion: string;
+  reasoningEffort: string;
+  maxOutputTokens: number;
+  schemaFingerprint: string;
   systemPrompt: string;
   userPrompt: string;
 }): string {
@@ -29,7 +33,7 @@ export function readRulingCacheTtlMs(env: NodeJS.ProcessEnv = process.env): numb
 
 export async function getCachedVerifiedRuling(
   key: string,
-  client: PrismaClient = prisma,
+  client: CacheDatabaseClient = prisma,
   now = new Date(),
 ): Promise<RulingGenerationResponse | null> {
   await client.verifiedRulingCache.deleteMany({ where: { expiresAt: { lte: now } } });
@@ -48,7 +52,7 @@ export async function cacheVerifiedRuling(
   key: string,
   snapshotId: string,
   answer: RulingGenerationResponse,
-  client: PrismaClient = prisma,
+  client: CacheDatabaseClient = prisma,
   now = new Date(),
 ): Promise<void> {
   const verified = rulingGenerationResponseSchema.parse(answer);
@@ -80,14 +84,32 @@ export async function reuseVerifiedRuling(
   key: string,
   snapshotId: string,
   generate: () => Promise<RulingGenerationResponse>,
-  operations: VerifiedRulingCacheOperations = {
-    get: (cacheKey) => getCachedVerifiedRuling(cacheKey),
-    set: (cacheKey, id, answer) => cacheVerifiedRuling(cacheKey, id, answer),
-  },
+  operations?: VerifiedRulingCacheOperations,
 ): Promise<RulingGenerationResponse> {
-  const cached = await operations.get(key);
+  if (operations) {
+    const cached = await operations.get(key);
+    if (cached) return cached;
+    const answer = rulingGenerationResponseSchema.parse(await generate());
+    await operations.set(key, snapshotId, answer);
+    return answer;
+  }
+
+  const cached = await getCachedVerifiedRuling(key);
   if (cached) return cached;
-  const answer = rulingGenerationResponseSchema.parse(await generate());
-  await operations.set(key, snapshotId, answer);
-  return answer;
+
+  // A transaction-scoped advisory lock gives all API replicas a single-flight
+  // guarantee for this cache key. The lock is released on commit or rollback.
+  const lockId = BigInt.asIntN(64, BigInt(`0x${key.slice(0, 16)}`));
+  return prisma.$transaction(
+    async (transaction) => {
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+      const existing = await getCachedVerifiedRuling(key, transaction);
+      if (existing) return existing;
+
+      const answer = rulingGenerationResponseSchema.parse(await generate());
+      await cacheVerifiedRuling(key, snapshotId, answer, transaction);
+      return answer;
+    },
+    { maxWait: 5_000, timeout: 130_000 },
+  );
 }

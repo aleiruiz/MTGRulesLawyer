@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient, SnapshotStatus } from "@prisma/client";
 import type { RulingGenerationResponse } from "@mtg-rules/contracts";
 import { after, describe, it } from "node:test";
-import { cacheVerifiedRuling, getCachedVerifiedRuling } from "./cache.js";
+import { cacheVerifiedRuling, getCachedVerifiedRuling, reuseVerifiedRuling } from "./cache.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const prisma = new PrismaClient();
@@ -65,6 +65,31 @@ void describe("verified ruling cache integration", { skip: !enabled }, () => {
         await getCachedVerifiedRuling(key, prisma, new Date(now.getTime() + 86_400_000)),
         null,
       );
+    } finally {
+      await prisma.verifiedRulingCache.deleteMany({ where: { key } });
+      await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
+    }
+  });
+
+  void it("uses a database lock to share one concurrent generation across API instances", async () => {
+    const snapshot = await prisma.dataSnapshot.create({
+      data: { version: `r09-single-flight-${randomUUID()}`, status: SnapshotStatus.CANDIDATE },
+    });
+    const key = randomUUID().replaceAll("-", "").padEnd(64, "0").slice(0, 64);
+    let modelCalls = 0;
+    const generate = async (): Promise<RulingGenerationResponse> => {
+      modelCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { ...answer, snapshot: { ...answer.snapshot, id: snapshot.id } };
+    };
+
+    try {
+      const [first, second] = await Promise.all([
+        reuseVerifiedRuling(key, snapshot.id, generate),
+        reuseVerifiedRuling(key, snapshot.id, generate),
+      ]);
+      assert.deepEqual(first, second);
+      assert.equal(modelCalls, 1);
     } finally {
       await prisma.verifiedRulingCache.deleteMany({ where: { key } });
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
