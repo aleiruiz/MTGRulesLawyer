@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import ConfirmedCardTile from "./ConfirmedCardTile";
+import ChallengeForm from "../challenges/ChallengeForm";
 import { apiUrl } from "../api-url";
 import { getPublicRulingUrl } from "../rulings/public-ruling-url";
 import {
@@ -436,6 +437,9 @@ export default function QuestionConfirmationScreen() {
             <Text style={styles.secondaryButtonText}>Sign in for account features</Text>
           </Pressable>
         </Link>
+        <Link href="/challenges" style={styles.link}>
+          Track my challenges
+        </Link>
         <Text style={styles.sectionTitle}>Describe the game situation</Text>
         <TextInput
           accessibilityLabel="Magic rules question"
@@ -800,6 +804,7 @@ export default function QuestionConfirmationScreen() {
                             </Text>
                             <Text>{ruling.ruling.summary}</Text>
                             <Text selectable>Ruling ID: {ruling.rulingId}</Text>
+                            <ChallengeForm rulingId={ruling.rulingId} />
                             <Pressable
                               accessibilityRole="link"
                               onPress={() =>

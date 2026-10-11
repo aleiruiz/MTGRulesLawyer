@@ -15,6 +15,12 @@ import {
   type RulingGenerationResponse,
   type PersistedRulingResponse,
   type SourceStatusResponse,
+  challengeSubmissionRequestSchema,
+  challengeResponseSchema,
+  myChallengesResponseSchema,
+  type ChallengeResponse,
+  type ChallengeSubmissionRequest,
+  type MyChallengesResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
 import { lookupCardsByExactFaceName } from "./cards/lookup.js";
@@ -24,11 +30,23 @@ import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
 import { getRuling, saveRuling } from "./rulings/persistence.js";
 import { prisma } from "./db/client.js";
-import { registerAuthentication, type AppUserResolver } from "./auth/authorization.js";
+import {
+  createAuthenticationPreHandler,
+  registerAuthentication,
+  requireAuthenticatedUser,
+  type AppUserResolver,
+} from "./auth/authorization.js";
 import {
   createSupabaseAccessTokenVerifier,
   type AccessTokenVerifier,
 } from "./auth/supabase-auth.js";
+import {
+  ChallengeNotFoundError,
+  ChallengeRateLimitError,
+  DuplicateChallengeError,
+  listMyChallenges,
+  submitChallenge,
+} from "./challenges/service.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -54,6 +72,10 @@ export interface BuildAppOptions {
   checkDatabase?: () => Promise<void>;
   verifyAccessToken?: AccessTokenVerifier;
   resolveAppUser?: AppUserResolver;
+  submitChallenge?: (
+    input: ChallengeSubmissionRequest & { rulingId: string; userId: string },
+  ) => Promise<ChallengeResponse>;
+  listMyChallenges?: (userId: string) => Promise<MyChallengesResponse>;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -108,6 +130,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       });
       return user;
     });
+  const createChallenge = options.submitChallenge ?? submitChallenge;
+  const readMyChallenges = options.listMyChallenges ?? listMyChallenges;
 
   registerAuthentication(app, verifyAccessToken, resolveAppUser);
 
@@ -133,6 +157,59 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.get("/api/auth/me", async (request, reply) =>
     reply.send({ userId: request.appUser?.id, role: request.appUser?.role }),
   );
+  const authenticate = createAuthenticationPreHandler(verifyAccessToken, resolveAppUser);
+  app.post<{ Params: { rulingId: string } }>(
+    "/api/rulings/:rulingId/challenges",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.rulingId))
+        return reply.code(400).send({ error: "INVALID_RULING_ID" });
+      const parsed = challengeSubmissionRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "INVALID_CHALLENGE" });
+      try {
+        return reply.send(
+          challengeResponseSchema.parse(
+            await createChallenge({
+              ...parsed.data,
+              rulingId: request.params.rulingId,
+              userId: user.id,
+            }),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof ChallengeNotFoundError)
+          return reply.code(404).send({ error: "RULING_NOT_FOUND" });
+        if (error instanceof DuplicateChallengeError)
+          return reply.code(409).send({ error: "CHALLENGE_ALREADY_EXISTS" });
+        if (error instanceof ChallengeRateLimitError) {
+          reply.header("Retry-After", "86400");
+          return reply
+            .code(429)
+            .send({ error: "CHALLENGE_DAILY_LIMIT", retryAfterSeconds: 86_400 });
+        }
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Challenge submission failed",
+        );
+        return reply.code(503).send({ error: "CHALLENGE_UNAVAILABLE" });
+      }
+    },
+  );
+  app.get("/api/me/challenges", { preHandler: authenticate }, async (request, reply) => {
+    const user = requireAuthenticatedUser(request, reply);
+    if (!user) return reply;
+    try {
+      return reply.send(myChallengesResponseSchema.parse(await readMyChallenges(user.id)));
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Challenge list failed",
+      );
+      return reply.code(503).send({ error: "CHALLENGES_UNAVAILABLE" });
+    }
+  });
   app.get("/ready", async (request, reply) => {
     try {
       await checkDatabase();
@@ -248,11 +325,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
   app.get<{ Params: { rulingId: string } }>("/api/rulings/:rulingId", async (request, reply) => {
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        request.params.rulingId,
-      )
-    ) {
+    if (!isUuid(request.params.rulingId)) {
       return reply.code(400).send({ error: "INVALID_RULING_ID" });
     }
     const result = await readRuling(request.params.rulingId);
@@ -260,4 +333,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return reply.send(persistedRulingResponseSchema.parse(result));
   });
   return app;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

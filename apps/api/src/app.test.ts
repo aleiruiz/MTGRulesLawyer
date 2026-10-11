@@ -12,6 +12,12 @@ import type {
 import type { LightMyRequestResponse } from "fastify";
 import { AiUsageLimitError } from "./ai/usage.js";
 import { buildApp } from "./app.js";
+import { DuplicateChallengeError } from "./challenges/service.js";
+import type {
+  ChallengeResponse,
+  ChallengeSubmissionRequest,
+  MyChallengesResponse,
+} from "@mtg-rules/contracts";
 
 const app = buildApp({
   checkDatabase: () => Promise.resolve(),
@@ -161,6 +167,45 @@ const rulingApp = buildApp({
     Promise.resolve(rulingId === savedRulingResponse?.rulingId ? savedRulingResponse : null),
 });
 
+const challengeRequests: Array<ChallengeSubmissionRequest & { rulingId: string; userId: string }> =
+  [];
+const challengeApp = buildApp({
+  verifyAccessToken: (token) =>
+    Promise.resolve(token === "signed-user" ? { subject: "supabase-user" } : null),
+  resolveAppUser: (subject) => Promise.resolve({ id: subject, role: "USER" }),
+  submitChallenge: (request) => {
+    challengeRequests.push(request);
+    if (request.rulingId === "00000000-0000-4000-8000-000000000099") {
+      return Promise.reject(new DuplicateChallengeError());
+    }
+    return Promise.resolve({
+      challengeId: "00000000-0000-4000-8000-000000000002",
+      rulingId: request.rulingId,
+      question: "Test question",
+      explanation: request.explanation,
+      proposedOutcome: request.proposedOutcome ?? null,
+      status: "open",
+      createdAt: "2026-10-11T00:00:00.000Z",
+      updatedAt: "2026-10-11T00:00:00.000Z",
+    } satisfies ChallengeResponse);
+  },
+  listMyChallenges: (userId): Promise<MyChallengesResponse> =>
+    Promise.resolve({
+      challenges: [
+        {
+          challengeId: "00000000-0000-4000-8000-000000000002",
+          rulingId: "00000000-0000-4000-8000-000000000001",
+          question: "Test question",
+          explanation: `Owned by ${userId}`,
+          proposedOutcome: null,
+          status: "open",
+          createdAt: "2026-10-11T00:00:00.000Z",
+          updatedAt: "2026-10-11T00:00:00.000Z",
+        },
+      ],
+    }),
+});
+
 void describe("GET /api/sources/status", () => {
   void it("returns active snapshot metadata and source freshness", async () => {
     const response = await app.inject({ method: "GET", url: "/api/sources/status" });
@@ -174,6 +219,64 @@ void after(async () => {
   await app.close();
   await evidenceApp.close();
   await rulingApp.close();
+  await challengeApp.close();
+});
+
+void describe("challenge routes", () => {
+  void it("requires sign-in and uses the authenticated AppUser for submission", async () => {
+    const rulingId = "00000000-0000-4000-8000-000000000001";
+    const unauthenticated = await challengeApp.inject({
+      method: "POST",
+      url: `/api/rulings/${rulingId}/challenges`,
+      payload: { explanation: "I think the ruling missed an applicable replacement effect." },
+    });
+    assert.equal(unauthenticated.statusCode, 401);
+    const response = await challengeApp.inject({
+      method: "POST",
+      url: `/api/rulings/${rulingId}/challenges`,
+      headers: { authorization: "Bearer signed-user" },
+      payload: {
+        explanation: "I think the ruling missed an applicable replacement effect.",
+        proposedOutcome: "conditional",
+        userId: "attacker-controlled-user",
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(challengeRequests[0]?.userId, "supabase-user");
+    assert.equal(challengeRequests[0]?.proposedOutcome, "conditional");
+  });
+
+  void it("validates submissions and returns a conflict for duplicates", async () => {
+    const invalid = await challengeApp.inject({
+      method: "POST",
+      url: "/api/rulings/00000000-0000-4000-8000-000000000001/challenges",
+      headers: { authorization: "Bearer signed-user" },
+      payload: { explanation: "short" },
+    });
+    assert.equal(invalid.statusCode, 400);
+    const duplicate = await challengeApp.inject({
+      method: "POST",
+      url: "/api/rulings/00000000-0000-4000-8000-000000000099/challenges",
+      headers: { authorization: "Bearer signed-user" },
+      payload: { explanation: "This should be treated as a duplicate challenge." },
+    });
+    assert.equal(duplicate.statusCode, 409);
+  });
+
+  void it("returns only the authenticated user's challenge list", async () => {
+    const unauthenticated = await challengeApp.inject({ method: "GET", url: "/api/me/challenges" });
+    assert.equal(unauthenticated.statusCode, 401);
+    const response = await challengeApp.inject({
+      method: "GET",
+      url: "/api/me/challenges",
+      headers: { authorization: "Bearer signed-user" },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.match(
+      response.json<MyChallengesResponse>().challenges[0]?.explanation ?? "",
+      /supabase-user/,
+    );
+  });
 });
 
 void describe("GET /health", () => {
