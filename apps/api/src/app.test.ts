@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import type {
   CardLookupResponse,
+  EvidenceSearchResponse,
+  ConfirmedQuestionEvidenceRequest,
   QuestionInterpretResponse,
   SourceStatusResponse,
 } from "@mtg-rules/contracts";
@@ -96,6 +98,29 @@ const app = buildApp({
   },
 });
 
+const receivedEvidenceRequests: ConfirmedQuestionEvidenceRequest[] = [];
+const evidenceApp = buildApp({
+  assembleQuestionEvidence: (request) => {
+    receivedEvidenceRequests.push(request);
+    return Promise.resolve({
+      snapshot: { id: "snapshot-id", version: "rules-test", activatedAt: null },
+      sources: [
+        {
+          id: "source-id",
+          kind: "COMPREHENSIVE_RULES",
+          sourceUrl: "https://magic.wizards.com/en/rules",
+          sourceVersion: "rules-test",
+          sourcePublishedAt: null,
+          checksumSha256: "a".repeat(64),
+        },
+      ],
+      cards: [],
+      rules: [],
+      truncated: false,
+    } satisfies EvidenceSearchResponse);
+  },
+});
+
 void describe("GET /api/sources/status", () => {
   void it("returns active snapshot metadata and source freshness", async () => {
     const response = await app.inject({ method: "GET", url: "/api/sources/status" });
@@ -107,6 +132,7 @@ void describe("GET /api/sources/status", () => {
 
 void after(async () => {
   await app.close();
+  await evidenceApp.close();
 });
 
 void describe("GET /health", () => {
@@ -211,5 +237,68 @@ void describe("POST /api/questions/interpret", () => {
       });
       assert.equal(response.statusCode, 400);
     }
+  });
+});
+
+void describe("POST /api/questions/evidence", () => {
+  void it("accepts confirmed IDs and game state, returning snapshot and source identifiers", async () => {
+    receivedEvidenceRequests.length = 0;
+    const response = await evidenceApp.inject({
+      method: "POST",
+      url: "/api/questions/evidence",
+      payload: {
+        question: "Can this creature deal damage?",
+        gameState: { events: ["The creature attacked."], knownFacts: ["It is blocked."] },
+        confirmedCards: [
+          {
+            oracleId: "oracle-id",
+            faceIndex: 0,
+            quantity: 2,
+            oracleText: "Client-supplied text must be ignored.",
+            imageUri: "https://attacker.invalid/card.png",
+          },
+        ],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json<EvidenceSearchResponse>();
+    assert.equal(body.snapshot.id, "snapshot-id");
+    assert.equal(body.sources[0]?.id, "source-id");
+    assert.deepEqual(receivedEvidenceRequests[0]?.confirmedCards, [
+      { oracleId: "oracle-id", faceIndex: 0, quantity: 2 },
+    ]);
+    assert.deepEqual(receivedEvidenceRequests[0]?.gameState?.events, ["The creature attacked."]);
+  });
+
+  void it("rejects duplicate Oracle IDs instead of making an ambiguous card packet", async () => {
+    const response = await evidenceApp.inject({
+      method: "POST",
+      url: "/api/questions/evidence",
+      payload: {
+        question: "Question",
+        confirmedCards: [
+          { oracleId: "oracle-id", faceIndex: 0, quantity: 1 },
+          { oracleId: "oracle-id", faceIndex: 0, quantity: 2 },
+        ],
+      },
+    });
+    assert.equal(response.statusCode, 400);
+  });
+
+  void it("rejects requests above the shared distinct-card limit", async () => {
+    const response = await evidenceApp.inject({
+      method: "POST",
+      url: "/api/questions/evidence",
+      payload: {
+        question: "Question",
+        confirmedCards: Array.from({ length: 11 }, (_, index) => ({
+          oracleId: `oracle-${index}`,
+          faceIndex: 0,
+          quantity: 1,
+        })),
+      },
+    });
+    assert.equal(response.statusCode, 400);
   });
 });
