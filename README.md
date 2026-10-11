@@ -1,6 +1,6 @@
 # MTG Rules Lawyer
 
-MTG Rules Lawyer is an unofficial Magic: The Gathering rules research assistant. The MVP is being built in small, reviewable tasks. The current starter app checks its Fastify API health endpoint; card imports, rulings, and database migrations are added in later tasks.
+MTG Rules Lawyer is an unofficial Magic: The Gathering rules research assistant. The MVP is being built in small, reviewable tasks. The API includes local source import commands and exact card face lookup; question interpretation and rulings are still in development.
 
 This project is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast. Magic: The Gathering, its game rules, cards, and related marks belong to Wizards of the Coast LLC and their respective owners. Read the [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Planned card data sources include [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data); see the [source and image use decision](docs/source-policy.md) for import, attribution, and display requirements.
 
@@ -13,7 +13,7 @@ This project is not affiliated with, endorsed, sponsored, or specifically approv
 - Docker Desktop or another Docker Compose provider for the local PostgreSQL service
 - An Android emulator, iOS simulator, or Expo Go on a device for the mobile app
 
-No OpenAI or OAuth credentials are needed to start the API or app. The current starter only calls `GET /health`. Values in `.env.example` are local placeholders; do not replace them with production secrets or commit a populated environment file.
+No OpenAI or OAuth credentials are needed to start the API or app. Values in `.env.example` are local placeholders; do not replace them with production secrets or commit a populated environment file.
 
 ### Install and configure
 
@@ -45,6 +45,15 @@ pnpm db:reset   # Drop and recreate the local schema, apply migrations, and seed
 ```
 
 `db:reset` deletes data in the configured database. Use it only with the local database above, never with a shared or production URL. The seed snapshot is an empty candidate; it contains no rules or card data.
+
+With the local database running, populate private development source snapshots from the official sources:
+
+```powershell
+pnpm rules:import  # Fetch and validate the current Comprehensive Rules TXT
+pnpm oracle:import # Download and import the current Scryfall Oracle Cards bulk file
+```
+
+These commands require network access but no API credentials. They store source metadata and checksums in PostgreSQL and keep the full bulk files in temporary local storage only. Keep imported rules and Oracle text private; see [the source use decision](docs/source-policy.md) before exposing source material or image references publicly. Exact face names can be looked up locally at GET /api/cards/lookup?name=Dauntless%20Avenger.
 
 In one terminal, start the API:
 
