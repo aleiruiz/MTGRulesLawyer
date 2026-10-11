@@ -187,6 +187,40 @@ export const evidenceSearchResponseSchema = z.object({
 
 export type EvidenceSearchResponse = z.infer<typeof evidenceSearchResponseSchema>;
 
+export const rulingGenerationResponseSchema = z.object({
+  outcome: z.enum(["resolved", "conditional", "needs_information", "uncertain"]),
+  summary: z.string().min(1).max(1_200),
+  reasoningSteps: z
+    .array(
+      z.object({
+        text: z.string().min(1).max(800),
+        citationIds: z.array(z.string()).max(8),
+      }),
+    )
+    .max(12),
+  summaryCitationIds: z.array(z.string()).max(8),
+  assumptions: z.array(z.string().min(1).max(300)).max(12),
+  clarificationQuestions: z.array(z.string().min(1).max(300)).max(6),
+  citations: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.enum(["RULE", "CARD_FACE"]),
+        label: z.string(),
+        excerpt: z.string().max(2_000),
+        sourceId: z.string(),
+        sourceUrl: z.string().url(),
+      }),
+    )
+    .max(64),
+  snapshot: evidenceSearchResponseSchema.shape.snapshot,
+  sources: evidenceSearchResponseSchema.shape.sources,
+  modelName: z.string().max(100),
+  promptVersion: z.string().max(100),
+});
+
+export type RulingGenerationResponse = z.infer<typeof rulingGenerationResponseSchema>;
+
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z
     .object({ id: z.string(), version: z.string(), activatedAt: z.string().datetime().nullable() })
