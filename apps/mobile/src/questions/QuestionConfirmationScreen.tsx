@@ -78,7 +78,6 @@ export default function QuestionConfirmationScreen() {
   const [manualCards, setManualCards] = useState<Card[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [faceIndexes, setFaceIndexes] = useState<Record<string, number>>({});
-  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [isInterpreting, setIsInterpreting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
@@ -593,7 +592,6 @@ export default function QuestionConfirmationScreen() {
                     {displayCards.map((entry) => {
                       const { card } = entry;
                       const faceIndex = faceIndexes[card.oracleId] ?? card.matchedFace.faceIndex;
-                      const imageKey = `${card.oracleId}:${faceIndex}`;
                       return (
                         <ConfirmedCardTile
                           key={card.oracleId}
@@ -601,10 +599,6 @@ export default function QuestionConfirmationScreen() {
                           mentionCount={entry.mentionIndexes.length}
                           copyCount={counts[card.oracleId] ?? 1}
                           faceIndex={faceIndex}
-                          imageFailed={Boolean(failedImages[imageKey])}
-                          onImageError={() =>
-                            setFailedImages((current) => ({ ...current, [imageKey]: true }))
-                          }
                           onSwitchFace={() => cycleFace(card)}
                           onChangeCount={(delta) => adjustCount(card.oracleId, delta)}
                           onReplace={() =>
