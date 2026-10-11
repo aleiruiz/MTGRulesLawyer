@@ -20,6 +20,12 @@ export function postgresConnectionEnv(connectionString) {
   return env;
 }
 
+export function postgresDatabaseName(connectionString) {
+  const database = decodeURIComponent(new URL(connectionString).pathname.replace(/^\//, ""));
+  if (!database) throw new Error("DATABASE_URL must include a database.");
+  return database;
+}
+
 export function runPostgresTool(command, args, connectionString) {
   const env = postgresConnectionEnv(connectionString);
   return new Promise((resolve, reject) => {

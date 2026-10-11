@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runPostgresTool, requireEnvironment } from "./postgres-client.mjs";
+import { postgresDatabaseName, runPostgresTool, requireEnvironment } from "./postgres-client.mjs";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 if (process.env.CONFIRM_DATABASE_RESTORE !== "YES") {
@@ -37,7 +37,16 @@ try {
   await executeSql(`UPDATE public.${probeTable} SET value = 'changed-after-backup';`);
   await runPostgresTool(
     "pg_restore",
-    ["--clean", "--if-exists", "--no-owner", "--no-privileges", "--exit-on-error", backupFile],
+    [
+      "--dbname",
+      postgresDatabaseName(databaseUrl),
+      "--clean",
+      "--if-exists",
+      "--no-owner",
+      "--no-privileges",
+      "--exit-on-error",
+      backupFile,
+    ],
     databaseUrl,
   );
   const restored = await executeSql(`SELECT value FROM public.${probeTable};`);

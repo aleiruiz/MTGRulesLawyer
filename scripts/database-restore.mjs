@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import { runPostgresTool, requireEnvironment } from "./postgres-client.mjs";
+import { postgresDatabaseName, runPostgresTool, requireEnvironment } from "./postgres-client.mjs";
 
 const startedAt = Date.now();
 try {
@@ -13,7 +13,16 @@ try {
   await access(backupFile);
   await runPostgresTool(
     "pg_restore",
-    ["--clean", "--if-exists", "--no-owner", "--no-privileges", "--exit-on-error", backupFile],
+    [
+      "--dbname",
+      postgresDatabaseName(restoreUrl),
+      "--clean",
+      "--if-exists",
+      "--no-owner",
+      "--no-privileges",
+      "--exit-on-error",
+      backupFile,
+    ],
     restoreUrl,
   );
   process.stdout.write(
