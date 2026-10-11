@@ -8,7 +8,7 @@ apps/api/           Fastify HTTP application and server entry point
 packages/contracts/ Zod schemas shared at API and mobile boundaries
 ```
 
-The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only future boundary for database and model access. The starter currently implements `GET /health`; question interpretation, imported rules/cards, authentication, and persistence are not implemented yet.
+The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. The API currently implements `GET /health` and `GET /api/cards/lookup?name=...`; rules and Oracle imports create versioned snapshots, while question interpretation and authentication remain in development.
 
 ## Planned data flow
 
@@ -17,9 +17,9 @@ flowchart LR
   Mobile[Expo mobile app] -->|validated HTTP requests| API[Fastify API]
   API --> Contracts[Shared Zod contracts]
   Mobile --> Contracts
-  API -->|future| DB[(PostgreSQL via Prisma)]
+  API -->|lookups and snapshots| DB[(PostgreSQL via Prisma)]
   API -->|future, server only| Model[OpenAI Responses API]
-  Sources[Rules and card import jobs] -->|future snapshots| DB
+  Sources[Rules and Oracle bulk import jobs] -->|private snapshots| DB
 ```
 
 The contract package defines external request and response shapes. API routes should validate input before calling domain services. Domain services should accept ordinary typed values rather than Fastify or React Native objects. Database queries, source imports, retrieval, model calls, and authorization decisions belong on the server.
