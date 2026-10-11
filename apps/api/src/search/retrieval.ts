@@ -2,6 +2,9 @@ import { Prisma, SnapshotStatus, type PrismaClient } from "@prisma/client";
 import {
   evidenceSearchRequestSchema,
   evidenceSearchResponseSchema,
+  confirmedQuestionEvidenceRequestSchema,
+  MAX_CONFIRMED_CARDS,
+  type ConfirmedQuestionEvidenceRequest,
   type EvidenceSearchRequest,
   type EvidenceSearchResponse,
 } from "@mtg-rules/contracts";
@@ -12,7 +15,7 @@ const MAX_MATCHING_RULES = 8;
 const MAX_EXPANDED_RULES = 24;
 const MAX_REFERENCES_PER_RULE = 12;
 const MAX_CARDS_PER_NAME = 3;
-const MAX_EVIDENCE_CARDS = 8;
+const MAX_EVIDENCE_CARDS = MAX_CONFIRMED_CARDS;
 const MAX_CARD_EVIDENCE_CHARACTERS = 8_000;
 const MAX_RULE_EVIDENCE_CHARACTERS = 16_000;
 const MAX_RULE_TEXT_CHARACTERS = 6_000;
@@ -41,10 +44,13 @@ type IncludeReason = "MATCH" | "REFERENCE" | "PARENT";
 export async function assembleEvidence(
   input: EvidenceSearchRequest,
   client: PrismaClient = prisma,
+  snapshotId?: string,
 ): Promise<EvidenceSearchResponse> {
   const request = evidenceSearchRequestSchema.parse(input);
   const snapshot = await client.dataSnapshot.findFirst({
-    where: { status: SnapshotStatus.ACTIVE },
+    where: snapshotId
+      ? { id: snapshotId, status: SnapshotStatus.ACTIVE }
+      : { status: SnapshotStatus.ACTIVE },
     include: { sources: { orderBy: { kind: "asc" } } },
   });
   if (!snapshot) {
@@ -88,6 +94,8 @@ export async function assembleEvidence(
         oracleId: card.oracleId,
         name: card.name,
         layout: card.layout,
+        selectedFaceIndex: match.faceIndex,
+        quantity: 1,
         matchedFace,
         faces,
       });
@@ -195,6 +203,87 @@ export async function assembleEvidence(
     cards,
     rules,
     truncated: cardBudget.truncated || ruleBudget.truncated,
+  });
+}
+
+export class InvalidConfirmedCardsError extends Error {
+  constructor() {
+    super("One or more confirmed card IDs or faces are unavailable in the active snapshot.");
+    this.name = "InvalidConfirmedCardsError";
+  }
+}
+
+export async function assembleConfirmedEvidence(
+  input: ConfirmedQuestionEvidenceRequest,
+  client: PrismaClient = prisma,
+): Promise<EvidenceSearchResponse> {
+  const request = confirmedQuestionEvidenceRequestSchema.parse(input);
+  const snapshot = await client.dataSnapshot.findFirst({
+    where: { status: SnapshotStatus.ACTIVE },
+    select: { id: true },
+  });
+  if (!snapshot) throw new Error("No active rules and card snapshot is available.");
+
+  const confirmedCards = request.confirmedCards.length
+    ? await client.card.findMany({
+        where: {
+          snapshotId: snapshot.id,
+          oracleId: { in: request.confirmedCards.map(({ oracleId }) => oracleId) },
+        },
+        include: { faces: { orderBy: { faceIndex: "asc" } } },
+      })
+    : [];
+  const cardsByOracleId = new Map(confirmedCards.map((card) => [card.oracleId, card]));
+  if (cardsByOracleId.size !== request.confirmedCards.length)
+    throw new InvalidConfirmedCardsError();
+
+  const selectedCards = request.confirmedCards.map((selection) => {
+    const card = cardsByOracleId.get(selection.oracleId);
+    const face = card?.faces.find(({ faceIndex }) => faceIndex === selection.faceIndex);
+    if (!card || !face) throw new InvalidConfirmedCardsError();
+    return { card, face, quantity: selection.quantity };
+  });
+  const query = [
+    request.question,
+    ...request.gameState.events,
+    ...request.gameState.knownFacts,
+    ...request.gameState.missingFacts,
+    ...request.gameState.searchTerms,
+  ]
+    .join("\n")
+    .slice(0, 4_000);
+  const packet = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
+  const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
+    const faces = card.faces.map((cardFace) => {
+      const faceText = takeText(cardFace.oracleText, MAX_CARD_TEXT_CHARACTERS, cardBudget);
+      return {
+        id: cardFace.id,
+        faceIndex: cardFace.faceIndex,
+        role: cardFace.role,
+        name: cardFace.name,
+        oracleText: faceText.value,
+        truncated: faceText.truncated,
+      };
+    });
+    const matchedFace = faces.find(({ id }) => id === face.id);
+    if (!matchedFace) throw new InvalidConfirmedCardsError();
+    return {
+      id: card.id,
+      oracleId: card.oracleId,
+      name: card.name,
+      layout: card.layout,
+      selectedFaceIndex: face.faceIndex,
+      quantity,
+      matchedFace,
+      faces,
+    };
+  });
+
+  return evidenceSearchResponseSchema.parse({
+    ...packet,
+    cards,
+    truncated: packet.truncated || cardBudget.truncated,
   });
 }
 

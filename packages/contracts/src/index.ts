@@ -97,6 +97,35 @@ export const evidenceSearchRequestSchema = z.object({
 
 export type EvidenceSearchRequest = z.infer<typeof evidenceSearchRequestSchema>;
 
+export const MAX_CONFIRMED_CARDS = 10;
+
+export const confirmedQuestionEvidenceRequestSchema = z.object({
+  question: z.string().trim().min(1).max(4_000),
+  gameState: z
+    .object({
+      events: z.array(z.string().trim().min(1).max(300)).max(12).default([]),
+      knownFacts: z.array(z.string().trim().min(1).max(500)).max(12).default([]),
+      missingFacts: z.array(z.string().trim().min(1).max(300)).max(12).default([]),
+      searchTerms: z.array(z.string().trim().min(1).max(100)).max(10).default([]),
+    })
+    .default({ events: [], knownFacts: [], missingFacts: [], searchTerms: [] }),
+  confirmedCards: z
+    .array(
+      z.object({
+        oracleId: z.string().min(1).max(100),
+        faceIndex: z.number().int().nonnegative().max(20),
+        quantity: z.number().int().min(1).max(99),
+      }),
+    )
+    .max(MAX_CONFIRMED_CARDS)
+    .default([])
+    .refine((cards) => new Set(cards.map((card) => card.oracleId)).size === cards.length),
+});
+
+export type ConfirmedQuestionEvidenceRequest = z.input<
+  typeof confirmedQuestionEvidenceRequestSchema
+>;
+
 export const evidenceSearchResponseSchema = z.object({
   snapshot: z.object({
     id: z.string(),
@@ -113,22 +142,16 @@ export const evidenceSearchResponseSchema = z.object({
       checksumSha256: z.string().length(64),
     }),
   ),
-  cards: z.array(
-    z.object({
-      id: z.string(),
-      oracleId: z.string(),
-      name: z.string(),
-      layout: z.string(),
-      matchedFace: z.object({
+  cards: z
+    .array(
+      z.object({
         id: z.string(),
-        faceIndex: z.number().int().nonnegative(),
-        role: z.enum(["FRONT", "BACK", "OTHER"]),
+        oracleId: z.string(),
         name: z.string(),
-        oracleText: z.string(),
-        truncated: z.boolean(),
-      }),
-      faces: z.array(
-        z.object({
+        layout: z.string(),
+        selectedFaceIndex: z.number().int().nonnegative(),
+        quantity: z.number().int().min(1).max(99),
+        matchedFace: z.object({
           id: z.string(),
           faceIndex: z.number().int().nonnegative(),
           role: z.enum(["FRONT", "BACK", "OTHER"]),
@@ -136,9 +159,19 @@ export const evidenceSearchResponseSchema = z.object({
           oracleText: z.string(),
           truncated: z.boolean(),
         }),
-      ),
-    }),
-  ),
+        faces: z.array(
+          z.object({
+            id: z.string(),
+            faceIndex: z.number().int().nonnegative(),
+            role: z.enum(["FRONT", "BACK", "OTHER"]),
+            name: z.string(),
+            oracleText: z.string(),
+            truncated: z.boolean(),
+          }),
+        ),
+      }),
+    )
+    .max(MAX_CONFIRMED_CARDS),
   rules: z.array(
     z.object({
       id: z.string(),

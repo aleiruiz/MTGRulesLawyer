@@ -14,9 +14,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ConfirmedCardTile from "./ConfirmedCardTile";
 import {
   cardLookupResponseSchema,
+  confirmedQuestionEvidenceRequestSchema,
+  evidenceSearchResponseSchema,
+  MAX_CONFIRMED_CARDS,
   questionInterpretRequestSchema,
   questionInterpretResponseSchema,
   type CardLookupResponse,
+  type EvidenceSearchResponse,
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
 
@@ -60,6 +64,7 @@ function highlightedQuestion(question: string, mentions: Mention[], ignored: Set
 export default function QuestionConfirmationScreen() {
   const interpretationRequestId = useRef(0);
   const searchRequestId = useRef(0);
+  const evidenceRequestId = useRef(0);
   const [question, setQuestion] = useState("");
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -76,6 +81,17 @@ export default function QuestionConfirmationScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [isRetrieving, setIsRetrieving] = useState(false);
+  const [retrievalError, setRetrievalError] = useState("");
+  const [evidence, setEvidence] = useState<EvidenceSearchResponse | null>(null);
+
+  function invalidateConfirmation() {
+    evidenceRequestId.current += 1;
+    setConfirmed(false);
+    setIsRetrieving(false);
+    setRetrievalError("");
+    setEvidence(null);
+  }
 
   const ignoredSet = useMemo(() => new Set(ignoredMentions), [ignoredMentions]);
   const displayCards = useMemo(() => {
@@ -117,7 +133,7 @@ export default function QuestionConfirmationScreen() {
     setFaceIndexes({});
     setSearchMode(null);
     setSearchResults([]);
-    setConfirmed(false);
+    invalidateConfirmation();
     try {
       const submittedQuestion = questionInterpretRequestSchema.parse({ question }).question;
       setQuestion(submittedQuestion);
@@ -170,7 +186,7 @@ export default function QuestionConfirmationScreen() {
     setSearchText(initialText);
     setSearchResults([]);
     setSearchError("");
-    setConfirmed(false);
+    invalidateConfirmation();
   }
 
   async function searchCards() {
@@ -201,9 +217,17 @@ export default function QuestionConfirmationScreen() {
 
   function selectSearchResult(card: Card) {
     if (!searchMode) return;
+    if (
+      searchMode.type === "add" &&
+      displayCards.length >= MAX_CONFIRMED_CARDS &&
+      !displayCards.some((entry) => entry.card.oracleId === card.oracleId)
+    ) {
+      setSearchError(`Evidence supports up to ${MAX_CONFIRMED_CARDS} distinct cards.`);
+      return;
+    }
     searchRequestId.current += 1;
     setIsSearching(false);
-    setConfirmed(false);
+    invalidateConfirmation();
     if (searchMode.type === "add") {
       setManualCards((current) =>
         current.some((existing) => existing.oracleId === card.oracleId)
@@ -245,7 +269,7 @@ export default function QuestionConfirmationScreen() {
   }
 
   function removeCard(entry: DisplayCard) {
-    setConfirmed(false);
+    invalidateConfirmation();
     setSelectedByMention((current) => {
       const next = { ...current };
       for (const index of entry.mentionIndexes) delete next[index];
@@ -256,7 +280,7 @@ export default function QuestionConfirmationScreen() {
   }
 
   function adjustCount(oracleId: string, delta: number) {
-    setConfirmed(false);
+    invalidateConfirmation();
     setCounts((current) => ({
       ...current,
       [oracleId]: Math.max(1, (current[oracleId] ?? 1) + delta),
@@ -264,7 +288,7 @@ export default function QuestionConfirmationScreen() {
   }
 
   function cycleFace(card: Card) {
-    setConfirmed(false);
+    invalidateConfirmation();
     setFaceIndexes((current) => ({
       ...current,
       [card.oracleId]:
@@ -276,11 +300,56 @@ export default function QuestionConfirmationScreen() {
     }));
   }
 
-  function confirmCards() {
+  async function confirmCards() {
+    const requestId = ++evidenceRequestId.current;
     searchRequestId.current += 1;
     setIsSearching(false);
-    setConfirmed(true);
     setSearchMode(null);
+    setIsRetrieving(true);
+    setRetrievalError("");
+    setEvidence(null);
+    try {
+      const request = confirmedQuestionEvidenceRequestSchema.parse({
+        question,
+        gameState: {
+          events: interpretation?.events ?? [],
+          knownFacts: interpretation?.knownFacts ?? [],
+          missingFacts: interpretation?.missingFacts ?? [],
+          searchTerms: interpretation?.searchTerms ?? [],
+        },
+        confirmedCards: displayCards.map(({ card }) => ({
+          oracleId: card.oracleId,
+          faceIndex: faceIndexes[card.oracleId] ?? card.matchedFace.faceIndex,
+          quantity: counts[card.oracleId] ?? 1,
+        })),
+      });
+      const response = await fetch(`${apiUrl}/api/questions/evidence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const code =
+          typeof body === "object" &&
+          body !== null &&
+          "error" in body &&
+          typeof body.error === "string"
+            ? body.error.replaceAll("_", " ")
+            : "Evidence retrieval failed";
+        throw new Error(`${code}. Check the API connection and confirmed card choices.`);
+      }
+      const result = evidenceSearchResponseSchema.parse(body);
+      if (requestId !== evidenceRequestId.current) return;
+      setEvidence(result);
+      setConfirmed(true);
+    } catch (error) {
+      if (requestId === evidenceRequestId.current) {
+        setRetrievalError(error instanceof Error ? error.message : "Unable to retrieve evidence.");
+      }
+    } finally {
+      if (requestId === evidenceRequestId.current) setIsRetrieving(false);
+    }
   }
 
   return (
@@ -296,6 +365,7 @@ export default function QuestionConfirmationScreen() {
           multiline
           maxLength={4_000}
           onChangeText={(value) => {
+            invalidateConfirmation();
             setQuestion(value);
             setInterpretation(null);
             setSelectedByMention({});
@@ -385,7 +455,7 @@ export default function QuestionConfirmationScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Select ${candidate.name} for ${mention.text}`}
                           onPress={() => {
-                            setConfirmed(false);
+                            invalidateConfirmation();
                             setSelectedByMention((current) => ({
                               ...current,
                               [mentionIndex]: candidate.oracleId,
@@ -419,7 +489,7 @@ export default function QuestionConfirmationScreen() {
                             setIgnoredMentions((current) => [
                               ...new Set([...current, mentionIndex]),
                             ]);
-                            setConfirmed(false);
+                            invalidateConfirmation();
                           }}
                           style={styles.secondaryButton}
                         >
@@ -545,6 +615,11 @@ export default function QuestionConfirmationScreen() {
                       <Text style={styles.secondaryButtonText}>Close card search</Text>
                     </Pressable>
                   </View>
+                ) : displayCards.length >= MAX_CONFIRMED_CARDS ? (
+                  <Text style={styles.helperText}>
+                    Evidence supports up to {MAX_CONFIRMED_CARDS} distinct cards. Remove one before
+                    adding another.
+                  </Text>
                 ) : (
                   <Pressable
                     accessibilityRole="button"
@@ -560,15 +635,24 @@ export default function QuestionConfirmationScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Confirm selected Oracle card identities"
                   accessibilityHint="Confirms the selected cards before a ruling can be requested."
-                  disabled={unresolvedMentionIndexes.length > 0}
-                  onPress={confirmCards}
+                  disabled={unresolvedMentionIndexes.length > 0 || isRetrieving}
+                  onPress={() => void confirmCards()}
                   style={[
                     styles.primaryButton,
-                    unresolvedMentionIndexes.length > 0 && styles.disabledButton,
+                    (unresolvedMentionIndexes.length > 0 || isRetrieving) && styles.disabledButton,
                   ]}
                 >
-                  <Text style={styles.primaryButtonText}>Confirm card identities</Text>
+                  {isRetrieving ? (
+                    <ActivityIndicator color="#fff" accessibilityLabel="Retrieving evidence" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Confirm card identities</Text>
+                  )}
                 </Pressable>
+                {retrievalError ? (
+                  <Text accessibilityRole="alert" style={styles.errorText}>
+                    {retrievalError}
+                  </Text>
+                ) : null}
                 {unresolvedMentionIndexes.length > 0 ? (
                   <Text style={styles.helperText}>
                     Choose, find, or remove each of the {unresolvedMentionIndexes.length} unresolved
@@ -585,8 +669,30 @@ export default function QuestionConfirmationScreen() {
                         : "No cards"}
                     </Text>
                     <Text style={styles.helperText}>
-                      Ruling generation becomes available in the next step.
+                      Evidence is pinned to the active rules and card snapshot.
                     </Text>
+                    {evidence ? (
+                      <View accessibilityLabel="Retrieved evidence packet">
+                        <Text selectable>
+                          Snapshot: {evidence.snapshot.version} · {evidence.snapshot.id}
+                        </Text>
+                        <Text style={styles.cardTitle}>Sources</Text>
+                        {evidence.sources.map((source) => (
+                          <Text key={source.id} selectable>
+                            {source.kind} · {source.id}
+                          </Text>
+                        ))}
+                        <Text style={styles.cardTitle}>Relevant rules</Text>
+                        {evidence.rules.map((rule) => (
+                          <Text key={rule.id} numberOfLines={3}>
+                            {rule.number}: {rule.text}
+                          </Text>
+                        ))}
+                        {evidence.truncated ? (
+                          <Text style={styles.helperText}>Evidence was bounded and truncated.</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
               </>

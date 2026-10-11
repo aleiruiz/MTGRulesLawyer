@@ -17,7 +17,11 @@ import {
 import { describe, it } from "node:test";
 import { PrismaOracleSnapshotWriter } from "../cards/oracle-import.js";
 import { PrismaRulesSnapshotWriter } from "../rules/import.js";
-import { assembleEvidence } from "../search/retrieval.js";
+import {
+  assembleConfirmedEvidence,
+  assembleEvidence,
+  InvalidConfirmedCardsError,
+} from "../search/retrieval.js";
 import { getSourceStatus } from "../sources/status.js";
 import { ORACLE_METADATA_URL, refreshAllSources } from "../sources/refresh.js";
 import type { OracleBulkMetadata } from "../cards/source.js";
@@ -206,6 +210,38 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
       );
       assert.ok(
         packet.rules.some((rule) => rule.number === "100" && rule.includedBecause === "PARENT"),
+      );
+      const activeCard = await prisma.card.findFirstOrThrow({
+        where: { snapshotId: refreshed.id },
+        select: { oracleId: true },
+      });
+      const confirmedPacket = await assembleConfirmedEvidence(
+        {
+          question: "How is damage assigned in order?",
+          gameState: { events: ["The card attacked."], searchTerms: ["damage order"] },
+          confirmedCards: [{ oracleId: activeCard.oracleId, faceIndex: 0, quantity: 3 }],
+        },
+        prisma,
+      );
+      assert.equal(confirmedPacket.snapshot.id, refreshed.id);
+      assert.ok(confirmedPacket.sources.some(({ id }) => id));
+      assert.equal(confirmedPacket.cards.length, 1);
+      assert.equal(confirmedPacket.cards[0]?.oracleId, activeCard.oracleId);
+      assert.equal(confirmedPacket.cards[0]?.selectedFaceIndex, 0);
+      assert.equal(confirmedPacket.cards[0]?.quantity, 3);
+      assert.equal(
+        confirmedPacket.cards[0]?.matchedFace.oracleText,
+        "This card is a test fixture.",
+      );
+      await assert.rejects(
+        assembleConfirmedEvidence(
+          {
+            question: "Fixture question",
+            confirmedCards: [{ oracleId: "not-in-active-snapshot", faceIndex: 0, quantity: 1 }],
+          },
+          prisma,
+        ),
+        InvalidConfirmedCardsError,
       );
       const overloadedPacket = await assembleEvidence(
         { question: "damage assigned", cardNames: [] },
