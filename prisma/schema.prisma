@@ -312,6 +312,7 @@ model Challenge {
   user            AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
   reviewEvents    ReviewEvent[]
 
+  @@unique([userId, rulingVersionId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@index([rulingVersionId])

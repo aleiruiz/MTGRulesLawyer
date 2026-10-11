@@ -240,6 +240,30 @@ export const persistedRulingResponseSchema = z.object({
 
 export type PersistedRulingResponse = z.infer<typeof persistedRulingResponseSchema>;
 
+export const challengeSubmissionRequestSchema = z.object({
+  explanation: z.string().trim().min(10).max(4_000),
+  proposedOutcome: rulingGenerationResponseSchema.shape.outcome.optional(),
+});
+
+export const challengeResponseSchema = z.object({
+  challengeId: z.string().uuid(),
+  rulingId: z.string().uuid(),
+  question: z.string().max(4_000),
+  explanation: z.string().max(4_000),
+  proposedOutcome: rulingGenerationResponseSchema.shape.outcome.nullable(),
+  status: z.enum(["open", "needs_information", "approved", "rejected"]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const myChallengesResponseSchema = z.object({
+  challenges: z.array(challengeResponseSchema).max(50),
+});
+
+export type ChallengeSubmissionRequest = z.infer<typeof challengeSubmissionRequestSchema>;
+export type ChallengeResponse = z.infer<typeof challengeResponseSchema>;
+export type MyChallengesResponse = z.infer<typeof myChallengesResponseSchema>;
+
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z
     .object({ id: z.string(), version: z.string(), activatedAt: z.string().datetime().nullable() })
