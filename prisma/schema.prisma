@@ -103,15 +103,16 @@ model DataSnapshot {
 }
 
 model SourceSnapshot {
-  id                String       @id @default(uuid()) @db.Uuid
-  snapshotId        String       @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  snapshotId        String           @db.Uuid
   kind              SourceKind
   sourceUrl         String
   sourceVersion     String?
-  sourcePublishedAt DateTime?    @db.Timestamptz(6)
-  importedAt        DateTime     @default(now()) @db.Timestamptz(6)
-  checksumSha256    String       @db.Char(64)
-  snapshot          DataSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  sourcePublishedAt DateTime?        @db.Timestamptz(6)
+  importedAt        DateTime         @default(now()) @db.Timestamptz(6)
+  checksumSha256    String           @db.Char(64)
+  snapshot          DataSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  rulingCitations   RulingCitation[]
 
   @@unique([snapshotId, kind])
   @@index([kind, importedAt(sort: Desc)])
@@ -206,6 +207,7 @@ model Question {
   id             String         @id @default(uuid()) @db.Uuid
   userId         String?        @db.Uuid
   text           String         @db.Text
+  gameState      Json?
   status         QuestionStatus @default(SUBMITTED)
   createdAt      DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
@@ -243,44 +245,49 @@ model Ruling {
 }
 
 model RulingVersion {
-  id               String           @id @default(uuid()) @db.Uuid
-  rulingId         String           @db.Uuid
-  snapshotId       String           @db.Uuid
-  version          Int
-  outcome          RulingOutcome
-  summary          String           @db.Text
-  reasoningSteps   Json
-  assumptions      String[]         @default([])
-  modelName        String?
-  promptVersion    String?
-  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
-  ruling           Ruling           @relation(fields: [rulingId], references: [id], onDelete: Cascade)
-  snapshot         DataSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
-  citations        RulingCitation[]
-  challenges       Challenge[]
-  correctedByEvent ReviewEvent?     @relation("CorrectedVersion")
+  id                     String           @id @default(uuid()) @db.Uuid
+  rulingId               String           @db.Uuid
+  snapshotId             String           @db.Uuid
+  version                Int
+  outcome                RulingOutcome
+  summary                String           @db.Text
+  reasoningSteps         Json
+  assumptions            String[]         @default([])
+  summaryCitationIds     String[]         @default([])
+  clarificationQuestions String[]         @default([])
+  modelName              String?
+  promptVersion          String?
+  createdAt              DateTime         @default(now()) @db.Timestamptz(6)
+  ruling                 Ruling           @relation(fields: [rulingId], references: [id], onDelete: Cascade)
+  snapshot               DataSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  citations              RulingCitation[]
+  challenges             Challenge[]
+  correctedByEvent       ReviewEvent?     @relation("CorrectedVersion")
 
   @@unique([rulingId, version])
   @@index([snapshotId, createdAt(sort: Desc)])
 }
 
 model RulingCitation {
-  id              String        @id @default(uuid()) @db.Uuid
-  rulingVersionId String        @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
+  rulingVersionId  String         @db.Uuid
   // The initial SQL migration enforces that only the matching source FK is set for each kind.
-  kind            CitationKind
-  ruleId          String?       @db.Uuid
-  cardFaceId      String?       @db.Uuid
-  label           String
-  excerpt         String        @db.Text
-  sourceUrl       String
-  rulingVersion   RulingVersion @relation(fields: [rulingVersionId], references: [id], onDelete: Cascade)
-  rule            Rule?         @relation(fields: [ruleId], references: [id], onDelete: Restrict)
-  cardFace        CardFace?     @relation(fields: [cardFaceId], references: [id], onDelete: Restrict)
+  kind             CitationKind
+  ruleId           String?        @db.Uuid
+  cardFaceId       String?        @db.Uuid
+  label            String
+  excerpt          String         @db.Text
+  sourceUrl        String
+  sourceSnapshotId String         @db.Uuid
+  rulingVersion    RulingVersion  @relation(fields: [rulingVersionId], references: [id], onDelete: Cascade)
+  sourceSnapshot   SourceSnapshot @relation(fields: [sourceSnapshotId], references: [id], onDelete: Restrict)
+  rule             Rule?          @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  cardFace         CardFace?      @relation(fields: [cardFaceId], references: [id], onDelete: Restrict)
 
   @@index([ruleId])
   @@index([cardFaceId])
   @@index([rulingVersionId])
+  @@index([sourceSnapshotId])
 }
 
 model AppUser {

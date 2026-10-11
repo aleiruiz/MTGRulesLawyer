@@ -221,6 +221,25 @@ export const rulingGenerationResponseSchema = z.object({
 
 export type RulingGenerationResponse = z.infer<typeof rulingGenerationResponseSchema>;
 
+export const persistedRulingResponseSchema = z.object({
+  rulingId: z.string().uuid(),
+  version: z.number().int().positive(),
+  createdAt: z.string().datetime(),
+  question: z.string().max(4_000),
+  confirmedCards: z
+    .array(
+      z.object({
+        oracleId: z.string(),
+        faceIndex: z.number().int().nonnegative(),
+        quantity: z.number().int().positive(),
+      }),
+    )
+    .max(MAX_CONFIRMED_CARDS),
+  ruling: rulingGenerationResponseSchema,
+});
+
+export type PersistedRulingResponse = z.infer<typeof persistedRulingResponseSchema>;
+
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z
     .object({ id: z.string(), version: z.string(), activatedAt: z.string().datetime().nullable() })
