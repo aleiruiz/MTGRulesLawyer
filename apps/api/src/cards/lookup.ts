@@ -1,4 +1,4 @@
-import { SnapshotStatus } from "@prisma/client";
+import { Prisma, SnapshotStatus, type PrismaClient } from "@prisma/client";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
 import { prisma } from "../db/client.js";
 
@@ -9,23 +9,7 @@ export async function lookupCardsByExactFaceName(name: string): Promise<CardLook
   });
   if (!activeSnapshot) return { cards: [] };
 
-  const matchingFaces = await prisma.cardFace.findMany({
-    where: {
-      name: { equals: name, mode: "insensitive" },
-      card: { snapshotId: activeSnapshot.id },
-    },
-    include: {
-      card: {
-        select: {
-          oracleId: true,
-          name: true,
-          layout: true,
-          faces: { orderBy: { faceIndex: "asc" } },
-        },
-      },
-    },
-    orderBy: [{ card: { name: "asc" } }, { faceIndex: "asc" }],
-  });
+  const matchingFaces = await findExactFaceMatches(name, activeSnapshot.id);
 
   const cards = new Map<string, CardLookupResponse["cards"][number]>();
   for (const match of matchingFaces) {
@@ -60,4 +44,42 @@ export async function lookupCardsByExactFaceName(name: string): Promise<CardLook
     }
   }
   return { cards: [...cards.values()] };
+}
+
+export async function findExactFaceMatches(
+  name: string,
+  snapshotId: string,
+  client: PrismaClient = prisma,
+  limit?: number,
+) {
+  const faceIds = await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT f."id"
+    FROM "CardFace" AS f
+    INNER JOIN "Card" AS c ON c."id" = f."cardId"
+    WHERE c."snapshotId" = ${snapshotId}::uuid
+      AND lower(f."name") = lower(${name})
+    ORDER BY c."name" ASC, c."oracleId" ASC, f."faceIndex" ASC
+    LIMIT ${limit ?? 2_147_483_647}
+  `);
+  if (faceIds.length === 0) return [];
+  const matches = await client.cardFace.findMany({
+    where: { id: { in: faceIds.map(({ id }) => id) } },
+    include: {
+      card: {
+        select: {
+          id: true,
+          oracleId: true,
+          name: true,
+          layout: true,
+          snapshotId: true,
+          faces: { orderBy: { faceIndex: "asc" } },
+        },
+      },
+    },
+  });
+  const matchesById = new Map(matches.map((match) => [match.id, match]));
+  return faceIds.flatMap(({ id }) => {
+    const match = matchesById.get(id);
+    return match ? [match] : [];
+  });
 }
