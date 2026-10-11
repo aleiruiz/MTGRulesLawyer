@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Link } from "expo-router";
 import ConfirmedCardTile from "./ConfirmedCardTile";
 import {
   cardLookupResponseSchema,
@@ -431,6 +432,11 @@ export default function QuestionConfirmationScreen() {
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>MTG Rules Lawyer</Text>
         <Text style={styles.subtitle}>Unofficial Magic rules research assistant</Text>
+        <Link href="/sign-in" asChild>
+          <Pressable accessibilityRole="button" style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Sign in for account features</Text>
+          </Pressable>
+        </Link>
         <Text style={styles.sectionTitle}>Describe the game situation</Text>
         <TextInput
           accessibilityLabel="Magic rules question"

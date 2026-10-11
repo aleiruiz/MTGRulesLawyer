@@ -1,5 +1,17 @@
 import { Stack } from "expo-router";
+import { AuthProvider } from "../src/auth/AuthProvider";
 
 export default function RootLayout() {
-  return <Stack />;
+  return (
+    <AuthProvider>
+      <Stack>
+        <Stack.Screen name="index" options={{ title: "MTG Rules Lawyer", headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
+        <Stack.Screen
+          name="auth/callback"
+          options={{ title: "Sign in", headerBackVisible: false }}
+        />
+      </Stack>
+    </AuthProvider>
+  );
 }
