@@ -8,7 +8,7 @@ This project is not affiliated with, endorsed, sponsored, or specifically approv
 
 ### Requirements
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - pnpm 9.15.9 (the repository pins the package manager)
 - Docker Desktop or another Docker Compose provider for the local PostgreSQL service
 - An Android emulator, iOS simulator, or Expo Go on a device for the mobile app

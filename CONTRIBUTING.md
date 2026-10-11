@@ -16,6 +16,12 @@ Follow the [README local setup](README.md#start-locally). The app and API start 
 
 Never commit credentials, generated build output, imported bulk card data, or local database files. Do not disable lint rules without a specific explanation. Keep external input validation in shared contracts and keep framework and storage details out of domain logic.
 
+## Social sign-in setup
+
+Sign-in uses Supabase Auth with Google, Apple, and GitHub. Copy the Supabase project URL and publishable key into `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; these values configure the mobile client and are not provider secrets. Keep OAuth client secrets in the Supabase provider settings, never in Expo variables or the repository. Add `mtgruleslawyer://auth/callback` to the Supabase Auth redirect URL allow list, then configure each provider's callback URL from the Supabase dashboard. Enable each provider in Supabase before testing its button. The session and PKCE verifier use Expo SecureStore on Android and iOS; the web preview keeps sign-in state in memory only. Local startup continues to work with the sample placeholders, while sign-in buttons remain disabled until project settings are supplied.
+
+Provider setup and device return-flow testing are documented in the [Supabase Expo social-auth guide](https://supabase.com/docs/guides/auth/quickstarts/with-expo-react-native-social-auth) and the [Expo SecureStore reference](https://docs.expo.dev/versions/v54.0.0/sdk/securestore/). Build an Android development app with `pnpm --filter @mtg-rules/mobile native:android` or an iOS development app on macOS with `pnpm --filter @mtg-rules/mobile native:ios`. Test successful sign-in, provider cancellation, expired sessions, and return-to-app deep links on both platforms. Expo Go does not use this app's registered `mtgruleslawyer` scheme.
+
 ## Adding regression coverage
 
 Add a focused test when a change alters behavior that can regress: malformed input handling, source import rollback, card-face resolution, citations, authorization, quota accounting, or review transitions. Keep fixtures small and synthetic where possible. Do not add real user questions, private data, or unreviewed rulings as training data.
