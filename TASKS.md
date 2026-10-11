@@ -40,7 +40,7 @@ This is the implementation checklist for the [development plan](DEVELOPMENT_PLAN
 - [x] **C03 — Submit and track challenges** (C02, R07). Add the signed-in challenge form, explanation/proposed result, `POST /api/rulings/:id/challenges`, and a user's own status list. **Done:** users can view only their private cases; duplicate submissions and spam are limited.
 - [x] **C04 — Build the in-app review queue** (C02, C03). Show the original answer, evidence snapshot, challenge, and review status; allow admins to request more information. **Done:** an admin can triage the queue on Android and iOS, and non-admins cannot load it through the API.
 - [x] **C05 — Record decisions and corrected versions** (C04). Implement approve/reject with a required reason, immutable `ReviewEvent`, linked corrected ruling, and atomic status transition. **Done:** simultaneous decisions cannot conflict; the original ruling remains viewable and the challenger sees the outcome.
-- [ ] **C06 — Feed approved cases into evaluation** (C05, R08). Export reviewed scenarios and error categories into versioned regression fixtures after a human checks them. **Done:** an approved challenge is represented in the evaluation set; rejected or unreviewed text never changes model behavior automatically.
+- [x] **C06 — Feed approved cases into evaluation** (C05, R08). Export reviewed scenarios and error categories into versioned regression fixtures after a human checks them. **Done:** an approved challenge is represented in the evaluation set; rejected or unreviewed text never changes model behavior automatically.
 
 ## Release readiness
 
