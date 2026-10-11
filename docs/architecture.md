@@ -8,7 +8,7 @@ apps/api/           Fastify HTTP application and server entry point
 packages/contracts/ Zod schemas shared at API and mobile boundaries
 ```
 
-The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. It currently implements `GET /health`, `GET /api/cards/lookup?name=...`, and `GET /api/sources/status`; its bounded evidence assembly service uses local PostgreSQL card and rule snapshots. Rules and Oracle imports create versioned snapshots. The server-side OpenAI adapter and atomic PostgreSQL AI usage reservation service are available for interpretation and ruling endpoints; HTTP orchestration and authentication remain in development.
+The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. It implements `GET /health`, `GET /api/cards/lookup?name=...`, `GET /api/sources/status`, and `POST /api/questions/interpret`. The interpretation route sends a bounded question through the server-side OpenAI adapter and atomic PostgreSQL AI usage reservation service, validates the scenario output, and resolves mentioned card names against the active local Oracle snapshot. Its bounded evidence assembly service uses local PostgreSQL card and rule snapshots. Rules and Oracle imports create versioned snapshots; ruling generation and authentication remain in development.
 
 ## Planned data flow
 
