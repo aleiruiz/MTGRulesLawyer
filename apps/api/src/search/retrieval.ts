@@ -94,7 +94,9 @@ export async function assembleEvidence(
     }
   }
 
-  const exactRuleNumbers = [...new Set(request.question.match(RULE_NUMBER) ?? [])]
+  const exactRuleNumbersFound = [...new Set(request.question.match(RULE_NUMBER) ?? [])];
+  if (exactRuleNumbersFound.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
+  const exactRuleNumbers = exactRuleNumbersFound
     .slice(0, MAX_MATCHING_RULES)
     .map((number) => number.toLowerCase());
   const exactHits = exactRuleNumbers.length
@@ -111,11 +113,12 @@ export async function assembleEvidence(
       AND to_tsvector('english', r."text") @@ websearch_to_tsquery('english', ${request.question})
     ORDER BY ts_rank_cd(to_tsvector('english', r."text"), websearch_to_tsquery('english', ${request.question})) DESC,
       r."sortOrder" ASC
-    LIMIT ${MAX_MATCHING_RULES}
+    LIMIT ${MAX_MATCHING_RULES + 1}
   `);
+  if (fullTextHits.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
   const matches = new Map<string, IncludeReason>();
   for (const rule of exactHits) matches.set(rule.id, "MATCH");
-  for (const rule of fullTextHits) matches.set(rule.id, "MATCH");
+  for (const rule of fullTextHits.slice(0, MAX_MATCHING_RULES)) matches.set(rule.id, "MATCH");
 
   const included = new Map<string, { rule: RuleHit; reason: IncludeReason }>();
   const frontier = [...matches].map(([id, reason]) => ({ id, reason }));
@@ -129,7 +132,7 @@ export async function assembleEvidence(
       include: {
         parent: { select: { id: true, number: true, text: true, parentId: true } },
         referencesOut: {
-          take: MAX_REFERENCES_PER_RULE,
+          take: MAX_REFERENCES_PER_RULE + 1,
           orderBy: { toRule: { sortOrder: "asc" } },
           include: {
             toRule: {
@@ -141,6 +144,7 @@ export async function assembleEvidence(
     })) as RuleHit[];
     const reasons = new Map(batch.map(({ id, reason }) => [id, reason]));
     for (const rule of rows) {
+      if (rule.referencesOut.length > MAX_REFERENCES_PER_RULE) ruleBudget.truncated = true;
       if (included.size >= MAX_EXPANDED_RULES) break;
       if (!included.has(rule.id)) {
         included.set(rule.id, { rule, reason: reasons.get(rule.id) ?? "REFERENCE" });
@@ -148,13 +152,16 @@ export async function assembleEvidence(
       if (rule.parent && !included.has(rule.parent.id)) {
         frontier.push({ id: rule.parent.id, reason: "PARENT" });
       }
-      for (const reference of rule.referencesOut) {
+      for (const reference of rule.referencesOut.slice(0, MAX_REFERENCES_PER_RULE)) {
         const target = reference.toRule;
         if (target.snapshotId === snapshot.id && !included.has(target.id)) {
           frontier.push({ id: target.id, reason: "REFERENCE" });
         }
       }
     }
+  }
+  if (included.size >= MAX_EXPANDED_RULES && frontier.some(({ id }) => !included.has(id))) {
+    ruleBudget.truncated = true;
   }
 
   const rules: EvidenceSearchResponse["rules"] = [];

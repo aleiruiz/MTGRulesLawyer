@@ -146,7 +146,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         sourcePublishedAt: now,
         checksumSha256: checksum("4"),
         importedAt: now,
-        rules: fixtureRules(true),
+        rules: fixtureRules(true, true),
       });
       testSnapshots.push(refreshed.id);
       const unchangedOracle = await cardsWriter.activateOracleSnapshot({
@@ -198,6 +198,11 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
       assert.ok(
         packet.rules.some((rule) => rule.number === "100" && rule.includedBecause === "PARENT"),
       );
+      const overloadedPacket = await assembleEvidence(
+        { question: "damage assigned", cardNames: [] },
+        prisma,
+      );
+      assert.equal(overloadedPacket.truncated, true, "omitted matching rules are reported");
       assert.ok(await prisma.rule.findUnique({ where: { id: originalRule.id } }));
       assert.ok(await prisma.cardFace.findUnique({ where: { id: originalFace.id } }));
       assert.equal(
@@ -231,8 +236,8 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
   });
 });
 
-function fixtureRules(refreshed = false) {
-  return [
+function fixtureRules(refreshed = false, overloadSearch = false) {
+  const rules = [
     { number: "100", text: "General rules.", sortOrder: 0, parentNumber: null, references: [] },
     {
       number: "100.1",
@@ -252,6 +257,25 @@ function fixtureRules(refreshed = false) {
       references: [],
     },
   ];
+  if (overloadSearch) {
+    rules.push({
+      number: "300",
+      text: "Additional damage rules.",
+      sortOrder: 4,
+      parentNumber: null,
+      references: [],
+    });
+    for (let index = 1; index <= 9; index += 1) {
+      rules.push({
+        number: `300.${index}`,
+        text: `Damage is assigned under additional rule ${index}.`,
+        sortOrder: 4 + index,
+        parentNumber: "300",
+        references: [],
+      });
+    }
+  }
+  return rules;
 }
 
 function oneCard() {
