@@ -53,10 +53,16 @@ void describe("challenge service integration", { skip: !enabled }, () => {
         userId: firstUser.id,
         explanation: "The ruling did not account for a replacement effect.",
         proposedOutcome: "conditional" as const,
+        evaluationConsent: true,
       };
       const submitted = await submitChallenge(input, prisma);
       assert.equal(submitted.rulingId, rulingId);
       assert.equal(submitted.proposedOutcome, "conditional");
+      assert.equal(
+        (await prisma.challenge.findFirstOrThrow({ where: { userId: firstUser.id } }))
+          .evaluationConsent,
+        true,
+      );
       await assert.rejects(submitChallenge(input, prisma), DuplicateChallengeError);
 
       await submitChallenge({ ...input, userId: secondUser.id }, prisma);
@@ -88,6 +94,7 @@ void describe("challenge service integration", { skip: !enabled }, () => {
               rulingId,
               userId: user.id,
               explanation: `Distinct challenge explanation ${rulingId}`,
+              evaluationConsent: false,
             },
             prisma,
           ),

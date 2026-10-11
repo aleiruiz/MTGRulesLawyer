@@ -42,7 +42,7 @@ export function makeEvaluationEvidence(
       name: card.name,
       layout: "normal",
       selectedFaceIndex: 0,
-      quantity: 1,
+      quantity: card.quantity ?? 1,
       matchedFace: {
         id: `face-${index}-${cardIndex}`,
         faceIndex: 0,
@@ -90,7 +90,7 @@ export function makeEvaluationRequest(
     confirmedCards: evidence.cards.map((card) => ({
       oracleId: card.oracleId,
       faceIndex: card.selectedFaceIndex,
-      quantity: 1,
+      quantity: card.quantity ?? 1,
     })),
   };
 }

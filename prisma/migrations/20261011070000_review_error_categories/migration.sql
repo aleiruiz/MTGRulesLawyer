@@ -1,0 +1,16 @@
+CREATE TYPE "ReviewErrorCategory" AS ENUM (
+  'CARD_RESOLUTION',
+  'MISSING_GAME_FACT',
+  'RETRIEVAL',
+  'REASONING',
+  'OUTDATED_SOURCE',
+  'PRESENTATION'
+);
+
+ALTER TABLE "ReviewEvent"
+ADD COLUMN "errorCategory" "ReviewErrorCategory",
+ADD COLUMN "includeInEvaluation" BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN "evaluationQuestion" TEXT;
+
+ALTER TABLE "Challenge"
+ADD COLUMN "evaluationConsent" BOOLEAN NOT NULL DEFAULT FALSE;

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "reviewed-public-replacement-choice",
+    "reviewSource": "maintainer_curated",
+    "fixtureOrigin": "synthetic",
+    "errorCategory": "reasoning",
+    "title": "Synthetic reviewed scenario: replacement effect choice",
+    "question": "Two replacement effects would exile a card instead of putting it into a graveyard. Who chooses between them?",
+    "cards": [
+      {
+        "name": "Rest in Peace",
+        "oracleText": "If a card or token would be put into a graveyard from anywhere, exile it instead."
+      },
+      {
+        "name": "Leyline of the Void",
+        "oracleText": "If a card would be put into an opponent's graveyard from anywhere, exile it instead."
+      }
+    ],
+    "rules": [
+      {
+        "number": "616.1",
+        "text": "The affected object's controller or owner, or the affected player, chooses among applicable replacement and prevention effects."
+      }
+    ],
+    "expectedOutcome": "resolved",
+    "expectedRuleNumbers": ["616.1"],
+    "expectedClarificationCount": 0,
+    "modelOutput": {
+      "outcome": "resolved",
+      "summary": "The affected object's controller or owner, or the affected player, chooses which applicable replacement effect to apply.",
+      "summarySupport": "SUPPORTED",
+      "summaryCitationNumbers": ["616.1"],
+      "reasoningSteps": [
+        {
+          "text": "When multiple replacement effects modify the same event, the affected object's controller or owner, or the affected player, chooses one to apply.",
+          "support": "SUPPORTED",
+          "citationNumbers": ["616.1"]
+        }
+      ],
+      "assumptions": [],
+      "clarificationQuestions": []
+    }
+  }
+]

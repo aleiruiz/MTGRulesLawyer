@@ -59,6 +59,7 @@ import {
   getReviewQueue,
   requestMoreInformation,
   ReviewChallengeConflictError,
+  ReviewEvaluationConsentRequiredError,
   ReviewChallengeNotFoundError,
 } from "./reviews/service.js";
 
@@ -291,6 +292,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           ),
         );
       } catch (error) {
+        if (error instanceof ReviewEvaluationConsentRequiredError)
+          return reply.code(400).send({ error: "EVALUATION_CONSENT_REQUIRED" });
         if (error instanceof ReviewChallengeNotFoundError)
           return reply.code(404).send({ error: "CHALLENGE_NOT_FOUND" });
         if (error instanceof ReviewChallengeConflictError)

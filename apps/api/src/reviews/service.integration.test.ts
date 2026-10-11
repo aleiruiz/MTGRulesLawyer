@@ -4,11 +4,13 @@ import { PrismaClient, SnapshotStatus } from "@prisma/client";
 import { after, describe, it } from "node:test";
 import { listMyChallenges, submitChallenge } from "../challenges/service.js";
 import { getRuling } from "../rulings/persistence.js";
+import { getReviewedEvaluationCases } from "../rulings/reviewed-evaluation-export.js";
 import {
   decideChallenge,
   getReviewQueue,
   requestMoreInformation,
   ReviewChallengeConflictError,
+  ReviewEvaluationConsentRequiredError,
 } from "./service.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
@@ -21,6 +23,23 @@ void describe("review service integration", { skip: !enabled }, () => {
     const suffix = randomUUID();
     const snapshot = await prisma.dataSnapshot.create({
       data: { version: `c04-${suffix}`, status: SnapshotStatus.CANDIDATE },
+    });
+    const source = await prisma.sourceSnapshot.create({
+      data: {
+        snapshotId: snapshot.id,
+        kind: "COMPREHENSIVE_RULES",
+        sourceUrl: "https://magic.wizards.com/en/rules",
+        sourceVersion: "2026-10",
+        checksumSha256: "c".repeat(64),
+      },
+    });
+    const rule = await prisma.rule.create({
+      data: {
+        snapshotId: snapshot.id,
+        number: "616.1",
+        text: "The affected object's controller or owner chooses among applicable replacement effects.",
+        sortOrder: 6161,
+      },
     });
     const challenger = await prisma.appUser.create({
       data: { supabaseUserId: `c04-challenger-${suffix}` },
@@ -75,6 +94,16 @@ void describe("review service integration", { skip: !enabled }, () => {
             summary: "C04 original answer",
             reasoningSteps: [{ text: "C04 original reasoning.", citationIds: [] }],
             assumptions: ["C04 original assumption."],
+            citations: {
+              create: {
+                kind: "RULE",
+                ruleId: rule.id,
+                label: "Rule 616.1",
+                excerpt: rule.text,
+                sourceUrl: source.sourceUrl,
+                sourceSnapshotId: source.id,
+              },
+            },
           },
         },
       },
@@ -85,6 +114,7 @@ void describe("review service integration", { skip: !enabled }, () => {
           rulingId: ruling.id,
           userId: challenger.id,
           explanation: "The original ruling may miss a replacement effect.",
+          evaluationConsent: true,
         },
         prisma,
       );
@@ -93,6 +123,7 @@ void describe("review service integration", { skip: !enabled }, () => {
         (item) => item.challengeId === challenge.challengeId,
       );
       assert.ok(queueItem);
+      assert.equal(queueItem.evaluationConsent, true);
       assert.equal(queueItem.originalRuling.snapshot.version, snapshot.version);
       assert.equal(queueItem.originalRuling.reasoningSteps[0]?.text, "C04 original reasoning.");
       assert.deepEqual(queueItem.originalRuling.gameState.events, [
@@ -129,6 +160,10 @@ void describe("review service integration", { skip: !enabled }, () => {
             decision: "approve",
             reason: "The challenger identified the applicable replacement effect.",
             correction: {
+              errorCategory: "reasoning",
+              includeInEvaluation: true,
+              evaluationQuestion:
+                "A public, anonymized scenario about two replacement effects affecting one event.",
               outcome: "conditional",
               summary: "The spell resolves conditionally after applying the replacement effect.",
               reasoningSteps: ["Apply the replacement effect before determining the final result."],
@@ -158,8 +193,29 @@ void describe("review service integration", { skip: !enabled }, () => {
         orderBy: { createdAt: "asc" },
       });
       assert.equal(reviewEvents.length, 2);
+      const approvalEvent = reviewEvents.find((event) => event.decision === "APPROVE");
+      if (approvalEvent) {
+        assert.equal(approvalEvent.errorCategory, "REASONING");
+        assert.equal(approvalEvent.includeInEvaluation, true);
+        assert.equal(
+          approvalEvent.evaluationQuestion,
+          "Two replacement effects would exile a card instead of putting it into a graveyard. Who chooses between them?",
+        );
+      }
       assert.ok(finalChallenge.status === "APPROVED" || finalChallenge.status === "REJECTED");
       if (finalChallenge.status === "APPROVED") {
+        const reviewedCase = (await getReviewedEvaluationCases(prisma)).find(
+          (item) =>
+            item.question ===
+            "Two replacement effects would exile a card instead of putting it into a graveyard. Who chooses between them?",
+        );
+        assert.ok(reviewedCase);
+        assert.equal(reviewedCase.errorCategory, "reasoning");
+        assert.equal(reviewedCase.reviewSource, "approved_challenge");
+        assert.equal(reviewedCase.expectedOutcome, "conditional");
+        assert.deepEqual(reviewedCase.expectedRuleNumbers, ["616.1"]);
+        assert.equal(JSON.stringify(reviewedCase).includes(challenge.challengeId), false);
+        assert.equal(JSON.stringify(reviewedCase).includes("C04 review fixture question"), false);
         const original = await getRuling(ruling.id, prisma, 1);
         const corrected = await getRuling(ruling.id, prisma, 2);
         assert.equal(original?.ruling.summary, "C04 original answer");
@@ -171,6 +227,10 @@ void describe("review service integration", { skip: !enabled }, () => {
         assert.equal(finalList.challenges[0]?.latestDecision?.decision, "approve");
         assert.equal(finalList.challenges[0]?.latestDecision?.correctedRulingVersion, 2);
       } else {
+        const unapprovedCase = (await getReviewedEvaluationCases(prisma)).find((item) =>
+          item.question.includes("C04 review fixture question"),
+        );
+        assert.equal(unapprovedCase, undefined);
         const finalList = await listMyChallenges(challenger.id, prisma);
         assert.equal(finalList.challenges[0]?.latestDecision?.decision, "reject");
         assert.equal(finalList.challenges[0]?.latestDecision?.correctedRulingVersion, null);
@@ -219,8 +279,30 @@ void describe("review service integration", { skip: !enabled }, () => {
           rulingId: ruling.id,
           userId: challenger.id,
           explanation: "This answer has enough evidence.",
+          evaluationConsent: false,
         },
         prisma,
+      );
+      await assert.rejects(
+        decideChallenge(
+          challenge.challengeId,
+          reviewer.id,
+          {
+            decision: "approve",
+            reason: "The correction is accurate and suitable for evaluation.",
+            correction: {
+              errorCategory: "reasoning",
+              includeInEvaluation: true,
+              evaluationQuestion: "A sanitized question about a publicly known card interaction.",
+              outcome: "resolved",
+              summary: "The corrected answer follows the public rules text.",
+              reasoningSteps: ["Apply the relevant rule to the stated facts."],
+              assumptions: [],
+            },
+          },
+          prisma,
+        ),
+        ReviewEvaluationConsentRequiredError,
       );
       const reason = "The cited evidence does not support the proposed correction.";
       const result = await decideChallenge(
@@ -238,6 +320,7 @@ void describe("review service integration", { skip: !enabled }, () => {
       assert.equal(event.reason, reason);
       assert.equal(event.reviewerId, reviewer.id);
       assert.equal(event.decision, "REJECT");
+      assert.equal(event.errorCategory, null);
       const ownList = await listMyChallenges(challenger.id, prisma);
       assert.equal(ownList.challenges[0]?.latestDecision?.decision, "reject");
       assert.equal(ownList.challenges[0]?.latestDecision?.reason, reason);

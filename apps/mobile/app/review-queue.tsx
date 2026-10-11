@@ -31,6 +31,15 @@ export default function ReviewQueueScreen() {
       string,
       {
         outcome: "resolved" | "conditional" | "needs_information" | "uncertain";
+        errorCategory:
+          | "card_resolution"
+          | "missing_game_fact"
+          | "retrieval"
+          | "reasoning"
+          | "outdated_source"
+          | "presentation";
+        includeInEvaluation: boolean;
+        evaluationQuestion: string;
         summary: string;
         reasoning: string;
       }
@@ -104,6 +113,9 @@ export default function ReviewQueueScreen() {
     const reason = decisionReasons[challengeId]?.trim() ?? "";
     const correction = corrections[challengeId] ?? {
       outcome: "resolved" as const,
+      errorCategory: "reasoning" as const,
+      includeInEvaluation: false,
+      evaluationQuestion: "",
       summary: "",
       reasoning: "",
     };
@@ -115,6 +127,11 @@ export default function ReviewQueueScreen() {
               decision,
               reason,
               correction: {
+                errorCategory: correction.errorCategory,
+                includeInEvaluation: correction.includeInEvaluation,
+                ...(correction.includeInEvaluation
+                  ? { evaluationQuestion: correction.evaluationQuestion }
+                  : {}),
                 outcome: correction.outcome,
                 summary: correction.summary,
                 reasoningSteps: [correction.reasoning],
@@ -126,7 +143,7 @@ export default function ReviewQueueScreen() {
     } catch {
       setMessage(
         decision === "approve"
-          ? "Provide a decision reason, corrected summary, and reasoning step."
+          ? "Provide a decision reason, error category, corrected summary, and reasoning step. If including this case, use a sanitized scenario and confirm the player opted in."
           : "Provide at least 10 characters explaining the rejection.",
       );
       return;
@@ -147,6 +164,10 @@ export default function ReviewQueueScreen() {
         throw new Error("Admin access is required to review challenges.");
       if (response.status === 409)
         throw new Error("This challenge was already decided. Refresh the queue.");
+      if (response.status === 400)
+        throw new Error(
+          "Review the corrected answer and sanitized scenario. Evaluation use needs the player's consent.",
+        );
       if (!response.ok) throw new Error("The decision could not be saved.");
       setMessage(
         decision === "approve" ? "Correction approved and saved." : "Challenge rejected and saved.",
@@ -178,6 +199,9 @@ export default function ReviewQueueScreen() {
         {queue?.challenges.map((item) => (
           <View key={item.challengeId} style={styles.card}>
             <Text style={styles.status}>{item.challenge.status.replaceAll("_", " ")}</Text>
+            <Text style={styles.meta}>
+              Evaluation consent: {item.evaluationConsent ? "granted" : "not granted"}
+            </Text>
             <Text style={styles.sectionTitle}>Question</Text>
             <Text style={styles.body}>{item.question}</Text>
             <Text style={styles.sectionTitle}>
@@ -286,6 +310,113 @@ export default function ReviewQueueScreen() {
               style={styles.input}
             />
             <Text style={styles.meta}>For approval, write the corrected answer:</Text>
+            <Text style={styles.sectionTitle}>Error category</Text>
+            <View style={styles.choices}>
+              {(
+                [
+                  "card_resolution",
+                  "missing_game_fact",
+                  "retrieval",
+                  "reasoning",
+                  "outdated_source",
+                  "presentation",
+                ] as const
+              ).map((errorCategory) => (
+                <Pressable
+                  key={errorCategory}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    selected:
+                      (corrections[item.challengeId]?.errorCategory ?? "reasoning") ===
+                      errorCategory,
+                  }}
+                  onPress={() =>
+                    setCorrections((current) => ({
+                      ...current,
+                      [item.challengeId]: {
+                        ...(current[item.challengeId] ?? {
+                          outcome: "resolved",
+                          errorCategory: "reasoning",
+                          includeInEvaluation: false,
+                          evaluationQuestion: "",
+                          summary: "",
+                          reasoning: "",
+                        }),
+                        errorCategory,
+                      },
+                    }))
+                  }
+                  style={[
+                    styles.choice,
+                    (corrections[item.challengeId]?.errorCategory ?? "reasoning") ===
+                      errorCategory && styles.selectedChoice,
+                  ]}
+                >
+                  <Text style={styles.choiceText}>{errorCategory.replaceAll("_", " ")}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: corrections[item.challengeId]?.includeInEvaluation ?? false,
+                disabled: !item.evaluationConsent,
+              }}
+              disabled={!item.evaluationConsent}
+              onPress={() =>
+                setCorrections((current) => {
+                  const previous = current[item.challengeId] ?? {
+                    outcome: "resolved" as const,
+                    errorCategory: "reasoning" as const,
+                    includeInEvaluation: false,
+                    evaluationQuestion: "",
+                    summary: "",
+                    reasoning: "",
+                  };
+                  const includeInEvaluation = !previous.includeInEvaluation;
+                  return {
+                    ...current,
+                    [item.challengeId]: {
+                      ...previous,
+                      includeInEvaluation,
+                      evaluationQuestion: includeInEvaluation ? previous.evaluationQuestion : "",
+                    },
+                  };
+                })
+              }
+              style={styles.evalToggle}
+            >
+              <Text style={styles.body}>
+                {corrections[item.challengeId]?.includeInEvaluation ? "☑" : "☐"} Add a sanitized
+                scenario to regression evaluation
+              </Text>
+            </Pressable>
+            {corrections[item.challengeId]?.includeInEvaluation ? (
+              <TextInput
+                accessibilityLabel={`Sanitized evaluation scenario for challenge ${item.challengeId}`}
+                multiline
+                maxLength={4_000}
+                value={corrections[item.challengeId]?.evaluationQuestion ?? ""}
+                onChangeText={(evaluationQuestion) =>
+                  setCorrections((current) => ({
+                    ...current,
+                    [item.challengeId]: {
+                      ...(current[item.challengeId] ?? {
+                        outcome: "resolved",
+                        errorCategory: "reasoning",
+                        includeInEvaluation: true,
+                        evaluationQuestion: "",
+                        summary: "",
+                        reasoning: "",
+                      }),
+                      evaluationQuestion,
+                    },
+                  }))
+                }
+                placeholder="Rewrite the scenario without names, account details, or other personal information."
+                style={styles.input}
+              />
+            ) : null}
             <View style={styles.choices}>
               {(["resolved", "conditional", "needs_information", "uncertain"] as const).map(
                 (outcome) => (
@@ -301,6 +432,9 @@ export default function ReviewQueueScreen() {
                         [item.challengeId]: {
                           ...(current[item.challengeId] ?? {
                             outcome: "resolved",
+                            errorCategory: "reasoning",
+                            includeInEvaluation: false,
+                            evaluationQuestion: "",
                             summary: "",
                             reasoning: "",
                           }),
@@ -330,6 +464,9 @@ export default function ReviewQueueScreen() {
                   [item.challengeId]: {
                     ...(current[item.challengeId] ?? {
                       outcome: "resolved",
+                      errorCategory: "reasoning",
+                      includeInEvaluation: false,
+                      evaluationQuestion: "",
                       summary: "",
                       reasoning: "",
                     }),
@@ -351,6 +488,9 @@ export default function ReviewQueueScreen() {
                   [item.challengeId]: {
                     ...(current[item.challengeId] ?? {
                       outcome: "resolved",
+                      errorCategory: "reasoning",
+                      includeInEvaluation: false,
+                      evaluationQuestion: "",
                       summary: "",
                       reasoning: "",
                     }),
@@ -395,6 +535,7 @@ const styles = StyleSheet.create({
   meta: { color: "#5b5a55", fontSize: 12, lineHeight: 18 },
   citation: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: "#f7f6f2" },
   section: { gap: 8, paddingTop: 8 },
+  evalToggle: { minHeight: 44, justifyContent: "center" },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   choice: {
     paddingHorizontal: 9,

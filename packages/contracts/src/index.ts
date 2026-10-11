@@ -243,6 +243,7 @@ export type PersistedRulingResponse = z.infer<typeof persistedRulingResponseSche
 export const challengeSubmissionRequestSchema = z.object({
   explanation: z.string().trim().min(10).max(4_000),
   proposedOutcome: rulingGenerationResponseSchema.shape.outcome.optional(),
+  evaluationConsent: z.boolean().default(false),
 });
 
 export const challengeResponseSchema = z.object({
@@ -284,6 +285,7 @@ export const reviewQueueResponseSchema = z.object({
         challengeId: z.string().uuid(),
         rulingId: z.string().uuid(),
         question: z.string().max(4_000),
+        evaluationConsent: z.boolean(),
         challenge: challengeResponseSchema,
         originalRuling: z.object({
           version: z.number().int().positive(),
@@ -331,12 +333,40 @@ export type ReviewQueueResponse = z.infer<typeof reviewQueueResponseSchema>;
 export type RequestChallengeInformation = z.infer<typeof requestChallengeInformationSchema>;
 
 const reviewDecisionReasonSchema = z.string().trim().min(10).max(2_000);
-const correctedRulingDraftSchema = z.object({
-  outcome: rulingGenerationResponseSchema.shape.outcome,
-  summary: z.string().trim().min(1).max(1_200),
-  reasoningSteps: z.array(z.string().trim().min(1).max(800)).min(1).max(12),
-  assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
-});
+export const reviewErrorCategorySchema = z.enum([
+  "card_resolution",
+  "missing_game_fact",
+  "retrieval",
+  "reasoning",
+  "outdated_source",
+  "presentation",
+]);
+const correctedRulingDraftSchema = z
+  .object({
+    errorCategory: reviewErrorCategorySchema,
+    includeInEvaluation: z.boolean().default(false),
+    evaluationQuestion: z.string().trim().min(20).max(4_000).optional(),
+    outcome: rulingGenerationResponseSchema.shape.outcome,
+    summary: z.string().trim().min(1).max(1_200),
+    reasoningSteps: z.array(z.string().trim().min(1).max(800)).min(1).max(12),
+    assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
+  })
+  .superRefine((correction, context) => {
+    if (correction.includeInEvaluation && !correction.evaluationQuestion) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationQuestion"],
+        message: "An anonymized scenario is required for an evaluation fixture.",
+      });
+    }
+    if (!correction.includeInEvaluation && correction.evaluationQuestion) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationQuestion"],
+        message: "An evaluation scenario requires explicit inclusion.",
+      });
+    }
+  });
 
 export const reviewDecisionRequestSchema = z.discriminatedUnion("decision", [
   z.object({
@@ -356,6 +386,7 @@ export const reviewDecisionResponseSchema = z.object({
 
 export type ReviewDecisionRequest = z.infer<typeof reviewDecisionRequestSchema>;
 export type ReviewDecisionResponse = z.infer<typeof reviewDecisionResponseSchema>;
+export type ReviewErrorCategory = z.infer<typeof reviewErrorCategorySchema>;
 
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z

@@ -1,4 +1,9 @@
-import { ChallengeStatus, ReviewDecision, type PrismaClient } from "@prisma/client";
+import {
+  ChallengeStatus,
+  ReviewDecision,
+  type PrismaClient,
+  type ReviewErrorCategory,
+} from "@prisma/client";
 import {
   confirmedQuestionEvidenceRequestSchema,
   reviewDecisionResponseSchema,
@@ -23,6 +28,13 @@ export class ReviewChallengeConflictError extends Error {
   }
 }
 
+export class ReviewEvaluationConsentRequiredError extends Error {
+  constructor() {
+    super("The challenger has not opted into evaluation use.");
+    this.name = "ReviewEvaluationConsentRequiredError";
+  }
+}
+
 export async function getReviewQueue(client: PrismaClient = prisma): Promise<ReviewQueueResponse> {
   const rows = await client.challenge.findMany({
     where: { status: { in: [ChallengeStatus.OPEN, ChallengeStatus.NEEDS_INFORMATION] } },
@@ -31,6 +43,7 @@ export async function getReviewQueue(client: PrismaClient = prisma): Promise<Rev
     select: {
       id: true,
       explanation: true,
+      evaluationConsent: true,
       proposedOutcome: true,
       status: true,
       createdAt: true,
@@ -114,6 +127,7 @@ export async function getReviewQueue(client: PrismaClient = prisma): Promise<Rev
         challengeId: row.id,
         rulingId,
         question,
+        evaluationConsent: row.evaluationConsent,
         challenge,
         originalRuling: {
           version: version.version,
@@ -195,6 +209,7 @@ export async function decideChallenge(
       select: {
         id: true,
         status: true,
+        evaluationConsent: true,
         rulingVersion: {
           select: {
             rulingId: true,
@@ -215,6 +230,13 @@ export async function decideChallenge(
       },
     });
     if (!challenge) throw new ReviewChallengeNotFoundError();
+    if (
+      decision.decision === "approve" &&
+      decision.correction.includeInEvaluation &&
+      !challenge.evaluationConsent
+    ) {
+      throw new ReviewEvaluationConsentRequiredError();
+    }
     if (
       challenge.status !== ChallengeStatus.OPEN &&
       challenge.status !== ChallengeStatus.NEEDS_INFORMATION
@@ -280,6 +302,16 @@ export async function decideChallenge(
         challengeId,
         reviewerId,
         decision: decision.decision === "approve" ? ReviewDecision.APPROVE : ReviewDecision.REJECT,
+        errorCategory:
+          decision.decision === "approve"
+            ? (decision.correction.errorCategory.toUpperCase() as ReviewErrorCategory)
+            : null,
+        includeInEvaluation:
+          decision.decision === "approve" && decision.correction.includeInEvaluation,
+        evaluationQuestion:
+          decision.decision === "approve" && decision.correction.includeInEvaluation
+            ? decision.correction.evaluationQuestion
+            : null,
         fromStatus: challenge.status,
         toStatus,
         reason: decision.reason,
