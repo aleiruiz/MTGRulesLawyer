@@ -1,5 +1,5 @@
 import cors from "@fastify/cors";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import {
   cardLookupResponseSchema,
   confirmedQuestionEvidenceRequestSchema,
@@ -26,13 +26,18 @@ import { getRuling, saveRuling } from "./rulings/persistence.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
-  interpretQuestion?: (question: string, clientIp: string) => Promise<QuestionInterpretResponse>;
+  interpretQuestion?: (
+    question: string,
+    clientIp: string,
+    signal?: AbortSignal,
+  ) => Promise<QuestionInterpretResponse>;
   assembleQuestionEvidence?: (
     request: ConfirmedQuestionEvidenceRequest,
   ) => Promise<EvidenceSearchResponse>;
   generateRuling?: (
     request: ConfirmedQuestionEvidenceRequest,
     clientIp: string,
+    signal?: AbortSignal,
   ) => Promise<RulingGenerationResponse>;
   saveRuling?: (
     request: ConfirmedQuestionEvidenceRequest,
@@ -40,6 +45,23 @@ export interface BuildAppOptions {
   ) => Promise<PersistedRulingResponse>;
   getRuling?: (rulingId: string) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
+}
+
+function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
+  const controller = new AbortController();
+  const abortOnDisconnect = () => controller.abort(new Error("Client disconnected."));
+  const abortOnResponseClose = () => {
+    if (!reply.raw.writableEnded) abortOnDisconnect();
+  };
+  request.raw.once("aborted", abortOnDisconnect);
+  reply.raw.once("close", abortOnResponseClose);
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      request.raw.off("aborted", abortOnDisconnect);
+      reply.raw.off("close", abortOnResponseClose);
+    },
+  };
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -80,16 +102,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Provide a non-empty question up to 4000 characters." });
     }
+    const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await interpret(parsed.data.question, request.ip);
+      const result = await interpret(parsed.data.question, request.ip, disconnect.signal);
       return reply.send(questionInterpretResponseSchema.parse(result));
     } catch (error) {
+      if (disconnect.signal.aborted) return reply;
       if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
       request.log.error(
         { errorName: error instanceof Error ? error.name : "UnknownError" },
         "Question interpretation failed",
       );
       return reply.code(502).send({ error: "QUESTION_INTERPRETATION_UNAVAILABLE" });
+    } finally {
+      disconnect.cleanup();
     }
   });
   app.post("/api/questions/evidence", async (request, reply) => {
@@ -116,12 +142,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.success) {
       return reply.code(400).send({ error: "INVALID_RULING_REQUEST" });
     }
+    const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await createRuling(parsed.data, request.ip);
+      const result = await createRuling(parsed.data, request.ip, disconnect.signal);
       return reply.send(
         persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result)),
       );
     } catch (error) {
+      if (disconnect.signal.aborted) return reply;
       if (error instanceof AiUsageLimitError) return sendAiUsageLimitError(reply, error);
       if (error instanceof InvalidConfirmedCardsError) {
         return reply.code(400).send({ error: "CONFIRMED_CARD_UNAVAILABLE" });
@@ -131,6 +159,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         "Ruling generation failed",
       );
       return reply.code(502).send({ error: "RULING_GENERATION_UNAVAILABLE" });
+    } finally {
+      disconnect.cleanup();
     }
   });
   app.get<{ Params: { rulingId: string } }>("/api/rulings/:rulingId", async (request, reply) => {

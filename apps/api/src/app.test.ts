@@ -125,11 +125,12 @@ const evidenceApp = buildApp({
 const receivedRulingRequests: Array<{
   request: ConfirmedQuestionEvidenceRequest;
   clientIp: string;
+  signal?: AbortSignal;
 }> = [];
 let savedRulingResponse: PersistedRulingResponse | null = null;
 const rulingApp = buildApp({
-  generateRuling: (request, clientIp) => {
-    receivedRulingRequests.push({ request, clientIp });
+  generateRuling: (request, clientIp, signal) => {
+    receivedRulingRequests.push({ request, clientIp, signal });
     return Promise.resolve({
       outcome: "uncertain",
       summary: "The evidence does not establish a supported outcome.",
@@ -365,6 +366,8 @@ void describe("POST /api/questions/ruling", () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.json<PersistedRulingResponse>().ruling.outcome, "uncertain");
     assert.equal(receivedRulingRequests[0]?.clientIp, "127.0.0.1");
+    assert.ok(receivedRulingRequests[0]?.signal instanceof AbortSignal);
+    assert.equal(receivedRulingRequests[0]?.signal?.aborted, false);
     assert.deepEqual(receivedRulingRequests[0]?.request.confirmedCards, [
       { oracleId: "oracle-id", faceIndex: 0, quantity: 1 },
     ]);

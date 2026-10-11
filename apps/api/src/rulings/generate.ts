@@ -5,9 +5,14 @@ import {
   type RulingGenerationResponse,
 } from "@mtg-rules/contracts";
 import { z } from "zod";
-import { readAiUsageConfig, runReservedAiCall } from "../ai/usage.js";
-import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
+import {
+  estimateAiTokenCostMicros,
+  readAiUsageConfig,
+  runReservedAiCallWithMetrics,
+} from "../ai/usage.js";
+import { createOpenAiAdapter, OPENAI_DEFAULT_MODEL, readOpenAiConfig } from "../ai/openai.js";
 import { assembleConfirmedEvidence } from "../search/retrieval.js";
+import { createVerifiedRulingCacheKey, reuseVerifiedRuling } from "./cache.js";
 
 export const RULING_PROMPT_VERSION = "verified-ruling-v1";
 
@@ -49,6 +54,11 @@ export function buildModelPrompt(
     });
   return JSON.stringify({
     question: request.question,
+    confirmedCards: (request.confirmedCards ?? []).map(({ oracleId, faceIndex, quantity }) => ({
+      oracleId,
+      faceIndex,
+      quantity,
+    })),
     gameState: {
       events: takeState(request.gameState?.events),
       knownFacts: takeState(request.gameState?.knownFacts),
@@ -66,6 +76,7 @@ export function buildModelPrompt(
       cards: evidence.cards.map((card) => ({
         oracleId: card.oracleId,
         name: card.name,
+        quantity: card.quantity,
         selectedFaceIndex: card.selectedFaceIndex,
         face: {
           id: card.matchedFace.id,
@@ -199,27 +210,59 @@ export function createClarificationResponse(
 export async function generateRuling(
   request: ConfirmedQuestionEvidenceRequest,
   clientIp: string,
+  signal?: AbortSignal,
 ): Promise<RulingGenerationResponse> {
   const evidence = await assembleConfirmedEvidence(request);
   const missingFacts = request.gameState?.missingFacts ?? [];
   if (missingFacts.length > 0) return createClarificationResponse(evidence, missingFacts);
 
   // Validate configuration before reserving so placeholder credentials do not consume quota.
-  const providerConfig = readOpenAiConfig();
-  const provider = createOpenAiAdapter(providerConfig);
-  const usageConfig = readAiUsageConfig();
-  const modelOutput = await runReservedAiCall(
-    { kind: "RULING", identity: { clientIp } },
-    async () => ({
-      value: await provider.generateStructuredOutput({
-        schema: modelRulingSchema,
-        schemaName: "mtg_verified_ruling",
-        systemPrompt: RULING_SYSTEM_PROMPT,
-        userPrompt: buildModelPrompt(request, evidence),
-        promptVersion: RULING_PROMPT_VERSION,
-      }),
-    }),
-    { config: usageConfig },
-  );
-  return verifyRulingOutput(modelOutput, evidence, providerConfig.model);
+  const modelName = z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .parse(process.env.OPENAI_MODEL ?? OPENAI_DEFAULT_MODEL);
+  const systemPrompt = RULING_SYSTEM_PROMPT;
+  const userPrompt = buildModelPrompt(request, evidence);
+  const cacheKey = createVerifiedRulingCacheKey({
+    snapshotId: evidence.snapshot.id,
+    modelName,
+    promptVersion: RULING_PROMPT_VERSION,
+    systemPrompt,
+    userPrompt,
+  });
+  return reuseVerifiedRuling(cacheKey, evidence.snapshot.id, async () => {
+    // Validate provider configuration before reserving so placeholders do not consume quota.
+    const providerConfig = readOpenAiConfig();
+    const provider = createOpenAiAdapter(providerConfig);
+    const usageConfig = readAiUsageConfig();
+    const result = await runReservedAiCallWithMetrics(
+      { kind: "RULING", identity: { clientIp } },
+      async (providerSignal) => {
+        const generated = await provider.generateStructuredOutputWithUsage(
+          {
+            schema: modelRulingSchema,
+            schemaName: "mtg_verified_ruling",
+            systemPrompt,
+            userPrompt,
+            promptVersion: RULING_PROMPT_VERSION,
+          },
+          providerSignal,
+        );
+        const estimatedCostMicros = estimateAiTokenCostMicros(
+          generated.inputTokens,
+          generated.outputTokens,
+        );
+        return {
+          value: generated.value,
+          inputTokens: generated.inputTokens,
+          outputTokens: generated.outputTokens,
+          actualCostMicros: estimatedCostMicros,
+        };
+      },
+      { config: usageConfig, signal },
+    );
+    return verifyRulingOutput(result.value, evidence, providerConfig.model);
+  });
 }

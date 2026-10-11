@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { PrismaClient, type UsageKind } from "@prisma/client";
 import { describe, it } from "node:test";
 import {
@@ -66,7 +67,18 @@ void describe("AI usage reservation integration", { skip: !enabled }, () => {
       assert.notEqual(stored.ipHash, ip);
       assert.equal(stored.accountHash, null);
       await Promise.all(granted.map((outcome) => outcome.value.beginProviderCall()));
-      await Promise.all(granted.map((outcome) => outcome.value.complete(1_000n)));
+      await Promise.all(
+        granted.map((outcome) =>
+          outcome.value.complete(1_000n, { inputTokens: 20, outputTokens: 12 }),
+        ),
+      );
+      const recorded = await client.aiUsageReservation.findUniqueOrThrow({
+        where: { id: granted[0]?.value.id },
+        select: { actualCostMicros: true, inputTokens: true, outputTokens: true },
+      });
+      assert.equal(recorded.actualCostMicros, 1_000n);
+      assert.equal(recorded.inputTokens, 20);
+      assert.equal(recorded.outputTokens, 12);
     } finally {
       await client.aiUsageReservation.deleteMany({ where: { id: { in: reservations } } });
       await client.$disconnect();
@@ -200,6 +212,63 @@ void describe("AI usage reservation integration", { skip: !enabled }, () => {
       if (reservationId) {
         await client.aiUsageReservation.deleteMany({ where: { id: reservationId } });
       }
+      await client.$disconnect();
+    }
+  });
+
+  void it("allows reservations after the rolling daily quota window resets", async () => {
+    const client = new PrismaClient();
+    const config = testConfig({ anonymousRulingsPerDay: 1 });
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const now = new Date("2026-10-11T12:00:00.000Z");
+    let reservationId: string | undefined;
+    try {
+      const previousWindow = await reserveAiUsage(request("RULING", ip), {
+        client,
+        config,
+        now: new Date(now.getTime() - 24 * 60 * 60 * 1_000 - 1),
+      });
+      const reservation = await reserveAiUsage(request("RULING", ip), { client, config, now });
+      reservationId = reservation.id;
+      await reservation.releaseBeforeProviderCall();
+      assert.ok(previousWindow.id);
+      const remaining = await client.aiUsageReservation.count({
+        where: { id: previousWindow.id },
+      });
+      assert.equal(remaining, 0);
+    } finally {
+      if (reservationId) {
+        await client.aiUsageReservation.deleteMany({ where: { id: reservationId } });
+      }
+      await client.$disconnect();
+    }
+  });
+
+  void it("releases a cancelled request before the provider starts", async () => {
+    const client = new PrismaClient();
+    const config = testConfig();
+    const controller = new AbortController();
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    controller.abort(new Error("client cancelled"));
+    let providerCalls = 0;
+    const ipHash = createHmac("sha256", config.hashKey).update(`ip:${ip}`).digest("hex");
+    try {
+      await assert.rejects(
+        runReservedAiCall(
+          request("RULING", ip),
+          () => {
+            providerCalls += 1;
+            return Promise.resolve({ value: "unreachable" });
+          },
+          { client, config, signal: controller.signal },
+        ),
+        /client cancelled/,
+      );
+      assert.equal(providerCalls, 0);
+    } finally {
+      await client.aiUsageReservation.deleteMany({
+        where: { ipHash },
+      });
       await client.$disconnect();
     }
   });

@@ -102,4 +102,31 @@ void describe("question interpretation resolution", () => {
       ["oracle-lightning-bolt", "oracle-another-printing"],
     );
   });
+
+  void it("stops off-topic interpretation before resolving card mentions", async () => {
+    let lookups = 0;
+    const response = await resolveQuestionInterpretation(
+      "What is the capital of France?",
+      {
+        ...interpretedQuestion,
+        inScope: false,
+        scopeReason: "This is general geography, not a Magic rules question.",
+        cardMentions: [{ text: "France", start: 19, end: 25 }],
+        entities: ["France"],
+        events: ["Question was asked"],
+        knownFacts: ["France is a country."],
+        searchTerms: ["capital"],
+      },
+      () => {
+        lookups += 1;
+        return Promise.resolve({ cards: [] });
+      },
+    );
+
+    assert.equal(lookups, 0);
+    assert.equal(response.inScope, false);
+    assert.deepEqual(response.cardMentions, []);
+    assert.deepEqual(response.events, []);
+    assert.deepEqual(response.searchTerms, []);
+  });
 });
