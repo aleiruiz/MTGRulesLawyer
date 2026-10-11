@@ -4,6 +4,7 @@ import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { persistedRulingResponseSchema, type PersistedRulingResponse } from "@mtg-rules/contracts";
 import { apiUrl } from "../src/api-url";
+import ChallengeForm from "../src/challenges/ChallengeForm";
 
 const rulingIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -138,6 +139,7 @@ export default function PublicRulingScreen() {
             <Link href="/" style={styles.link}>
               Ask a rules question
             </Link>
+            {version === undefined ? <ChallengeForm rulingId={ruling.rulingId} /> : null}
           </View>
         ) : null}
       </ScrollView>
