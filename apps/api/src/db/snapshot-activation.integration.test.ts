@@ -203,6 +203,16 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         prisma,
       );
       assert.equal(overloadedPacket.truncated, true, "omitted matching rules are reported");
+      const referenceOverflowPacket = await assembleEvidence(
+        { question: "400", cardNames: [] },
+        prisma,
+      );
+      assert.equal(referenceOverflowPacket.truncated, true, "excess references are reported");
+      const expansionOverflowPacket = await assembleEvidence(
+        { question: "500 501", cardNames: [] },
+        prisma,
+      );
+      assert.equal(expansionOverflowPacket.truncated, true, "unexpanded evidence is reported");
       assert.ok(await prisma.rule.findUnique({ where: { id: originalRule.id } }));
       assert.ok(await prisma.cardFace.findUnique({ where: { id: originalFace.id } }));
       assert.equal(
@@ -237,7 +247,13 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
 });
 
 function fixtureRules(refreshed = false, overloadSearch = false) {
-  const rules = [
+  const rules: Array<{
+    number: string;
+    text: string;
+    sortOrder: number;
+    parentNumber: string | null;
+    references: string[];
+  }> = [
     { number: "100", text: "General rules.", sortOrder: 0, parentNumber: null, references: [] },
     {
       number: "100.1",
@@ -273,6 +289,44 @@ function fixtureRules(refreshed = false, overloadSearch = false) {
         parentNumber: "300",
         references: [],
       });
+    }
+    rules.push({
+      number: "400",
+      text: "A rule with many references.",
+      sortOrder: 14,
+      parentNumber: null,
+      references: Array.from({ length: 13 }, (_, index) => `${401 + index}`),
+    });
+    for (let number = 401; number <= 413; number += 1) {
+      rules.push({
+        number: `${number}`,
+        text: `Reference target ${number}.`,
+        sortOrder: 14 + number - 400,
+        parentNumber: null,
+        references: [],
+      });
+    }
+    for (const [root, firstTarget] of [
+      [500, 510],
+      [501, 530],
+    ] as const) {
+      rules.push({
+        number: `${root}`,
+        text: `A rule with expansion targets ${root}.`,
+        sortOrder: 30 + root - 500,
+        parentNumber: null,
+        references: Array.from({ length: 12 }, (_, index) => `${firstTarget + index}`),
+      });
+      for (let index = 0; index < 12; index += 1) {
+        const number = firstTarget + index;
+        rules.push({
+          number: `${number}`,
+          text: `Expansion target ${number}.`,
+          sortOrder: 32 + number - 510,
+          parentNumber: null,
+          references: [],
+        });
+      }
     }
   }
   return rules;
