@@ -9,6 +9,7 @@ import type {
   QuestionInterpretResponse,
   SourceStatusResponse,
 } from "@mtg-rules/contracts";
+import { reviewDecisionRequestSchema } from "@mtg-rules/contracts";
 import type { LightMyRequestResponse } from "fastify";
 import { AiUsageLimitError } from "./ai/usage.js";
 import { buildApp } from "./app.js";
@@ -533,6 +534,46 @@ void describe("admin challenge review routes", () => {
     });
     assert.equal(response.statusCode, 400);
     assert.deepEqual(response.json(), { error: "INVALID_REVIEW_DECISION" });
+  });
+
+  void it("rejects evaluation fixtures that disagree with the approved outcome", () => {
+    const parsed = reviewDecisionRequestSchema.safeParse({
+      decision: "approve",
+      reason: "The corrected ruling is supported by the cited rule.",
+      correction: {
+        errorCategory: "reasoning",
+        includeInEvaluation: true,
+        outcome: "resolved",
+        summary: "The affected player chooses the replacement effect.",
+        reasoningSteps: ["Apply rule 616.1."],
+        assumptions: [],
+        evaluationFixture: {
+          question: "Who chooses between replacement effects that modify one event?",
+          cards: [],
+          rules: [{ number: "616.1", text: "The affected player chooses among effects." }],
+          expectedOutcome: "conditional",
+          expectedRuleNumbers: ["616.1"],
+          expectedClarificationCount: 0,
+          modelOutput: {
+            outcome: "conditional",
+            summary: "The affected player chooses one applicable effect.",
+            summarySupport: "SUPPORTED",
+            summaryCitationNumbers: ["616.1"],
+            reasoningSteps: [
+              {
+                text: "Rule 616.1 gives the affected player this choice.",
+                support: "SUPPORTED",
+                citationNumbers: ["616.1"],
+              },
+            ],
+            assumptions: [],
+            clarificationQuestions: [],
+          },
+        },
+      },
+    });
+
+    assert.equal(parsed.success, false);
   });
 });
 

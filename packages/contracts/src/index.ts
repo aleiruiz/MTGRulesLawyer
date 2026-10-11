@@ -449,6 +449,17 @@ const correctedRulingDraftSchema = z
         message: "An evaluation fixture requires explicit inclusion.",
       });
     }
+    if (
+      correction.includeInEvaluation &&
+      correction.evaluationFixture &&
+      correction.evaluationFixture.expectedOutcome !== correction.outcome
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationFixture", "expectedOutcome"],
+        message: "The fixture outcome must match the approved correction.",
+      });
+    }
   });
 
 export const reviewDecisionRequestSchema = z.discriminatedUnion("decision", [
