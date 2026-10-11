@@ -1,10 +1,28 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
-import type { CardLookupResponse } from "@mtg-rules/contracts";
+import type { CardLookupResponse, SourceStatusResponse } from "@mtg-rules/contracts";
 import type { LightMyRequestResponse } from "fastify";
 import { buildApp } from "./app.js";
 
 const app = buildApp({
+  getSourceStatus: (): Promise<SourceStatusResponse> =>
+    Promise.resolve({
+      activeSnapshot: { id: "snapshot-id", version: "rules-test", activatedAt: null },
+      staleAfterHours: 72,
+      sources: [
+        {
+          kind: "COMPREHENSIVE_RULES",
+          sourceUrl: "https://magic.wizards.com/en/rules",
+          sourceVersion: "rules-test",
+          checksumSha256: "a".repeat(64),
+          importedAt: "2026-10-10T00:00:00.000Z",
+          checkedAt: "2026-10-10T00:00:00.000Z",
+          lastStatus: "UNCHANGED",
+          lastError: null,
+          stale: false,
+        },
+      ],
+    }),
   lookupCardsByExactFaceName: (name): Promise<CardLookupResponse> =>
     Promise.resolve(
       name.toLowerCase() === "awakened skyclave"
@@ -54,6 +72,15 @@ const app = buildApp({
           }
         : { cards: [] },
     ),
+});
+
+void describe("GET /api/sources/status", () => {
+  void it("returns active snapshot metadata and source freshness", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/sources/status" });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json<SourceStatusResponse>().sources[0]?.lastStatus, "UNCHANGED");
+  });
 });
 
 void after(async () => {

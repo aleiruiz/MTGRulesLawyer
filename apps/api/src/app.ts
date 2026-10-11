@@ -4,21 +4,26 @@ import {
   cardLookupResponseSchema,
   healthResponseSchema,
   type CardLookupResponse,
+  type SourceStatusResponse,
 } from "@mtg-rules/contracts";
 import { lookupCardsByExactFaceName } from "./cards/lookup.js";
+import { getSourceStatus } from "./sources/status.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
+  getSourceStatus?: () => Promise<SourceStatusResponse>;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: true });
   const lookupCards = options.lookupCardsByExactFaceName ?? lookupCardsByExactFaceName;
+  const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
 
   void app.register(cors, { origin: true });
   app.get("/health", async (_request, reply) =>
     reply.send(healthResponseSchema.parse({ status: "ok", service: "mtg-rules-api" })),
   );
+  app.get("/api/sources/status", async (_request, reply) => reply.send(await readSourceStatus()));
   app.get<{ Querystring: { name?: string | string[] } }>(
     "/api/cards/lookup",
     async (request, reply) => {

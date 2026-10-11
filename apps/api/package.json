@@ -10,6 +10,8 @@
     "test": "tsx --test src/app.test.ts src/rules/import.test.ts src/cards/oracle-import.test.ts src/cards/source.test.ts src/db/snapshot-activation.integration.test.ts",
     "import:rules": "tsx src/rules/import-cli.ts",
     "import:oracle": "tsx src/cards/import-cli.ts",
+    "refresh:sources": "tsx src/sources/refresh-cli.ts",
+    "check:sources": "tsx src/sources/check-freshness-cli.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {

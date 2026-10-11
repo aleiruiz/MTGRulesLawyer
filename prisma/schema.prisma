@@ -13,6 +13,13 @@ enum SnapshotStatus {
   RETIRED
 }
 
+enum SourceRefreshStatus {
+  RUNNING
+  UNCHANGED
+  IMPORTED
+  FAILED
+}
+
 enum SourceKind {
   COMPREHENSIVE_RULES
   ORACLE_CARDS
@@ -101,6 +108,23 @@ model SourceSnapshot {
 
   @@unique([snapshotId, kind])
   @@index([kind, importedAt(sort: Desc)])
+}
+
+model SourceRefreshLog {
+  id              String              @id @default(uuid()) @db.Uuid
+  runId           String              @db.Uuid
+  kind            SourceKind
+  status          SourceRefreshStatus @default(RUNNING)
+  sourceUrl       String
+  sourceVersion   String?
+  checksumSha256  String?             @db.Char(64)
+  snapshotVersion String?
+  checkedAt       DateTime            @default(now()) @db.Timestamptz(6)
+  completedAt     DateTime?           @db.Timestamptz(6)
+  errorMessage    String?             @db.Text
+
+  @@index([kind, checkedAt(sort: Desc)])
+  @@index([runId])
 }
 
 model Rule {

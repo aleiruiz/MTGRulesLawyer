@@ -11,6 +11,8 @@
     "dev:mobile": "pnpm --filter @mtg-rules/mobile start",
     "rules:import": "pnpm --filter @mtg-rules/api import:rules",
     "oracle:import": "pnpm --filter @mtg-rules/api import:oracle",
+    "sources:refresh": "pnpm --filter @mtg-rules/api refresh:sources",
+    "sources:check": "pnpm --filter @mtg-rules/api check:sources",
     "build": "pnpm db:generate && pnpm -r build",
     "lint": "pnpm db:generate && pnpm --filter @mtg-rules/contracts build && eslint apps/mobile/app apps/api/src packages/contracts/src eslint.config.mjs",
     "lint:fix": "pnpm db:generate && pnpm --filter @mtg-rules/contracts build && eslint apps/mobile/app apps/api/src packages/contracts/src eslint.config.mjs --fix",
