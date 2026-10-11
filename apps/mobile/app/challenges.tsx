@@ -67,6 +67,16 @@ export default function MyChallengesScreen() {
                 {challenge.proposedOutcome ? (
                   <Text>Suggested outcome: {challenge.proposedOutcome.replaceAll("_", " ")}</Text>
                 ) : null}
+                {challenge.latestInformationRequest ? (
+                  <View accessibilityLiveRegion="polite" style={styles.infoRequest}>
+                    <Text style={styles.infoTitle}>The reviewer needs more information</Text>
+                    <Text>{challenge.latestInformationRequest.reason}</Text>
+                    <Text style={styles.date}>
+                      Requested{" "}
+                      {new Date(challenge.latestInformationRequest.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                ) : null}
                 <Link
                   href={`/rulings?id=${encodeURIComponent(challenge.rulingId)}`}
                   style={styles.link}
@@ -92,6 +102,8 @@ const styles = StyleSheet.create({
   card: { gap: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff" },
   status: { color: "#386641", fontWeight: "800", textTransform: "capitalize" },
   question: { color: "#17212b", fontSize: 18, fontWeight: "700" },
+  infoRequest: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: "#fff4d6" },
+  infoTitle: { color: "#6b4b00", fontWeight: "700" },
   date: { color: "#5b5a55", fontSize: 13 },
   refresh: {
     minHeight: 44,
