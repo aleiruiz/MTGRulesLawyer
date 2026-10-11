@@ -252,6 +252,9 @@ export const challengeResponseSchema = z.object({
   explanation: z.string().max(4_000),
   proposedOutcome: rulingGenerationResponseSchema.shape.outcome.nullable(),
   status: z.enum(["open", "needs_information", "approved", "rejected"]),
+  latestInformationRequest: z
+    .object({ reason: z.string().max(2_000), createdAt: z.string().datetime() })
+    .nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -263,6 +266,59 @@ export const myChallengesResponseSchema = z.object({
 export type ChallengeSubmissionRequest = z.infer<typeof challengeSubmissionRequestSchema>;
 export type ChallengeResponse = z.infer<typeof challengeResponseSchema>;
 export type MyChallengesResponse = z.infer<typeof myChallengesResponseSchema>;
+
+export const reviewQueueResponseSchema = z.object({
+  challenges: z
+    .array(
+      z.object({
+        challengeId: z.string().uuid(),
+        rulingId: z.string().uuid(),
+        question: z.string().max(4_000),
+        challenge: challengeResponseSchema,
+        originalRuling: z.object({
+          version: z.number().int().positive(),
+          outcome: rulingGenerationResponseSchema.shape.outcome,
+          summary: z.string().max(4_000),
+          reasoningSteps: z.array(z.object({ text: z.string().max(2_000) })).max(30),
+          assumptions: z.array(z.string().max(1_000)).max(30),
+          gameState: confirmedQuestionEvidenceRequestSchema.shape.gameState,
+          confirmedCards: z
+            .array(
+              z.object({
+                oracleId: z.string(),
+                cardName: z.string(),
+                faceIndex: z.number().int().nonnegative().nullable(),
+                faceName: z.string().nullable(),
+                quantity: z.number().int().positive(),
+                oracleText: z.string().max(4_000).nullable(),
+              }),
+            )
+            .max(MAX_CONFIRMED_CARDS),
+          snapshot: z.object({
+            version: z.string(),
+            activatedAt: z.string().datetime().nullable(),
+          }),
+          citations: z
+            .array(
+              z.object({
+                label: z.string().max(500),
+                excerpt: z.string().max(2_000),
+                sourceUrl: z.string().url(),
+              }),
+            )
+            .max(64),
+        }),
+      }),
+    )
+    .max(100),
+});
+
+export const requestChallengeInformationSchema = z.object({
+  reason: z.string().trim().min(10).max(2_000),
+});
+
+export type ReviewQueueResponse = z.infer<typeof reviewQueueResponseSchema>;
+export type RequestChallengeInformation = z.infer<typeof requestChallengeInformationSchema>;
 
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z

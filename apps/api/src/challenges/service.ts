@@ -87,7 +87,7 @@ export async function submitChallenge(
       });
       return { ...challenge, rulingId: ruling.id, question: ruling.question.text };
     });
-    return serializeChallenge(row);
+    return serializeChallenge({ ...row, latestInformationRequest: null });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new DuplicateChallengeError();
@@ -111,6 +111,12 @@ export async function listMyChallenges(
       status: true,
       createdAt: true,
       updatedAt: true,
+      reviewEvents: {
+        where: { decision: "REQUEST_INFORMATION" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { reason: true, createdAt: true },
+      },
       rulingVersion: {
         select: { ruling: { select: { id: true, question: { select: { text: true } } } } },
       },
@@ -122,6 +128,7 @@ export async function listMyChallenges(
         ...challenge,
         rulingId: challenge.rulingVersion.ruling.id,
         question: challenge.rulingVersion.ruling.question.text,
+        latestInformationRequest: challenge.reviewEvents[0] ?? null,
       }),
     ),
   });
@@ -136,6 +143,7 @@ function serializeChallenge(challenge: {
   status: ChallengeStatus;
   createdAt: Date;
   updatedAt: Date;
+  latestInformationRequest: { reason: string; createdAt: Date } | null;
 }): ChallengeResponse {
   const outcome = challenge.proposedOutcome?.toLowerCase();
   return challengeResponseSchema.parse({
@@ -151,6 +159,12 @@ function serializeChallenge(challenge: {
         ? outcome
         : null,
     status: challenge.status.toLowerCase(),
+    latestInformationRequest: challenge.latestInformationRequest
+      ? {
+          reason: challenge.latestInformationRequest.reason,
+          createdAt: challenge.latestInformationRequest.createdAt.toISOString(),
+        }
+      : null,
     createdAt: challenge.createdAt.toISOString(),
     updatedAt: challenge.updatedAt.toISOString(),
   });

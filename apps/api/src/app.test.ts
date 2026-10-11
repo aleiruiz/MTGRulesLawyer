@@ -17,6 +17,7 @@ import type {
   ChallengeResponse,
   ChallengeSubmissionRequest,
   MyChallengesResponse,
+  ReviewQueueResponse,
 } from "@mtg-rules/contracts";
 
 const app = buildApp({
@@ -185,6 +186,7 @@ const challengeApp = buildApp({
       explanation: request.explanation,
       proposedOutcome: request.proposedOutcome ?? null,
       status: "open",
+      latestInformationRequest: null,
       createdAt: "2026-10-11T00:00:00.000Z",
       updatedAt: "2026-10-11T00:00:00.000Z",
     } satisfies ChallengeResponse);
@@ -199,11 +201,68 @@ const challengeApp = buildApp({
           explanation: `Owned by ${userId}`,
           proposedOutcome: null,
           status: "open",
+          latestInformationRequest: null,
           createdAt: "2026-10-11T00:00:00.000Z",
           updatedAt: "2026-10-11T00:00:00.000Z",
         },
       ],
     }),
+});
+
+const reviewRequests: Array<{ challengeId: string; reviewerId: string; reason: string }> = [];
+const reviewQueueFixture: ReviewQueueResponse = {
+  challenges: [
+    {
+      challengeId: "00000000-0000-4000-8000-000000000010",
+      rulingId: "00000000-0000-4000-8000-000000000001",
+      question: "Does this interaction resolve?",
+      challenge: {
+        challengeId: "00000000-0000-4000-8000-000000000010",
+        rulingId: "00000000-0000-4000-8000-000000000001",
+        question: "Does this interaction resolve?",
+        explanation: "The answer may overlook a replacement effect.",
+        proposedOutcome: "conditional",
+        status: "open",
+        latestInformationRequest: null,
+        createdAt: "2026-10-11T00:00:00.000Z",
+        updatedAt: "2026-10-11T00:00:00.000Z",
+      },
+      originalRuling: {
+        version: 1,
+        outcome: "resolved",
+        summary: "The spell resolves.",
+        reasoningSteps: [{ text: "No effect changes the result." }],
+        assumptions: ["No other replacement effects apply."],
+        gameState: {
+          events: [],
+          knownFacts: ["The spell was cast."],
+          missingFacts: [],
+          searchTerms: [],
+        },
+        confirmedCards: [],
+        snapshot: { version: "2026-10", activatedAt: "2026-10-10T00:00:00.000Z" },
+        citations: [
+          {
+            label: "Rule 101.1",
+            excerpt:
+              "When a card's text directly contradicts these rules, the card takes precedence.",
+            sourceUrl: "https://magic.wizards.com/en/rules",
+          },
+        ],
+      },
+    },
+  ],
+};
+const reviewApp = buildApp({
+  verifyAccessToken: (token) =>
+    Promise.resolve(token === "admin-token" || token === "user-token" ? { subject: token } : null),
+  resolveAppUser: (subject) =>
+    Promise.resolve({ id: subject, role: subject === "admin-token" ? "ADMIN" : "USER" }),
+  getReviewQueue: () => Promise.resolve(reviewQueueFixture),
+  requestMoreInformation: (challengeId, reviewerId, reason) => {
+    reviewRequests.push({ challengeId, reviewerId, reason });
+    return Promise.resolve();
+  },
 });
 
 void describe("GET /api/sources/status", () => {
@@ -220,6 +279,7 @@ void after(async () => {
   await evidenceApp.close();
   await rulingApp.close();
   await challengeApp.close();
+  await reviewApp.close();
 });
 
 void describe("challenge routes", () => {
@@ -276,6 +336,50 @@ void describe("challenge routes", () => {
       response.json<MyChallengesResponse>().challenges[0]?.explanation ?? "",
       /supabase-user/,
     );
+  });
+});
+
+void describe("admin challenge review routes", () => {
+  void it("denies non-admins and returns original ruling evidence to admins", async () => {
+    const denied = await reviewApp.inject({
+      method: "GET",
+      url: "/api/admin/challenges",
+      headers: { authorization: "Bearer user-token" },
+    });
+    assert.equal(denied.statusCode, 403);
+    const response = await reviewApp.inject({
+      method: "GET",
+      url: "/api/admin/challenges",
+      headers: { authorization: "Bearer admin-token" },
+    });
+    assert.equal(response.statusCode, 200);
+    const first = response.json<ReviewQueueResponse>().challenges[0];
+    assert.equal(first?.originalRuling.snapshot.version, "2026-10");
+    assert.equal(first?.originalRuling.citations[0]?.label, "Rule 101.1");
+    assert.equal(first?.challenge.explanation, "The answer may overlook a replacement effect.");
+  });
+
+  void it("uses the verified admin identity when requesting more information", async () => {
+    const challengeId = "00000000-0000-4000-8000-000000000010";
+    const response = await reviewApp.inject({
+      method: "POST",
+      url: `/api/admin/challenges/${challengeId}/request-information`,
+      headers: { authorization: "Bearer admin-token" },
+      payload: { reason: "Please identify the replacement effect you believe applies." },
+    });
+    assert.equal(response.statusCode, 204);
+    assert.deepEqual(reviewRequests[0], {
+      challengeId,
+      reviewerId: "admin-token",
+      reason: "Please identify the replacement effect you believe applies.",
+    });
+    const denied = await reviewApp.inject({
+      method: "POST",
+      url: `/api/admin/challenges/${challengeId}/request-information`,
+      headers: { authorization: "Bearer user-token" },
+      payload: { reason: "Please identify the replacement effect you believe applies." },
+    });
+    assert.equal(denied.statusCode, 403);
   });
 });
 

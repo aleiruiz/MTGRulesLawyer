@@ -21,6 +21,9 @@ import {
   type ChallengeResponse,
   type ChallengeSubmissionRequest,
   type MyChallengesResponse,
+  reviewQueueResponseSchema,
+  requestChallengeInformationSchema,
+  type ReviewQueueResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
 import { lookupCardsByExactFaceName } from "./cards/lookup.js";
@@ -47,6 +50,12 @@ import {
   listMyChallenges,
   submitChallenge,
 } from "./challenges/service.js";
+import {
+  getReviewQueue,
+  requestMoreInformation,
+  ReviewChallengeConflictError,
+  ReviewChallengeNotFoundError,
+} from "./reviews/service.js";
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -76,6 +85,12 @@ export interface BuildAppOptions {
     input: ChallengeSubmissionRequest & { rulingId: string; userId: string },
   ) => Promise<ChallengeResponse>;
   listMyChallenges?: (userId: string) => Promise<MyChallengesResponse>;
+  getReviewQueue?: () => Promise<ReviewQueueResponse>;
+  requestMoreInformation?: (
+    challengeId: string,
+    reviewerId: string,
+    reason: string,
+  ) => Promise<void>;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -132,6 +147,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   const createChallenge = options.submitChallenge ?? submitChallenge;
   const readMyChallenges = options.listMyChallenges ?? listMyChallenges;
+  const readReviewQueue = options.getReviewQueue ?? getReviewQueue;
+  const requestChallengeInformation = options.requestMoreInformation ?? requestMoreInformation;
 
   registerAuthentication(app, verifyAccessToken, resolveAppUser);
 
@@ -210,6 +227,42 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(503).send({ error: "CHALLENGES_UNAVAILABLE" });
     }
   });
+  app.get("/api/admin/challenges", async (request, reply) => {
+    try {
+      return reply.send(reviewQueueResponseSchema.parse(await readReviewQueue()));
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Review queue could not be loaded",
+      );
+      return reply.code(503).send({ error: "REVIEW_QUEUE_UNAVAILABLE" });
+    }
+  });
+  app.post<{ Params: { challengeId: string } }>(
+    "/api/admin/challenges/:challengeId/request-information",
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.challengeId))
+        return reply.code(400).send({ error: "INVALID_CHALLENGE_ID" });
+      const parsed = requestChallengeInformationSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "INVALID_REVIEW_REQUEST" });
+      try {
+        await requestChallengeInformation(request.params.challengeId, user.id, parsed.data.reason);
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof ReviewChallengeNotFoundError)
+          return reply.code(404).send({ error: "CHALLENGE_NOT_FOUND" });
+        if (error instanceof ReviewChallengeConflictError)
+          return reply.code(409).send({ error: "CHALLENGE_STATUS_CHANGED" });
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Review request could not be saved",
+        );
+        return reply.code(503).send({ error: "REVIEW_REQUEST_UNAVAILABLE" });
+      }
+    },
+  );
   app.get("/ready", async (request, reply) => {
     try {
       await checkDatabase();
