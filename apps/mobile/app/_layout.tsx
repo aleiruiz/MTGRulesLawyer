@@ -7,6 +7,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="index" options={{ title: "MTG Rules Lawyer", headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
+        <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
         <Stack.Screen
           name="auth/callback"
           options={{ title: "Sign in", headerBackVisible: false }}
