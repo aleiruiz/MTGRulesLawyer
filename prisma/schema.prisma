@@ -69,6 +69,15 @@ enum ReviewDecision {
   REJECT
 }
 
+enum ReviewErrorCategory {
+  CARD_RESOLUTION
+  MISSING_GAME_FACT
+  RETRIEVAL
+  REASONING
+  OUTDATED_SOURCE
+  PRESENTATION
+}
+
 enum UsageKind {
   INTERPRETATION
   RULING
@@ -300,17 +309,18 @@ model AppUser {
 }
 
 model Challenge {
-  id              String          @id @default(uuid()) @db.Uuid
-  rulingVersionId String          @db.Uuid
-  userId          String          @db.Uuid
-  explanation     String          @db.Text
-  proposedOutcome RulingOutcome?
-  status          ChallengeStatus @default(OPEN)
-  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime        @updatedAt @db.Timestamptz(6)
-  rulingVersion   RulingVersion   @relation(fields: [rulingVersionId], references: [id], onDelete: Restrict)
-  user            AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
-  reviewEvents    ReviewEvent[]
+  id                String          @id @default(uuid()) @db.Uuid
+  rulingVersionId   String          @db.Uuid
+  userId            String          @db.Uuid
+  explanation       String          @db.Text
+  proposedOutcome   RulingOutcome?
+  evaluationConsent Boolean         @default(false)
+  status            ChallengeStatus @default(OPEN)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
+  rulingVersion     RulingVersion   @relation(fields: [rulingVersionId], references: [id], onDelete: Restrict)
+  user              AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reviewEvents      ReviewEvent[]
 
   @@unique([userId, rulingVersionId])
   @@index([userId, createdAt(sort: Desc)])
@@ -319,18 +329,21 @@ model Challenge {
 }
 
 model ReviewEvent {
-  id                 String           @id @default(uuid()) @db.Uuid
-  challengeId        String           @db.Uuid
-  reviewerId         String           @db.Uuid
-  decision           ReviewDecision
-  fromStatus         ChallengeStatus?
-  toStatus           ChallengeStatus
-  reason             String           @db.Text
-  correctedVersionId String?          @unique @db.Uuid
-  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
-  challenge          Challenge        @relation(fields: [challengeId], references: [id], onDelete: Restrict)
-  reviewer           AppUser          @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
-  correctedVersion   RulingVersion?   @relation("CorrectedVersion", fields: [correctedVersionId], references: [id], onDelete: Restrict)
+  id                  String               @id @default(uuid()) @db.Uuid
+  challengeId         String               @db.Uuid
+  reviewerId          String               @db.Uuid
+  decision            ReviewDecision
+  errorCategory       ReviewErrorCategory?
+  includeInEvaluation Boolean              @default(false)
+  evaluationFixture   Json?
+  fromStatus          ChallengeStatus?
+  toStatus            ChallengeStatus
+  reason              String               @db.Text
+  correctedVersionId  String?              @unique @db.Uuid
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  challenge           Challenge            @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  reviewer            AppUser              @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  correctedVersion    RulingVersion?       @relation("CorrectedVersion", fields: [correctedVersionId], references: [id], onDelete: Restrict)
 
   @@index([challengeId, createdAt])
   @@index([reviewerId, createdAt])

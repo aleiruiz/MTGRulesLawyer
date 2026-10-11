@@ -21,6 +21,7 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
   const { session } = useAuth();
   const [explanation, setExplanation] = useState("");
   const [proposedOutcome, setProposedOutcome] = useState<RulingGenerationResponse["outcome"]>();
+  const [evaluationConsent, setEvaluationConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -29,7 +30,11 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
     setSubmitting(true);
     setMessage("");
     try {
-      const payload = challengeSubmissionRequestSchema.parse({ explanation, proposedOutcome });
+      const payload = challengeSubmissionRequestSchema.parse({
+        explanation,
+        proposedOutcome,
+        evaluationConsent,
+      });
       const response = await fetch(
         `${apiUrl}/api/rulings/${encodeURIComponent(rulingId)}/challenges`,
         {
@@ -48,6 +53,7 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
       challengeResponseSchema.parse(body);
       setExplanation("");
       setProposedOutcome(undefined);
+      setEvaluationConsent(false);
       setMessage("Challenge submitted. You can follow its status below.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The challenge could not be submitted.");
@@ -98,6 +104,19 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
             ))}
           </View>
           <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: evaluationConsent }}
+            onPress={() => setEvaluationConsent((consent) => !consent)}
+            style={styles.consent}
+          >
+            <Text style={styles.consentMark}>{evaluationConsent ? "☑" : "☐"}</Text>
+            <Text style={styles.help}>
+              Allow a de-identified scenario from this challenge to be used for regression testing?
+              This is optional. Your original question, explanation, and account details are not
+              exported.
+            </Text>
+          </Pressable>
+          <Pressable
             accessibilityRole="button"
             disabled={submitting || explanation.trim().length < 10}
             onPress={() => void submit()}
@@ -136,6 +155,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  consent: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 4 },
+  consentMark: { color: "#1f5d50", fontSize: 20, lineHeight: 22 },
   choice: {
     paddingHorizontal: 9,
     paddingVertical: 7,

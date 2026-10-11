@@ -75,6 +75,7 @@ export async function submitChallenge(
           userId: input.userId,
           explanation: input.explanation,
           proposedOutcome: input.proposedOutcome?.toUpperCase() as RulingOutcome | undefined,
+          evaluationConsent: input.evaluationConsent,
         },
         select: {
           id: true,

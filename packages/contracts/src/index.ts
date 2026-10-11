@@ -243,6 +243,7 @@ export type PersistedRulingResponse = z.infer<typeof persistedRulingResponseSche
 export const challengeSubmissionRequestSchema = z.object({
   explanation: z.string().trim().min(10).max(4_000),
   proposedOutcome: rulingGenerationResponseSchema.shape.outcome.optional(),
+  evaluationConsent: z.boolean().default(false),
 });
 
 export const challengeResponseSchema = z.object({
@@ -284,6 +285,7 @@ export const reviewQueueResponseSchema = z.object({
         challengeId: z.string().uuid(),
         rulingId: z.string().uuid(),
         question: z.string().max(4_000),
+        evaluationConsent: z.boolean(),
         challenge: challengeResponseSchema,
         originalRuling: z.object({
           version: z.number().int().positive(),
@@ -331,12 +333,134 @@ export type ReviewQueueResponse = z.infer<typeof reviewQueueResponseSchema>;
 export type RequestChallengeInformation = z.infer<typeof requestChallengeInformationSchema>;
 
 const reviewDecisionReasonSchema = z.string().trim().min(10).max(2_000);
-const correctedRulingDraftSchema = z.object({
-  outcome: rulingGenerationResponseSchema.shape.outcome,
-  summary: z.string().trim().min(1).max(1_200),
-  reasoningSteps: z.array(z.string().trim().min(1).max(800)).min(1).max(12),
-  assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
-});
+export const reviewedEvaluationFixtureSchema = z
+  .object({
+    question: z.string().trim().min(20).max(4_000),
+    cards: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(300),
+            oracleText: z.string().max(10_000),
+            quantity: z.number().int().positive().optional(),
+          })
+          .strict(),
+      )
+      .max(MAX_CONFIRMED_CARDS),
+    rules: z
+      .array(
+        z
+          .object({
+            number: z.string().trim().min(1).max(50),
+            text: z.string().trim().min(1).max(4_000),
+          })
+          .strict(),
+      )
+      .max(20),
+    expectedOutcome: rulingGenerationResponseSchema.shape.outcome,
+    expectedRuleNumbers: z.array(z.string().trim().min(1).max(50)).max(20),
+    expectedClarificationCount: z.number().int().min(0).max(6),
+    modelOutput: z
+      .object({
+        outcome: rulingGenerationResponseSchema.shape.outcome,
+        summary: z.string().trim().min(1).max(1_200),
+        summarySupport: z.enum(["SUPPORTED", "UNSUPPORTED"]),
+        summaryCitationNumbers: z.array(z.string().trim().min(1).max(50)).max(8),
+        reasoningSteps: z
+          .array(
+            z
+              .object({
+                text: z.string().trim().min(1).max(800),
+                support: z.enum(["SUPPORTED", "UNSUPPORTED"]),
+                citationNumbers: z.array(z.string().trim().min(1).max(50)).max(8),
+              })
+              .strict(),
+          )
+          .max(12),
+        assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
+        clarificationQuestions: z.array(z.string().trim().min(1).max(300)).max(6),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((fixture, context) => {
+    const availableRules = new Set(fixture.rules.map((rule) => rule.number));
+    const citedRules = [
+      ...fixture.expectedRuleNumbers,
+      ...fixture.modelOutput.summaryCitationNumbers,
+      ...fixture.modelOutput.reasoningSteps.flatMap((step) => step.citationNumbers),
+    ];
+    if (fixture.expectedOutcome !== fixture.modelOutput.outcome) {
+      context.addIssue({
+        code: "custom",
+        path: ["modelOutput", "outcome"],
+        message: "Expected and fixture outcomes must match.",
+      });
+    }
+    if (fixture.expectedClarificationCount !== fixture.modelOutput.clarificationQuestions.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["modelOutput", "clarificationQuestions"],
+        message: "Clarification count must match the expected output.",
+      });
+    }
+    for (const ruleNumber of citedRules) {
+      if (!availableRules.has(ruleNumber)) {
+        context.addIssue({
+          code: "custom",
+          path: ["rules"],
+          message: `Cited rule ${ruleNumber} must be included in the reviewed evidence.`,
+        });
+        break;
+      }
+    }
+  });
+
+export const reviewErrorCategorySchema = z.enum([
+  "card_resolution",
+  "missing_game_fact",
+  "retrieval",
+  "reasoning",
+  "outdated_source",
+  "presentation",
+]);
+const correctedRulingDraftSchema = z
+  .object({
+    errorCategory: reviewErrorCategorySchema,
+    includeInEvaluation: z.boolean().default(false),
+    evaluationFixture: reviewedEvaluationFixtureSchema.optional(),
+    outcome: rulingGenerationResponseSchema.shape.outcome,
+    summary: z.string().trim().min(1).max(1_200),
+    reasoningSteps: z.array(z.string().trim().min(1).max(800)).min(1).max(12),
+    assumptions: z.array(z.string().trim().min(1).max(300)).max(12),
+  })
+  .superRefine((correction, context) => {
+    if (correction.includeInEvaluation && !correction.evaluationFixture) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationFixture"],
+        message: "A complete reviewed evaluation fixture is required for inclusion.",
+      });
+    }
+    if (!correction.includeInEvaluation && correction.evaluationFixture) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationFixture"],
+        message: "An evaluation fixture requires explicit inclusion.",
+      });
+    }
+    if (
+      correction.includeInEvaluation &&
+      correction.evaluationFixture &&
+      correction.evaluationFixture.expectedOutcome !== correction.outcome
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["evaluationFixture", "expectedOutcome"],
+        message: "The fixture outcome must match the approved correction.",
+      });
+    }
+  });
 
 export const reviewDecisionRequestSchema = z.discriminatedUnion("decision", [
   z.object({
@@ -356,6 +480,7 @@ export const reviewDecisionResponseSchema = z.object({
 
 export type ReviewDecisionRequest = z.infer<typeof reviewDecisionRequestSchema>;
 export type ReviewDecisionResponse = z.infer<typeof reviewDecisionResponseSchema>;
+export type ReviewErrorCategory = z.infer<typeof reviewErrorCategorySchema>;
 
 export const sourceStatusResponseSchema = z.object({
   activeSnapshot: z

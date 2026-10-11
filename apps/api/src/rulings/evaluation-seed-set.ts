@@ -1,31 +1,49 @@
-import type { ModelRuling } from "./generate.js";
+import { reviewErrorCategorySchema } from "@mtg-rules/contracts";
+import { z } from "zod";
+import { modelRulingSchema } from "./generate.js";
+import reviewedEvaluationCases from "./reviewed-evaluation-cases-v1.json" with { type: "json" };
 
-export interface RulingEvaluationCase {
-  id: string;
-  title: string;
-  question: string;
-  cards: Array<{ name: string; oracleText: string }>;
-  rules: Array<{ number: string; text: string }>;
-  expectedOutcome: ModelRuling["outcome"];
-  expectedRuleNumbers: string[];
-  expectedClarificationCount: number;
-  modelOutput: {
-    outcome: ModelRuling["outcome"];
-    summary: string;
-    summarySupport: "SUPPORTED" | "UNSUPPORTED";
-    summaryCitationNumbers: string[];
-    reasoningSteps: Array<{
-      text: string;
-      support: "SUPPORTED" | "UNSUPPORTED";
-      citationNumbers: string[];
-    }>;
-    assumptions: string[];
-    clarificationQuestions: string[];
-  };
-}
+export const rulingEvaluationCaseSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  question: z.string().min(1),
+  cards: z.array(
+    z.object({
+      name: z.string(),
+      oracleText: z.string(),
+      quantity: z.number().int().positive().optional(),
+    }),
+  ),
+  rules: z.array(z.object({ number: z.string(), text: z.string() })),
+  expectedOutcome: modelRulingSchema.shape.outcome,
+  expectedRuleNumbers: z.array(z.string()),
+  expectedClarificationCount: z.number().int().nonnegative(),
+  errorCategory: reviewErrorCategorySchema.optional(),
+  reviewSource: z.enum(["approved_challenge", "maintainer_curated"]).optional(),
+  fixtureOrigin: z.enum(["synthetic", "exported"]).optional(),
+  modelOutput: z.object({
+    outcome: modelRulingSchema.shape.outcome,
+    summary: z.string().min(1).max(1_200),
+    summarySupport: z.enum(["SUPPORTED", "UNSUPPORTED"]),
+    summaryCitationNumbers: z.array(z.string()).max(8),
+    reasoningSteps: z
+      .array(
+        z.object({
+          text: z.string().min(1).max(800),
+          support: z.enum(["SUPPORTED", "UNSUPPORTED"]),
+          citationNumbers: z.array(z.string()).max(8),
+        }),
+      )
+      .max(12),
+    assumptions: z.array(z.string().min(1).max(300)).max(12),
+    clarificationQuestions: z.array(z.string().min(1).max(300)).max(6),
+  }),
+});
+
+export type RulingEvaluationCase = z.infer<typeof rulingEvaluationCaseSchema>;
 
 // Citation numbers were checked against Wizards' Comprehensive Rules, June 19, 2026.
-export const rulingEvaluationSeedSet: RulingEvaluationCase[] = [
+const baseEvaluationCases: RulingEvaluationCase[] = [
   {
     id: "layers-timestamp",
     title: "Continuous effects and timestamp order",
@@ -211,4 +229,13 @@ export const rulingEvaluationSeedSet: RulingEvaluationCase[] = [
       ],
     },
   },
+];
+
+const reviewedCases: RulingEvaluationCase[] = z
+  .array(rulingEvaluationCaseSchema)
+  .parse(reviewedEvaluationCases);
+
+export const rulingEvaluationSeedSet: RulingEvaluationCase[] = [
+  ...baseEvaluationCases,
+  ...reviewedCases,
 ];

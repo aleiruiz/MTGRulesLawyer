@@ -9,6 +9,7 @@ import type {
   QuestionInterpretResponse,
   SourceStatusResponse,
 } from "@mtg-rules/contracts";
+import { reviewDecisionRequestSchema } from "@mtg-rules/contracts";
 import type { LightMyRequestResponse } from "fastify";
 import { AiUsageLimitError } from "./ai/usage.js";
 import { buildApp } from "./app.js";
@@ -230,6 +231,7 @@ const reviewQueueFixture: ReviewQueueResponse = {
       challengeId: "00000000-0000-4000-8000-000000000010",
       rulingId: "00000000-0000-4000-8000-000000000001",
       question: "Does this interaction resolve?",
+      evaluationConsent: true,
       challenge: {
         challengeId: "00000000-0000-4000-8000-000000000010",
         rulingId: "00000000-0000-4000-8000-000000000001",
@@ -324,12 +326,14 @@ void describe("challenge routes", () => {
       payload: {
         explanation: "I think the ruling missed an applicable replacement effect.",
         proposedOutcome: "conditional",
+        evaluationConsent: true,
         userId: "attacker-controlled-user",
       },
     });
     assert.equal(response.statusCode, 200);
     assert.equal(challengeRequests[0]?.userId, "supabase-user");
     assert.equal(challengeRequests[0]?.proposedOutcome, "conditional");
+    assert.equal(challengeRequests[0]?.evaluationConsent, true);
   });
 
   void it("validates submissions and returns a conflict for duplicates", async () => {
@@ -347,6 +351,7 @@ void describe("challenge routes", () => {
       payload: { explanation: "This should be treated as a duplicate challenge." },
     });
     assert.equal(duplicate.statusCode, 409);
+    assert.equal(challengeRequests[1]?.evaluationConsent, false);
   });
 
   void it("returns only the authenticated user's challenge list", async () => {
@@ -418,6 +423,31 @@ void describe("admin challenge review routes", () => {
         decision: "approve",
         reason: "The challenge correctly identifies the replacement effect.",
         correction: {
+          errorCategory: "reasoning",
+          includeInEvaluation: true,
+          evaluationFixture: {
+            question: "Which player chooses between two replacement effects that modify one event?",
+            cards: [],
+            rules: [{ number: "616.1", text: "The affected player chooses among these effects." }],
+            expectedOutcome: "conditional",
+            expectedRuleNumbers: ["616.1"],
+            expectedClarificationCount: 0,
+            modelOutput: {
+              outcome: "conditional",
+              summary: "The affected player chooses one applicable effect.",
+              summarySupport: "SUPPORTED",
+              summaryCitationNumbers: ["616.1"],
+              reasoningSteps: [
+                {
+                  text: "Rule 616.1 gives the affected player this choice.",
+                  support: "SUPPORTED",
+                  citationNumbers: ["616.1"],
+                },
+              ],
+              assumptions: [],
+              clarificationQuestions: [],
+            },
+          },
           outcome: "conditional",
           summary: "The spell resolves conditionally when the replacement effect applies.",
           reasoningSteps: ["Apply the replacement effect before determining the result."],
@@ -428,6 +458,13 @@ void describe("admin challenge review routes", () => {
     assert.equal(response.statusCode, 200);
     assert.equal(response.json<ReviewDecisionResponse>().correctedRulingVersion, 2);
     assert.equal(reviewDecisions[0]?.reviewerId, "admin-token");
+    assert.equal(reviewDecisions[0]?.decision.decision, "approve");
+    if (reviewDecisions[0]?.decision.decision === "approve") {
+      assert.equal(
+        reviewDecisions[0].decision.correction.evaluationFixture?.question,
+        "Which player chooses between two replacement effects that modify one event?",
+      );
+    }
     const denied = await reviewApp.inject({
       method: "POST",
       url: `/api/admin/challenges/${challengeId}/decision`,
@@ -435,6 +472,108 @@ void describe("admin challenge review routes", () => {
       payload: { decision: "reject", reason: "The challenged ruling is supported by evidence." },
     });
     assert.equal(denied.statusCode, 403);
+  });
+
+  void it("requires a sanitized scenario when an admin opts a case into evaluation", async () => {
+    const response = await reviewApp.inject({
+      method: "POST",
+      url: "/api/admin/challenges/00000000-0000-4000-8000-000000000010/decision",
+      headers: { authorization: "Bearer admin-token" },
+      payload: {
+        decision: "approve",
+        reason: "The correction is supported by the cited rule.",
+        correction: {
+          errorCategory: "reasoning",
+          includeInEvaluation: true,
+          outcome: "resolved",
+          summary: "The affected player chooses the replacement effect.",
+          reasoningSteps: ["Apply rule 616.1."],
+          assumptions: [],
+        },
+      },
+    });
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(response.json(), { error: "INVALID_REVIEW_DECISION" });
+  });
+
+  void it("rejects evaluation fixtures with private fields or citations outside their evidence", async () => {
+    const response = await reviewApp.inject({
+      method: "POST",
+      url: "/api/admin/challenges/00000000-0000-4000-8000-000000000010/decision",
+      headers: { authorization: "Bearer admin-token" },
+      payload: {
+        decision: "approve",
+        reason: "The correction is supported by the cited rule.",
+        correction: {
+          errorCategory: "reasoning",
+          includeInEvaluation: true,
+          evaluationFixture: {
+            question: "A sanitized scenario with a citation that is not in the reviewed evidence?",
+            cards: [],
+            rules: [],
+            expectedOutcome: "resolved",
+            expectedRuleNumbers: ["616.1"],
+            expectedClarificationCount: 0,
+            modelOutput: {
+              outcome: "resolved",
+              summary: "The cited rule determines the outcome.",
+              summarySupport: "SUPPORTED",
+              summaryCitationNumbers: ["616.1"],
+              reasoningSteps: [],
+              assumptions: [],
+              clarificationQuestions: [],
+            },
+            challengeId: "private-id-must-not-be-accepted",
+          },
+          outcome: "resolved",
+          summary: "The corrected answer follows the public rules text.",
+          reasoningSteps: ["Apply the relevant rule to the stated facts."],
+          assumptions: [],
+        },
+      },
+    });
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(response.json(), { error: "INVALID_REVIEW_DECISION" });
+  });
+
+  void it("rejects evaluation fixtures that disagree with the approved outcome", () => {
+    const parsed = reviewDecisionRequestSchema.safeParse({
+      decision: "approve",
+      reason: "The corrected ruling is supported by the cited rule.",
+      correction: {
+        errorCategory: "reasoning",
+        includeInEvaluation: true,
+        outcome: "resolved",
+        summary: "The affected player chooses the replacement effect.",
+        reasoningSteps: ["Apply rule 616.1."],
+        assumptions: [],
+        evaluationFixture: {
+          question: "Who chooses between replacement effects that modify one event?",
+          cards: [],
+          rules: [{ number: "616.1", text: "The affected player chooses among effects." }],
+          expectedOutcome: "conditional",
+          expectedRuleNumbers: ["616.1"],
+          expectedClarificationCount: 0,
+          modelOutput: {
+            outcome: "conditional",
+            summary: "The affected player chooses one applicable effect.",
+            summarySupport: "SUPPORTED",
+            summaryCitationNumbers: ["616.1"],
+            reasoningSteps: [
+              {
+                text: "Rule 616.1 gives the affected player this choice.",
+                support: "SUPPORTED",
+                citationNumbers: ["616.1"],
+              },
+            ],
+            assumptions: [],
+            clarificationQuestions: [],
+          },
+        },
+      },
+    });
+
+    assert.equal(parsed.success, false);
   });
 });
 
