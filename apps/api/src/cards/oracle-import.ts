@@ -256,6 +256,18 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
   ) {
     return this.prisma.$transaction(
       async (transaction) => {
+        const previous = await transaction.dataSnapshot.findFirst({
+          where: { status: SnapshotStatus.ACTIVE },
+          include: { sources: true },
+        });
+        const activeOracleSource = previous?.sources.find(
+          (source) => source.kind === SourceKind.ORACLE_CARDS,
+        );
+        if (previous && activeOracleSource?.checksumSha256 === input.checksumSha256) {
+          const cardCount = await transaction.card.count({ where: { snapshotId: previous.id } });
+          return { id: previous.id, version: previous.version, cardCount };
+        }
+
         const existing = await transaction.dataSnapshot.findUnique({
           where: { version: input.version },
           select: { id: true, version: true, status: true, _count: { select: { cards: true } } },
@@ -267,10 +279,6 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
           throw new Error(`Snapshot version ${input.version} already exists but is not active.`);
         }
 
-        const previous = await transaction.dataSnapshot.findFirst({
-          where: { status: SnapshotStatus.ACTIVE },
-          include: { sources: { where: { kind: SourceKind.COMPREHENSIVE_RULES } } },
-        });
         const snapshotId = randomUUID();
         const now = input.importedAt;
         await transaction.dataSnapshot.create({
@@ -311,7 +319,9 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
               await transaction.ruleCrossReference.createMany({ data: references });
             }
           }
-          const ruleSource = previous.sources[0];
+          const ruleSource = previous.sources.find(
+            (source) => source.kind === SourceKind.COMPREHENSIVE_RULES,
+          );
           if (ruleSource) {
             await transaction.sourceSnapshot.create({
               data: {
@@ -342,6 +352,7 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
         });
 
         let cardCount = 0;
+        let faceCount = 0;
         let cardBatch: Array<{ card: OracleCardInput; cardId: string }> = [];
         const seenOracleIds = new Set<string>();
         const flushCards = async (): Promise<void> => {
@@ -369,9 +380,17 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
           if (seenOracleIds.has(card.oracleId)) {
             throw new Error(`Oracle bulk file contains duplicate Oracle ID ${card.oracleId}.`);
           }
+          if (
+            card.faces.length === 0 ||
+            new Set(card.faces.map((face) => face.faceIndex)).size !== card.faces.length ||
+            card.faces.some((face) => face.faceIndex < 0 || face.name.trim() === "")
+          ) {
+            throw new Error(`Oracle bulk card ${card.name} contains invalid face data.`);
+          }
           seenOracleIds.add(card.oracleId);
           cardBatch.push({ card, cardId: randomUUID() });
           cardCount += 1;
+          faceCount += card.faces.length;
           if (cardBatch.length >= 250) await flushCards();
         }
         await flushCards();
@@ -380,6 +399,21 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
           throw new Error(
             `Oracle bulk file contained only ${cardCount} cards; expected at least ${input.minimumCardCount}.`,
           );
+        }
+
+        const [candidateCardCount, candidateFaceCount, candidateSources] = await Promise.all([
+          transaction.card.count({ where: { snapshotId } }),
+          transaction.cardFace.count({ where: { card: { snapshotId } } }),
+          transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
+        ]);
+        if (
+          candidateCardCount !== cardCount ||
+          candidateFaceCount !== faceCount ||
+          !candidateSources.some((source) => source.kind === SourceKind.ORACLE_CARDS) ||
+          (previous?.sources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES) &&
+            !candidateSources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES))
+        ) {
+          throw new Error("Oracle snapshot candidate failed count or source validation.");
         }
 
         await transaction.dataSnapshot.updateMany({
