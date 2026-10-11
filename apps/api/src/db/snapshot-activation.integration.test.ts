@@ -57,6 +57,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         sourceUrl: "https://example.invalid/oracle.jsonl.gz",
         sourcePublishedAt: now,
         checksumSha256: checksum("2"),
+        importerRevision: 1,
         importedAt: now,
         minimumCardCount: 1,
         cards: oneCard(),
@@ -108,6 +109,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
           sourceUrl: "https://example.invalid/oracle.jsonl.gz",
           sourcePublishedAt: now,
           checksumSha256: checksum("3"),
+          importerRevision: 1,
           importedAt: now,
           minimumCardCount: 2,
           cards: oneCard(),
@@ -118,6 +120,29 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         (await prisma.dataSnapshot.findFirstOrThrow({ where: { status: SnapshotStatus.ACTIVE } }))
           .id,
         oracle.id,
+      );
+
+      const reprocessed = await cardsWriter.activateOracleSnapshot({
+        version: `d04-oracle-v2-${randomUUID()}`,
+        sourceVersion: "2026-10-10T00:00:00.000Z",
+        sourceUrl: "https://example.invalid/oracle.jsonl.gz",
+        sourcePublishedAt: now,
+        checksumSha256: checksum("2"),
+        importerRevision: 2,
+        importedAt: now,
+        minimumCardCount: 1,
+        cards: oneCard(),
+      });
+      testSnapshots.push(reprocessed.id);
+      assert.notEqual(
+        reprocessed.id,
+        oracle.id,
+        "a new normalizer revision reprocesses unchanged source data",
+      );
+      assert.equal(
+        (await prisma.dataSnapshot.findFirstOrThrow({ where: { status: SnapshotStatus.ACTIVE } }))
+          .id,
+        reprocessed.id,
       );
 
       const refreshed = await rulesWriter.activateRulesSnapshot({

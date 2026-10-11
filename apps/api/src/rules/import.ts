@@ -194,6 +194,7 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
             version: input.version,
             status: SnapshotStatus.CANDIDATE,
             activatedAt: null,
+            notes: active?.notes ?? null,
             createdAt: input.importedAt,
           },
         });
