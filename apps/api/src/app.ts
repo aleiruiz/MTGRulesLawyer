@@ -15,7 +15,14 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: true });
+  const trustedProxies = (process.env.TRUSTED_PROXY_IPS ?? "")
+    .split(",")
+    .map((address) => address.trim())
+    .filter(Boolean);
+  const app = Fastify({
+    logger: true,
+    trustProxy: trustedProxies.length > 0 ? trustedProxies : false,
+  });
   const lookupCards = options.lookupCardsByExactFaceName ?? lookupCardsByExactFaceName;
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
 

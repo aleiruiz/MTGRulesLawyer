@@ -8,7 +8,7 @@ apps/api/           Fastify HTTP application and server entry point
 packages/contracts/ Zod schemas shared at API and mobile boundaries
 ```
 
-The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. It currently implements `GET /health`, `GET /api/cards/lookup?name=...`, and `GET /api/sources/status`; its bounded evidence assembly service uses local PostgreSQL card and rule snapshots. Rules and Oracle imports create versioned snapshots. The server-side OpenAI adapter is available for future interpretation and ruling services; HTTP orchestration and authentication remain in development.
+The mobile app calls the API and validates the response with shared contracts. The API owns server-side behavior and is the only boundary for database and model access. It currently implements `GET /health`, `GET /api/cards/lookup?name=...`, and `GET /api/sources/status`; its bounded evidence assembly service uses local PostgreSQL card and rule snapshots. Rules and Oracle imports create versioned snapshots. The server-side OpenAI adapter and atomic PostgreSQL AI usage reservation service are available for interpretation and ruling endpoints; HTTP orchestration and authentication remain in development.
 
 ## Planned data flow
 
@@ -19,6 +19,8 @@ flowchart LR
   Mobile --> Contracts
   API -->|lookups and snapshots| DB[(PostgreSQL via Prisma)]
   API -->|server only| Model[OpenAI Responses API adapter]
+  API -->|reserve before provider calls| Quotas[AI usage and cost controls]
+  Quotas --> DB
   Sources[Rules and Oracle bulk import jobs] -->|private snapshots| DB
 ```
 
