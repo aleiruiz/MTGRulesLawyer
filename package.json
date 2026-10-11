@@ -19,7 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm db:generate && pnpm --filter @mtg-rules/contracts build && pnpm -r --if-present typecheck",
-    "test": "pnpm --filter @mtg-rules/contracts build && pnpm --filter @mtg-rules/api test && tsx --test apps/mobile/src/auth/oauth-url.test.ts apps/mobile/src/auth/supabase-config.test.ts apps/mobile/src/auth/chunked-secure-storage.test.ts apps/mobile/src/rulings/public-ruling-url.test.ts",
+    "test": "pnpm --filter @mtg-rules/contracts build && pnpm --filter @mtg-rules/api test && node --test scripts/ai-usage-report.test.mjs && tsx --test apps/mobile/src/auth/oauth-url.test.ts apps/mobile/src/auth/supabase-config.test.ts apps/mobile/src/auth/chunked-secure-storage.test.ts apps/mobile/src/rulings/public-ruling-url.test.ts",
     "eval:rulings": "pnpm --filter @mtg-rules/api eval:rulings",
     "eval:rulings:live": "pnpm --filter @mtg-rules/api eval:rulings:live",
     "audit:check": "node scripts/audit-dependencies.mjs",

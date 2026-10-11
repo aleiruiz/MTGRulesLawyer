@@ -14,8 +14,9 @@ if (process.env.CONFIRM_DATABASE_RESTORE !== "YES") {
 
 const directory = await mkdtemp(join(tmpdir(), "mtg-db-restore-rehearsal-"));
 const backupFile = join(directory, "rehearsal.dump");
-const probeTable = "ops_backup_rehearsal";
+const probeTable = `ops_backup_rehearsal_${randomUUID().replaceAll("-", "")}`;
 const expected = `saved-${randomUUID()}`;
+let probeCreated = false;
 const executeSql = (sql) =>
   runPostgresTool(
     "psql",
@@ -25,8 +26,9 @@ const executeSql = (sql) =>
 
 try {
   await executeSql(
-    `DROP TABLE IF EXISTS public.${probeTable}; CREATE TABLE public.${probeTable} (value text NOT NULL); INSERT INTO public.${probeTable} (value) VALUES ('${expected}');`,
+    `CREATE TABLE public.${probeTable} (value text NOT NULL); INSERT INTO public.${probeTable} (value) VALUES ('${expected}');`,
   );
+  probeCreated = true;
   await runPostgresTool(
     "pg_dump",
     ["--format=custom", "--no-owner", "--no-privileges", `--file=${backupFile}`],
@@ -48,6 +50,6 @@ try {
   );
   process.exitCode = 1;
 } finally {
-  await executeSql(`DROP TABLE IF EXISTS public.${probeTable};`).catch(() => undefined);
+  if (probeCreated) await executeSql(`DROP TABLE public.${probeTable};`).catch(() => undefined);
   await rm(directory, { recursive: true, force: true });
 }

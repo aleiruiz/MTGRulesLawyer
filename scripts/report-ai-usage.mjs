@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { prisma } from "../apps/api/src/db/client.js";
+import { createAiUsageReport } from "./ai-usage-report.mjs";
 
 try {
   const now = new Date();
@@ -24,52 +25,17 @@ try {
     GROUP BY "kind", "status"
   `;
 
-  let actualCostMicros = 0n;
-  let reservedCostMicros = 0n;
-  let completed = 0;
-  let releasedReservations = 0;
-  const groups = rows.map((row) => {
-    const actual = row.actualCostMicros;
-    const reserved = row.reservedCostMicros;
-    if (row.status === "COMPLETED") {
-      actualCostMicros += actual;
-      reservedCostMicros += reserved * BigInt(row._count._all - row._count.actualCostMicros);
-      completed += Number(row.count);
-    } else if (row.status !== "RELEASED") {
-      reservedCostMicros += reserved;
-    }
-    if (row.status === "RELEASED") releasedReservations += Number(row.count);
-    return {
-      kind: row.kind,
-      status: row.status,
-      count: Number(row.count),
-      actualCostMicros: actual.toString(),
-      reservedCostMicros: reserved.toString(),
-      inputTokens: Number(row.inputTokens),
-      outputTokens: Number(row.outputTokens),
-    };
-  });
-
   const configuredLimit = process.env.AI_GLOBAL_DAILY_COST_LIMIT_MICROS ?? "5000000";
   const dailyLimit = BigInt(configuredLimit);
   const defaultAlertThreshold = (dailyLimit * 80n) / 100n;
   const thresholdOverride = process.env.AI_DAILY_COST_ALERT_MICROS?.trim();
   const alertThreshold = BigInt(thresholdOverride || defaultAlertThreshold.toString());
-  const totalCostMicros = actualCostMicros + reservedCostMicros;
-  const report = {
-    event: "ai.usage.daily_report",
+  const report = createAiUsageReport(rows, {
     windowStart: dayStart.toISOString(),
     generatedAt: now.toISOString(),
-    actualCostMicros: actualCostMicros.toString(),
-    reservedCostMicros: reservedCostMicros.toString(),
-    totalCostMicros: totalCostMicros.toString(),
-    alertThresholdMicros: alertThreshold.toString(),
-    dailyLimitMicros: dailyLimit.toString(),
-    completedReservations: completed,
-    releasedReservations,
-    groups,
-    alert: totalCostMicros >= alertThreshold,
-  };
+    dailyLimitMicros: dailyLimit,
+    alertThresholdMicros: alertThreshold,
+  });
   process.stdout.write(`${JSON.stringify(report)}\n`);
   if (report.alert) process.exitCode = 2;
 } catch (error) {
