@@ -39,16 +39,22 @@ export function readCorsAllowedOrigins(value: string | undefined, production: bo
   });
 }
 
-/** Reads TRUSTED_PROXY_IPS as specific IP addresses or CIDR ranges; anything else fails startup. */
+/**
+ * Reads TRUSTED_PROXY_IPS as specific IP addresses or CIDR ranges; anything else fails startup.
+ * Ranges broader than /8 (IPv4) or /16 (IPv6) are rejected so the list cannot trust everyone.
+ */
 export function readTrustedProxies(value: string | undefined): string[] {
   return splitList(value).map((entry) => {
     const [address = "", prefix, extra] = entry.split("/");
     const version = isIP(address);
+    // IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) are ranges over the 128-bit address.
+    const mapped = version === 6 && address.includes(".");
+    const minPrefix = version === 4 ? 8 : mapped ? 104 : 16;
     const maxPrefix = version === 4 ? 32 : 128;
     const validPrefix =
       prefix === undefined ||
-      (/^\d{1,3}$/.test(prefix) && Number(prefix) >= 1 && Number(prefix) <= maxPrefix);
-    if (version === 0 || extra !== undefined || !validPrefix) {
+      (/^\d{1,3}$/.test(prefix) && Number(prefix) >= minPrefix && Number(prefix) <= maxPrefix);
+    if (version === 0 || address.includes("%") || extra !== undefined || !validPrefix) {
       throw new NetworkConfigError(
         `TRUSTED_PROXY_IPS entries must be IP addresses or CIDR ranges: ${entry}`,
       );

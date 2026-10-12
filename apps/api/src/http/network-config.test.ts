@@ -32,13 +32,23 @@ void describe("CORS origin settings", () => {
 void describe("trusted proxy settings", () => {
   void it("accepts specific addresses and CIDR ranges only", () => {
     assert.deepEqual(readTrustedProxies(undefined), []);
-    assert.deepEqual(readTrustedProxies("10.0.0.5, 10.0.0.0/24, ::1, fd00::/8"), [
-      "10.0.0.5",
-      "10.0.0.0/24",
-      "::1",
+    assert.deepEqual(
+      readTrustedProxies("10.0.0.5, 10.0.0.0/24, ::1, fd00::/16, ::ffff:10.0.0.0/120"),
+      ["10.0.0.5", "10.0.0.0/24", "::1", "fd00::/16", "::ffff:10.0.0.0/120"],
+    );
+    for (const invalid of [
+      "*",
+      "true",
+      "loopback",
+      "10.0.0.0/0",
+      "0.0.0.0/1",
+      "::/1",
       "fd00::/8",
-    ]);
-    for (const invalid of ["*", "true", "loopback", "10.0.0.0/0", "10.0.0.0/33", "10.0.0.0/8/1"]) {
+      "::ffff:10.0.0.0/96",
+      "fe80::1%eth0",
+      "10.0.0.0/33",
+      "10.0.0.0/8/1",
+    ]) {
       assert.throws(() => readTrustedProxies(invalid), NetworkConfigError);
     }
   });
