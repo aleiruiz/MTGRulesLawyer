@@ -356,7 +356,31 @@
     "level": "hard",
     "question": "I control Solemnity and Kitchen Finks. What happens when Kitchen Finks dies without counters on it?",
     "cards": ["Solemnity", "Kitchen Finks"],
-    "expected": "Persist returns it to the battlefield, but Solemnity stops the -1/-1 counter from being put on it, so it can die and return again and again.",
+    "expected": "Persist returns Kitchen Finks, but Solemnity stops the -1/-1 counter from being put on it, so each time it dies again persist returns it again: a loop that repeats as long as something keeps killing it.",
     "source": "Solemnity official ruling; CR 702.79a"
+  },
+  {
+    "id": "H11",
+    "level": "hard",
+    "question": "I control Melira, Sylvok Outcast, Kitchen Finks and Viscera Seer. How much life can I gain this turn?",
+    "cards": ["Melira, Sylvok Outcast", "Kitchen Finks", "Viscera Seer"],
+    "expected": "As much as you want. Sacrificing Kitchen Finks to Viscera Seer makes persist return it, Melira stops the -1/-1 counter so persist works again, and each return gains 2 life. It is an optional loop: you choose how many times to repeat it.",
+    "source": "CR 702.79a, 732.2a; Melira and Kitchen Finks Oracle text"
+  },
+  {
+    "id": "H12",
+    "level": "hard",
+    "question": "I control Exquisite Blood and Sanguine Bond and my opponent is at 10 life. What happens if my opponent loses 1 life?",
+    "cards": ["Exquisite Blood", "Sanguine Bond"],
+    "expected": "Your opponent loses the game. Each life loss triggers Exquisite Blood, each life gain triggers Sanguine Bond, and the two keep triggering each other until your opponent reaches 0 life and loses as a state-based action. The loop is mandatory but it ends, so it is not a draw.",
+    "source": "CR 704.5a, 732.4; Exquisite Blood and Sanguine Bond Oracle text"
+  },
+  {
+    "id": "H13",
+    "level": "hard",
+    "question": "I cast Animate Dead on Worldgorger Dragon in my graveyard. It's the only creature card in any graveyard and no player has any other spells or abilities. What happens?",
+    "cards": ["Animate Dead", "Worldgorger Dragon"],
+    "expected": "The game is a draw. The Dragon exiles Animate Dead, so the Dragon is sacrificed, Animate Dead returns and must return the Dragon again, and nothing can stop this loop of mandatory actions.",
+    "source": "CR 104.4b, 732.4; Worldgorger Dragon and Animate Dead Oracle text"
   }
 ]
