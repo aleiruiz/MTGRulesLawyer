@@ -127,11 +127,16 @@ export function createAccountDeleter(options: {
     const deleted = await options.deleteAppUserData(appUserId);
     if (!deleted) return;
     await options.deleteAuthIdentity(deleted.supabaseUserId);
-    try {
-      await options.deleteAppUserDataBySupabaseUserId(deleted.supabaseUserId);
-    } catch {
-      // The account is already deleted; a failed best-effort cleanup must not report otherwise.
-      options.onCleanupError?.();
+    // The account is already deleted, so a failed cleanup must not report otherwise. Retry once;
+    // if both attempts fail, the logged event tells the maintainer to remove the orphaned record.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await options.deleteAppUserDataBySupabaseUserId(deleted.supabaseUserId);
+        return;
+      } catch {
+        // Retried below, then reported.
+      }
     }
+    options.onCleanupError?.();
   };
 }

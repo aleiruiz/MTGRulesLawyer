@@ -80,6 +80,25 @@ void describe("account deleter", () => {
     await deleteAccount("app-user-id");
     assert.deepEqual(steps, ["data:app-user-id", "identity:auth-user-id", "cleanup:auth-user-id"]);
   });
+
+  void it("still succeeds and reports when the post-identity cleanup keeps failing", async () => {
+    let cleanupAttempts = 0;
+    let reported = 0;
+    const deleteAccount = createAccountDeleter({
+      deleteAppUserData: () => Promise.resolve({ supabaseUserId: "auth-user-id" }),
+      deleteAppUserDataBySupabaseUserId: () => {
+        cleanupAttempts += 1;
+        return Promise.reject(new Error("database unavailable"));
+      },
+      deleteAuthIdentity: () => Promise.resolve(),
+      onCleanupError: () => {
+        reported += 1;
+      },
+    });
+    await deleteAccount("app-user-id");
+    assert.equal(cleanupAttempts, 2);
+    assert.equal(reported, 1);
+  });
 });
 
 const deletedAccounts: string[] = [];

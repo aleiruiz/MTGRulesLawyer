@@ -67,7 +67,11 @@ export default function SignInScreen() {
         return;
       }
       // The server already removed the sign-in identity, so only clear this device's session.
-      await supabase.auth.signOut({ scope: "local" });
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        // Deletion succeeded; the API rejects the stale local session anyway.
+      }
       setMessage("Your account and its data were deleted.");
     } catch {
       setMessage("Account deletion is unavailable right now. Check your connection.");
