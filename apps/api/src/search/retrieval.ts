@@ -399,23 +399,22 @@ export async function assembleConfirmedEvidence(
     .join("\n")
     .slice(0, 4_000);
   const packet = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
-  const searchedIds = new Set(packet.rules.map((rule) => rule.id));
   const coreRows = await client.rule.findMany({
     where: { snapshotId: snapshot.id, number: { in: CORE_RULE_NUMBERS } },
     orderBy: { sortOrder: "asc" },
     select: { id: true, number: true, text: true, parent: { select: { number: true } } },
   });
-  // Core rules are short and bounded by CORE_RULE_NUMBERS; the prompt applies its own budget.
-  const coreRules: EvidenceSearchResponse["rules"] = coreRows
-    .filter((rule) => !searchedIds.has(rule.id))
-    .map((rule) => ({
+  const rules = withCoreRules(
+    packet.rules,
+    coreRows.map((rule) => ({
       id: rule.id,
       number: rule.number,
       text: rule.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
       parentNumber: rule.parent?.number ?? null,
       includedBecause: "CORE" as const,
       truncated: rule.text.length > MAX_RULE_TEXT_CHARACTERS,
-    }));
+    })),
+  );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
     const faces = card.faces.map((cardFace) => {
@@ -446,9 +445,22 @@ export async function assembleConfirmedEvidence(
   return evidenceSearchResponseSchema.parse({
     ...packet,
     cards,
-    rules: [...packet.rules, ...coreRules],
+    rules,
     truncated: packet.truncated || cardBudget.truncated,
   });
+}
+
+/**
+ * Searched rules followed by the core rules. A core rule the search also found is kept only as
+ * CORE, so the prompt's core budget always includes it; as a searched rule it could fall past
+ * the searched-rule cap.
+ */
+export function withCoreRules(
+  searched: EvidenceSearchResponse["rules"],
+  core: EvidenceSearchResponse["rules"],
+): EvidenceSearchResponse["rules"] {
+  const coreIds = new Set(core.map((rule) => rule.id));
+  return [...searched.filter((rule) => !coreIds.has(rule.id)), ...core];
 }
 
 /**
