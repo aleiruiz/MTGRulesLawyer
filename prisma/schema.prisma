@@ -81,6 +81,8 @@ enum ReviewErrorCategory {
 enum UsageKind {
   INTERPRETATION
   RULING
+  /// A second ruling attempt that may use web search, only after an uncertain answer.
+  RULING_RESEARCH
 }
 
 enum AiReservationStatus {

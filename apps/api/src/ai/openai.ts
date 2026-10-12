@@ -45,6 +45,8 @@ export interface GenerateStructuredOutputOptions<TSchema extends z.ZodType> {
   systemPrompt: string;
   userPrompt: string;
   promptVersion: string;
+  /** Lets the model run OpenAI's web search tool at most this many times. Off when absent. */
+  webSearchMaxCalls?: number;
 }
 
 export interface OpenAiRequest {
@@ -54,6 +56,13 @@ export interface OpenAiRequest {
   reasoningEffort: OpenAiConfig["reasoningEffort"];
   schemaName: string;
   schema: Record<string, unknown>;
+  webSearchMaxCalls?: number;
+}
+
+/** A web page the model read through web search. Untrusted: never evidence for a ruling. */
+export interface WebSource {
+  url: string;
+  title?: string;
 }
 
 export interface OpenAiResponse {
@@ -61,6 +70,8 @@ export interface OpenAiResponse {
   requestId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  webSearchCalls?: number;
+  webSources?: WebSource[];
 }
 
 export type OpenAiTransport = (
@@ -72,6 +83,8 @@ export interface StructuredOutputResult<T> {
   value: T;
   inputTokens?: number;
   outputTokens?: number;
+  webSearchCalls?: number;
+  webSources?: WebSource[];
 }
 
 export type OpenAiLogger = (metadata: Record<string, unknown>, message: string) => void;
@@ -97,6 +110,15 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
         input: request.input,
         max_output_tokens: request.maxOutputTokens,
         reasoning: { effort: request.reasoningEffort },
+        ...(request.webSearchMaxCalls
+          ? {
+              tools: [{ type: "web_search" as const }],
+              // Research only runs after an uncertain answer, so the search is not optional.
+              tool_choice: "required" as const,
+              max_tool_calls: request.webSearchMaxCalls,
+              include: ["web_search_call.action.sources" as const],
+            }
+          : {}),
         text: {
           format: {
             type: "json_schema",
@@ -114,11 +136,31 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
         `OpenAI response was incomplete (${response.incomplete_details?.reason ?? "unknown"}).`,
       );
     }
+    const webSearchCalls = response.output.filter((item) => item.type === "web_search_call");
+    const webSources = new Map<string, WebSource>();
+    for (const call of webSearchCalls) {
+      if (call.action.type !== "search") continue;
+      for (const source of call.action.sources ?? [])
+        webSources.set(source.url, { url: source.url });
+    }
+    for (const item of response.output) {
+      if (item.type !== "message") continue;
+      for (const content of item.content) {
+        if (content.type !== "output_text") continue;
+        for (const annotation of content.annotations) {
+          if (annotation.type === "url_citation")
+            webSources.set(annotation.url, { url: annotation.url, title: annotation.title });
+        }
+      }
+    }
     return {
       outputText: response.output_text,
       requestId: response.id,
       inputTokens: response.usage?.input_tokens,
       outputTokens: response.usage?.output_tokens,
+      ...(request.webSearchMaxCalls
+        ? { webSearchCalls: webSearchCalls.length, webSources: [...webSources.values()] }
+        : {}),
     };
   };
 }
@@ -144,8 +186,8 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
         throw new Error("System prompt must contain 1 to 8000 characters.");
       }
       // A ruling prompt is bounded by its parts: evidence (searched and core rules, card text;
-      // about 21,000 characters with ten cards), a 4,000-character question, five prior turns
-      // and the game state, about 32,000 in the worst case. The cap sits above that so a
+      // about 23,000 characters with ten cards), a 4,000-character question, five prior turns
+      // and the game state, about 34,000 in the worst case. The cap sits above that so a
       // legitimate request never fails here after its quota was reserved.
       if (!request.userPrompt.trim() || request.userPrompt.length > 40_000) {
         throw new Error("User prompt must contain 1 to 40000 characters.");
@@ -170,6 +212,7 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
             reasoningEffort: config.reasoningEffort,
             schemaName: request.schemaName,
             schema: z.toJSONSchema(request.schema),
+            ...(request.webSearchMaxCalls ? { webSearchMaxCalls: request.webSearchMaxCalls } : {}),
           },
           signal,
         );
@@ -182,6 +225,9 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
             requestId: result.requestId,
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
+            ...(result.webSearchCalls === undefined
+              ? {}
+              : { webSearchCalls: result.webSearchCalls }),
             durationMs: Date.now() - startedAt,
           },
           "OpenAI request completed",
@@ -190,6 +236,9 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
           value: validated,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
+          ...(result.webSearchCalls === undefined
+            ? {}
+            : { webSearchCalls: result.webSearchCalls, webSources: result.webSources ?? [] }),
         };
       } catch (error) {
         log(
