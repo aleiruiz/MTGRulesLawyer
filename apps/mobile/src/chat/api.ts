@@ -41,6 +41,7 @@ const errorMessages: Record<string, string> = {
 async function requestJson(
   path: string,
   init: RequestInit & { accessToken?: string },
+  fallback = "The judge could not answer right now. Try again in a moment.",
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
   let response: Response;
@@ -75,12 +76,7 @@ async function requestJson(
     // No JSON body means a proxy or gateway answered, not the API.
     if (body === null) throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
     throw new QuestionRequestError(
-      (code && errorMessages[code]) ??
-        questionErrorMessage(
-          code,
-          retryAfter,
-          "The judge could not answer right now. Try again in a moment.",
-        ),
+      (code && errorMessages[code]) ?? questionErrorMessage(code, retryAfter, fallback),
     );
   }
   return body;
@@ -133,7 +129,11 @@ export async function askJudge(
 
 export async function fetchConversations(accessToken: string): Promise<ConversationListResponse> {
   return conversationListResponseSchema.parse(
-    await requestJson("/api/me/conversations", { method: "GET", accessToken }),
+    await requestJson(
+      "/api/me/conversations",
+      { method: "GET", accessToken },
+      "Could not load your recent chats.",
+    ),
   );
 }
 
@@ -142,10 +142,11 @@ export async function fetchConversation(
   conversationId: string,
 ): Promise<ConversationDetailResponse> {
   return conversationDetailResponseSchema.parse(
-    await requestJson(`/api/me/conversations/${encodeURIComponent(conversationId)}`, {
-      method: "GET",
-      accessToken,
-    }),
+    await requestJson(
+      `/api/me/conversations/${encodeURIComponent(conversationId)}`,
+      { method: "GET", accessToken },
+      "Could not open this chat.",
+    ),
   );
 }
 
@@ -153,8 +154,9 @@ export async function removeConversation(
   accessToken: string,
   conversationId: string,
 ): Promise<void> {
-  await requestJson(`/api/me/conversations/${encodeURIComponent(conversationId)}`, {
-    method: "DELETE",
-    accessToken,
-  });
+  await requestJson(
+    `/api/me/conversations/${encodeURIComponent(conversationId)}`,
+    { method: "DELETE", accessToken },
+    "Could not delete this chat. Try again in a moment.",
+  );
 }
