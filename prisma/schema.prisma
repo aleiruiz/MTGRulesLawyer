@@ -311,7 +311,8 @@ model AppUser {
 model Challenge {
   id                String          @id @default(uuid()) @db.Uuid
   rulingVersionId   String          @db.Uuid
-  userId            String          @db.Uuid
+  /// Null after the player deletes their account.
+  userId            String?         @db.Uuid
   explanation       String          @db.Text
   proposedOutcome   RulingOutcome?
   evaluationConsent Boolean         @default(false)
@@ -319,7 +320,7 @@ model Challenge {
   createdAt         DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
   rulingVersion     RulingVersion   @relation(fields: [rulingVersionId], references: [id], onDelete: Restrict)
-  user              AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              AppUser?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   reviewEvents      ReviewEvent[]
 
   @@unique([userId, rulingVersionId])
@@ -331,7 +332,8 @@ model Challenge {
 model ReviewEvent {
   id                  String               @id @default(uuid()) @db.Uuid
   challengeId         String               @db.Uuid
-  reviewerId          String               @db.Uuid
+  /// Null after the reviewer deletes their account.
+  reviewerId          String?              @db.Uuid
   decision            ReviewDecision
   errorCategory       ReviewErrorCategory?
   includeInEvaluation Boolean              @default(false)
@@ -342,7 +344,7 @@ model ReviewEvent {
   correctedVersionId  String?              @unique @db.Uuid
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   challenge           Challenge            @relation(fields: [challengeId], references: [id], onDelete: Restrict)
-  reviewer            AppUser              @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewer            AppUser?             @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
   correctedVersion    RulingVersion?       @relation("CorrectedVersion", fields: [correctedVersionId], references: [id], onDelete: Restrict)
 
   @@index([challengeId, createdAt])
