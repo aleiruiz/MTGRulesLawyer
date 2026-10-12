@@ -582,6 +582,12 @@ export function rankRulings<T extends { text: string; position: number }>(
 }
 
 const MAX_REQUESTED_RULES = 6;
+const normalizeRuleNumber = (value: string) =>
+  value
+    .trim()
+    .replace(/^rule\s+/i, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
 const REQUESTABLE_RULE_NUMBER = /^\d{3}\.\d+[a-z]?$/;
 
 /**
@@ -594,17 +600,7 @@ export async function addRequestedRules(
   numbers: string[],
   client: PrismaClient = prisma,
 ): Promise<EvidenceSearchResponse | null> {
-  const wanted = [
-    ...new Set(
-      numbers.map((number) =>
-        number
-          .trim()
-          .replace(/^rule\s+/i, "")
-          .replace(/\.$/, "")
-          .toLowerCase(),
-      ),
-    ),
-  ]
+  const wanted = [...new Set(numbers.map(normalizeRuleNumber))]
     .filter((number) => REQUESTABLE_RULE_NUMBER.test(number))
     .slice(0, MAX_REQUESTED_RULES);
   if (wanted.length === 0) return null;

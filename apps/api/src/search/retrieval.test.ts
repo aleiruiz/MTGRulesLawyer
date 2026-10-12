@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { boundEvidenceForPrompt } from "../rulings/generate.js";
-import { CORE_RULE_NUMBERS, rankRulings, withCoreRules, withoutCardNames } from "./retrieval.js";
+import type { PrismaClient } from "@prisma/client";
+import {
+  addRequestedRules,
+  CORE_RULE_NUMBERS,
+  rankRulings,
+  withCoreRules,
+  withoutCardNames,
+} from "./retrieval.js";
 
 void describe("confirmed-card query text", () => {
   void it("removes multi-word card names and their part before a comma", () => {
@@ -76,5 +83,81 @@ void describe("official ruling ranking", () => {
       ]).map(({ position }) => position),
       [1, 2, 0, 3],
     );
+  });
+});
+
+void describe("requested rules", () => {
+  const packet = {
+    snapshot: { id: "snapshot-id", version: "v", activatedAt: null },
+    sources: [],
+    cards: [],
+    rules: [
+      {
+        id: "legend",
+        number: "704.5j",
+        text: "Legend rule.",
+        parentNumber: "704.5",
+        includedBecause: "MATCH" as const,
+        truncated: false,
+      },
+    ],
+    truncated: false,
+  };
+  const fakeClient = (rows: Array<{ id: string; number: string }>) => {
+    const queries: string[][] = [];
+    const client = {
+      rule: {
+        findMany: (args: { where: { number: { in: string[] } } }) => {
+          queries.push(args.where.number.in);
+          return Promise.resolve(
+            rows
+              .filter(({ number }) => args.where.number.in.includes(number))
+              .map((row) => ({ ...row, text: `Text of ${row.number}.`, parent: null })),
+          );
+        },
+      },
+    } as unknown as PrismaClient;
+    return { client, queries };
+  };
+
+  void it("normalizes numbers, caps them, and adds real rule text as REQUESTED", async () => {
+    const { client, queries } = fakeClient([
+      { id: "legend", number: "704.5j" },
+      { id: "cascade", number: "702.85a" },
+    ]);
+    const extended = await addRequestedRules(
+      packet,
+      [
+        "Rule 704.5J.",
+        "702.85a",
+        "not a rule",
+        "card1",
+        "1.1.1",
+        "100.1",
+        "100.2",
+        "100.3",
+        "100.4",
+        "100.5",
+      ],
+      client,
+    );
+    assert.deepEqual(queries, [["704.5j", "702.85a", "100.1", "100.2", "100.3", "100.4"]]);
+    assert.ok(extended);
+    // A rule already in the packet moves to REQUESTED instead of appearing twice.
+    assert.deepEqual(
+      extended.rules.map(({ id, includedBecause }) => [id, includedBecause]),
+      [
+        ["legend", "REQUESTED"],
+        ["cascade", "REQUESTED"],
+      ],
+    );
+    assert.equal(extended.rules[1]?.text, "Text of 702.85a.");
+  });
+
+  void it("returns null when nothing requested names a rule", async () => {
+    const { client, queries } = fakeClient([]);
+    assert.equal(await addRequestedRules(packet, ["card1", "uuid-like"], client), null);
+    assert.deepEqual(queries, []);
+    assert.equal(await addRequestedRules(packet, ["999.9"], client), null);
   });
 });

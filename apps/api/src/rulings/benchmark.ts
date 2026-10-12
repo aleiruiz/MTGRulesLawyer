@@ -158,6 +158,7 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
       promptVersion: RULING_PROMPT_VERSION,
     });
     let answer = verifyRulingOutput(modelOutput, bounded, config.model);
+    let explained = { output: modelOutput, evidence: bounded };
     let retried = false;
     if (answer.outcome === "uncertain") {
       // Like the app: one more attempt with the rules the first answer asked for.
@@ -176,12 +177,8 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
       );
       if (retry) {
         retried = true;
-        const retriedAnswer = verifyRulingOutput(
-          retry.output,
-          boundEvidenceForPrompt(retry.evidence),
-          config.model,
-        );
-        if (retriedAnswer.outcome !== "uncertain") answer = retriedAnswer;
+        explained = { output: retry.output, evidence: boundEvidenceForPrompt(retry.evidence) };
+        answer = verifyRulingOutput(retry.output, explained.evidence, config.model);
       }
     }
     const rulingsCited = answer.citations.filter(({ kind }) => kind === "CARD_RULING").length;
@@ -191,7 +188,7 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
         verdict: "uncertain",
         outcome: answer.outcome,
         summary: answer.summary,
-        whyUncertain: `${retried ? "(after requested rules) " : ""}${explainUncertain(modelOutput, bounded)}`,
+        whyUncertain: `${retried ? "(after requested rules) " : ""}${explainUncertain(explained.output, explained.evidence)}`,
       };
     }
     const grade = await model.generateStructuredOutput({
