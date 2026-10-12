@@ -322,7 +322,7 @@
   {
     "id": "H6",
     "level": "hard",
-    "question": "I sacrifice my Grizzly Bears to Fling after casting Giant Growth on it this turn. How much damage does Fling deal?",
+    "question": "This turn I cast Giant Growth on my Grizzly Bears and it resolved. Now I sacrifice the Bears to Fling. How much damage does Fling deal?",
     "cards": ["Fling", "Grizzly Bears", "Giant Growth"],
     "expected": "5. Fling uses the sacrificed creature's power as it last existed on the battlefield, including Giant Growth's +3/+3.",
     "source": "Fling official ruling; CR 608.2h"

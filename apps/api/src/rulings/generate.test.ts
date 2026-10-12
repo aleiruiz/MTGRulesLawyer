@@ -757,4 +757,23 @@ void describe("Ruling evidence verification", () => {
     assert.equal(retry, null);
     assert.deepEqual(asked, [["508.1"]]);
   });
+
+  void it("splits several references packed into one citation", () => {
+    const answer = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "Attackers are declared.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["508.1],[card1"],
+        reasoningSteps: [{ text: "Declare.", support: "SUPPORTED", citationIds: ["508.1, card1"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      boundEvidenceForPrompt(evidence),
+      "test-model",
+    );
+    assert.equal(answer.outcome, "resolved");
+    assert.deepEqual(answer.summaryCitationIds, ["rule-id", "face-id"]);
+    assert.deepEqual(answer.reasoningSteps[0]?.citationIds, ["rule-id", "face-id"]);
+  });
 });
