@@ -438,5 +438,13 @@
     "cards": ["Humility", "Opalescence"],
     "expected": "Humility is a 1/1 enchantment creature with no abilities: Opalescence makes it a creature (layer 4), Humility removes abilities (layer 6) but its effect keeps applying (613.6), and in layer 7b Opalescence's 4/4 applies first and Humility's 1/1, with the later timestamp, overrides it.",
     "source": "CR 613.6; Humility / Opalescence official ruling"
+  },
+  {
+    "id": "M24",
+    "level": "medium",
+    "question": "My Bolrac-Clan Basher attacks and my opponent blocks it with Llanowar Elves. How much damage can I deal to my opponent?",
+    "cards": ["Bolrac-Clan Basher", "Llanowar Elves"],
+    "expected": "Up to 5. In the first-strike damage step the 3/2 double strike, trample Basher must assign at least 1 (lethal) damage to the 1/1 Elves and can assign the other 2 to your opponent; the Elves die, and in the regular damage step the Basher is still blocked but no creature is blocking it, so all 3 damage goes to your opponent.",
+    "source": "CR 702.4b, 702.19b, 702.19d"
   }
 ]

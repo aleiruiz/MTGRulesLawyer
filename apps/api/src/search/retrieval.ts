@@ -36,6 +36,13 @@ const MAX_SUBRULES_PER_HEADING = 4;
 const MAX_HEADINGS_EXPANDED = 3;
 // Subrules count against the prompt's searched-rule limit, so few are added overall.
 const MAX_SUBRULES_ADDED = 4;
+// Every subrule of a keyword ability a confirmed card has ("Double strike", "Trample"), so the
+// exceptions are there too (702.19d: a trampler whose blocker is gone deals all its damage to
+// the player).
+const MAX_CARD_KEYWORDS = 4;
+const MAX_RULES_PER_CARD_KEYWORD = 8;
+const MAX_CARD_KEYWORD_RULES = 12;
+const SEARCHED_RULES_BEFORE_KEYWORDS = 6;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
 interface RuleHit {
@@ -78,6 +85,8 @@ export const CORE_RULE_NUMBERS = [
   "608.2g",
   "500.1",
   "506.1",
+  // A creature that leaves the battlefield is removed from combat (no longer blocking).
+  "506.4",
   "302.6",
   // Loops: a mandatory loop is a draw, an optional one is shortcut to a chosen number.
   "104.4b",
@@ -431,9 +440,24 @@ export async function assembleConfirmedEvidence(
     .join("\n")
     .slice(0, 4_000);
   const searched = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const keywordRules = await rulesForCardKeywords(
+    selectedCards.map(({ card, face }) => face.oracleText || card.oracleText),
+    snapshot.id,
+    client,
+  );
+  const keywordIds = new Set(keywordRules.map(({ id }) => id));
+  const searchedRules = (await withSubrulesOfHeadings(searched.rules, snapshot.id, client)).filter(
+    ({ id }) => !keywordIds.has(id),
+  );
+  // The search's best matches stay first; the cards' keyword rules follow them, ahead of the
+  // rest of the search, so both fit the prompt's searched-rule limit.
   const packet = {
     ...searched,
-    rules: await withSubrulesOfHeadings(searched.rules, snapshot.id, client),
+    rules: [
+      ...searchedRules.slice(0, SEARCHED_RULES_BEFORE_KEYWORDS),
+      ...keywordRules,
+      ...searchedRules.slice(SEARCHED_RULES_BEFORE_KEYWORDS),
+    ],
   };
   const coreRows = await client.rule.findMany({
     where: { snapshotId: snapshot.id, number: { in: CORE_RULE_NUMBERS } },
@@ -633,6 +657,65 @@ export async function addRequestedRules(
       })),
     ],
   });
+}
+
+/**
+ * The subrules of the keyword abilities the cards have, read from their keyword lines
+ * ("Double strike, trample"), each keyword's rules in order. Keyword headings are the 702.x
+ * rules whose whole text is the keyword ("702.19. Trample").
+ */
+export async function rulesForCardKeywords(
+  cardTexts: string[],
+  snapshotId: string,
+  client: PrismaClient = prisma,
+): Promise<EvidenceSearchResponse["rules"]> {
+  const keywordLines = cardTexts
+    .flatMap((text) => text.split("\n"))
+    .map((line) =>
+      line
+        .replace(/\([^)]*\)/g, "")
+        .trim()
+        .toLowerCase(),
+    )
+    .filter(Boolean);
+  if (keywordLines.length === 0) return [];
+  const headings = await client.rule.findMany({
+    where: { snapshotId, number: { startsWith: "702." } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, number: true, text: true },
+  });
+  const keywords = headings
+    .filter(({ number, text }) => /^702\.\d+$/.test(number) && text.length <= 40)
+    .filter(({ text }) => {
+      const keyword = text.trim().toLowerCase();
+      // A keyword line lists keywords separated by commas, each maybe followed by a cost or
+      // number ("Ward {2}", "Disguise {3}{R}{R}", "Toxic 1").
+      return keywordLines.some((line) =>
+        line.split(/[,;]\s*/).some((part) => part === keyword || part.startsWith(`${keyword} `)),
+      );
+    })
+    .slice(0, MAX_CARD_KEYWORDS);
+  if (keywords.length === 0) return [];
+  const subrules = await client.rule.findMany({
+    where: { snapshotId, parentId: { in: keywords.map(({ id }) => id) } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, number: true, text: true, parentId: true },
+  });
+  return keywords
+    .flatMap((keyword) =>
+      subrules
+        .filter(({ parentId }) => parentId === keyword.id)
+        .slice(0, MAX_RULES_PER_CARD_KEYWORD)
+        .map((rule) => ({
+          id: rule.id,
+          number: rule.number,
+          text: rule.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+          parentNumber: keyword.number,
+          includedBecause: "MATCH" as const,
+          truncated: rule.text.length > MAX_RULE_TEXT_CHARACTERS,
+        })),
+    )
+    .slice(0, MAX_CARD_KEYWORD_RULES);
 }
 
 /**

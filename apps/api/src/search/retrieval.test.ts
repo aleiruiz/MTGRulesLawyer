@@ -6,6 +6,7 @@ import {
   addRequestedRules,
   CORE_RULE_NUMBERS,
   rankRulings,
+  rulesForCardKeywords,
   withCoreRules,
   withoutCardNames,
   withSubrulesOfHeadings,
@@ -213,5 +214,51 @@ void describe("heading rules", () => {
       ["510.1", "510.1a", "510.1c", "510.1d", "510.1e", "510.1b", "702.7b"],
     );
     assert.equal(rules[1]?.includedBecause, "REFERENCE");
+  });
+});
+
+void describe("card keyword rules", () => {
+  void it("brings every subrule of the keywords on the cards' keyword lines", async () => {
+    const rows = [
+      { id: "ds", number: "702.4", text: "Double Strike", parentId: null },
+      { id: "tr", number: "702.19", text: "Trample", parentId: null },
+      { id: "wa", number: "702.21", text: "Ward", parentId: null },
+      { id: "fl", number: "702.9", text: "Flying", parentId: null },
+      ...["a", "b", "c", "d"].map((letter) => ({
+        id: `tr-${letter}`,
+        number: `702.19${letter}`,
+        text: `Trample ${letter}.`,
+        parentId: "tr",
+      })),
+      { id: "ds-a", number: "702.4a", text: "Double strike a.", parentId: "ds" },
+      { id: "wa-a", number: "702.21a", text: "Ward a.", parentId: "wa" },
+    ];
+    const client = {
+      rule: {
+        findMany: (args: {
+          where: { number?: { startsWith: string }; parentId?: { in: string[] } };
+        }) =>
+          Promise.resolve(
+            args.where.parentId
+              ? rows.filter(
+                  ({ parentId }) => parentId && args.where.parentId?.in.includes(parentId),
+                )
+              : rows.filter(({ parentId }) => parentId === null),
+          ),
+      },
+    } as unknown as PrismaClient;
+    const rules = await rulesForCardKeywords(
+      [
+        "Double strike, trample\nWard {2} (Whenever this becomes the target...)",
+        "This creature can't block flying creatures.",
+      ],
+      "snapshot-id",
+      client,
+    );
+    // Flying only appears in a sentence, not a keyword line, so it brings nothing.
+    assert.deepEqual(
+      rules.map(({ number }) => number),
+      ["702.4a", "702.19a", "702.19b", "702.19c", "702.19d", "702.21a"],
+    );
   });
 });
