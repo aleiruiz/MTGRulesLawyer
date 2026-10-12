@@ -60,3 +60,7 @@ When web research settles a question (resolved or conditional, verified, no link
 ## Official card rulings
 
 The Oracle refresh also downloads Scryfall's rulings bulk file and keeps only the rulings Wizards of the Coast published (`source: "wotc"`), stored per card in the same snapshot (`CardRuling`, source `OFFICIAL_RULINGS`). A new rulings file alone produces a new snapshot. For each confirmed card the judge sees the rulings most relevant to the question (those naming another confirmed card first), and can cite them; the app labels those citations "<card> ruling (<date>)", separate from rules and Oracle text.
+
+## Judge benchmark
+
+`pnpm eval:judge` answers the real rules questions in `apps/api/src/rulings/benchmark-cases.json` against the active local snapshot the way the app does (interpretation, then a verified ruling; no web research), and a second model grades each answer against the expected verdict as correct (1), partially correct (0.5) or incorrect. Uncertain answers score 0. It calls OpenAI, so it costs money, and needs `DATABASE_URL` with imported sources; it writes nothing to the database. Options: `--runs 3` (the model varies between runs), `--only M1,H3`, `--level hard`, `--out results.json`. Add a case for every wrong ruling a player reports, with the expected answer checked against the rules and official rulings, and compare scores before and after each judge change.

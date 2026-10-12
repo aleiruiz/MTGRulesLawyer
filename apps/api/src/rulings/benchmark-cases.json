@@ -1,0 +1,362 @@
+[
+  {
+    "id": "E1",
+    "level": "easy",
+    "question": "Can I target my opponent's Soltari Priest with Lightning Bolt?",
+    "cards": ["Lightning Bolt", "Soltari Priest"],
+    "expected": "No. Soltari Priest has protection from red, so it can't be targeted by red spells like Lightning Bolt.",
+    "source": "CR 702.16b; Soltari Priest Oracle text"
+  },
+  {
+    "id": "E2",
+    "level": "easy",
+    "question": "If I cast Wrath of God while my opponent controls Darksteel Colossus, does the Colossus die?",
+    "cards": ["Wrath of God", "Darksteel Colossus"],
+    "expected": "No. Darksteel Colossus is indestructible, so 'destroy' doesn't affect it; it stays on the battlefield.",
+    "source": "CR 702.12b"
+  },
+  {
+    "id": "E3",
+    "level": "easy",
+    "question": "My opponent casts Lightning Bolt on my Grizzly Bears and I respond with Giant Growth on the Bears. Do the Bears survive?",
+    "cards": ["Lightning Bolt", "Grizzly Bears", "Giant Growth"],
+    "expected": "Yes. Giant Growth resolves first, the Bears become 5/5, and 3 damage isn't lethal, so they survive until end of turn.",
+    "source": "CR 405.5, 704.5g"
+  },
+  {
+    "id": "E4",
+    "level": "easy",
+    "question": "I just played Llanowar Elves this turn. Can I tap it for mana right away?",
+    "cards": ["Llanowar Elves"],
+    "expected": "No. It has summoning sickness: a creature can't use {T} abilities unless you've controlled it continuously since your most recent turn began.",
+    "source": "CR 302.6"
+  },
+  {
+    "id": "E5",
+    "level": "easy",
+    "question": "My opponent counters my Mulldrifter with Counterspell. Do I still draw two cards?",
+    "cards": ["Mulldrifter", "Counterspell"],
+    "expected": "No. The countered spell never enters the battlefield, so its enters trigger never happens.",
+    "source": "CR 701.6a, 603.6a"
+  },
+  {
+    "id": "E6",
+    "level": "easy",
+    "question": "Can I cast Giant Growth on my own Gladecover Scout?",
+    "cards": ["Giant Growth", "Gladecover Scout"],
+    "expected": "Yes. Hexproof only stops spells and abilities your opponents control from targeting it; you can target your own hexproof creature.",
+    "source": "CR 702.11b"
+  },
+  {
+    "id": "E7",
+    "level": "easy",
+    "question": "Can I put Rancor on my own Argothian Enchantress?",
+    "cards": ["Rancor", "Argothian Enchantress"],
+    "expected": "No. Shroud means it can't be the target of any spells or abilities, including yours, and an Aura spell targets.",
+    "source": "CR 702.18a, 303.4a"
+  },
+  {
+    "id": "E8",
+    "level": "easy",
+    "question": "My opponent casts Sudden Shock targeting my Grizzly Bears. Can I respond with Giant Growth to save them?",
+    "cards": ["Sudden Shock", "Grizzly Bears", "Giant Growth"],
+    "expected": "No. Sudden Shock has split second, so while it's on the stack players can't cast spells (only mana abilities and special actions), so the Bears die.",
+    "source": "CR 702.61a"
+  },
+  {
+    "id": "E9",
+    "level": "easy",
+    "question": "I cast Abrupt Decay and my opponent responds with Counterspell targeting it. What happens?",
+    "cards": ["Abrupt Decay", "Counterspell"],
+    "expected": "Counterspell can be cast and resolves, but it doesn't counter Abrupt Decay, which can't be countered; Abrupt Decay resolves normally.",
+    "source": "CR 101.2; Abrupt Decay Oracle text"
+  },
+  {
+    "id": "E10",
+    "level": "easy",
+    "question": "I cast Raging Goblin this turn. Can it attack right away?",
+    "cards": ["Raging Goblin"],
+    "expected": "Yes. Raging Goblin has haste, so it can attack the turn it comes under your control.",
+    "source": "CR 702.10b, 302.6"
+  },
+  {
+    "id": "E11",
+    "level": "easy",
+    "question": "My opponent controls Leyline of Sanctity. Can I target them with Thoughtseize?",
+    "cards": ["Leyline of Sanctity", "Thoughtseize"],
+    "expected": "No. While they control Leyline of Sanctity, that player has hexproof and can't be the target of spells or abilities you control.",
+    "source": "Leyline of Sanctity Oracle text; CR 702.11c"
+  },
+  {
+    "id": "E12",
+    "level": "easy",
+    "question": "I control Platinum Angel and my life total is -5. Do I lose the game?",
+    "cards": ["Platinum Angel"],
+    "expected": "No. Platinum Angel says you can't lose the game, so the state-based action for having 0 or less life doesn't make you lose while you control it.",
+    "source": "Platinum Angel official ruling; CR 704.5a"
+  },
+  {
+    "id": "E13",
+    "level": "easy",
+    "question": "Can my opponent respond to me tapping Llanowar Elves for mana?",
+    "cards": ["Llanowar Elves"],
+    "expected": "No. It's a mana ability, which doesn't use the stack and resolves immediately, so it can't be responded to.",
+    "source": "CR 605.3b"
+  },
+  {
+    "id": "E14",
+    "level": "easy",
+    "question": "My opponent controls Thalia, Guardian of Thraben. How much do I have to pay to cast Lightning Bolt?",
+    "cards": ["Thalia, Guardian of Thraben", "Lightning Bolt"],
+    "expected": "{1}{R}. Thalia makes noncreature spells cost {1} more to cast.",
+    "source": "Thalia Oracle text; CR 601.2f, 202.3"
+  },
+  {
+    "id": "E15",
+    "level": "easy",
+    "question": "Can my opponent block my Boggart Brute with just one creature?",
+    "cards": ["Boggart Brute"],
+    "expected": "No. Boggart Brute has menace, so it can't be blocked except by two or more creatures.",
+    "source": "CR 702.111b"
+  },
+  {
+    "id": "M1",
+    "level": "medium",
+    "question": "With Blood Moon and Urborg, Tomb of Yawgmoth on the battlefield, are all lands Swamps?",
+    "cards": ["Blood Moon", "Urborg, Tomb of Yawgmoth"],
+    "expected": "No. Blood Moon makes Urborg a Mountain that loses its ability, so Urborg doesn't make any lands Swamps, regardless of timestamp order.",
+    "source": "Urborg, Tomb of Yawgmoth official ruling (Magus of the Moon / setting a basic land type)"
+  },
+  {
+    "id": "M2",
+    "level": "medium",
+    "question": "My opponent has Leyline of the Void. If my Kitchen Finks dies, does persist bring it back?",
+    "cards": ["Leyline of the Void", "Kitchen Finks"],
+    "expected": "No. Kitchen Finks is exiled instead of going to the graveyard, so it doesn't die and persist doesn't trigger.",
+    "source": "Leyline of the Void official ruling"
+  },
+  {
+    "id": "M3",
+    "level": "medium",
+    "question": "If Torpor Orb is on the battlefield and I cast Mulldrifter normally, do I draw two cards?",
+    "cards": ["Torpor Orb", "Mulldrifter"],
+    "expected": "No. Torpor Orb stops creatures entering from causing triggered abilities to trigger, so Mulldrifter's draw doesn't happen.",
+    "source": "Torpor Orb official ruling"
+  },
+  {
+    "id": "M4",
+    "level": "medium",
+    "question": "I control Doubling Season and cast Jace Beleren. How much loyalty does Jace enter with?",
+    "cards": ["Doubling Season", "Jace Beleren"],
+    "expected": "6. Planeswalkers enter with double the normal loyalty counters under Doubling Season (Jace's starting loyalty is 3).",
+    "source": "Doubling Season official ruling"
+  },
+  {
+    "id": "M5",
+    "level": "medium",
+    "question": "With Humility and Glorious Anthem on the battlefield, what size is my Grizzly Bears?",
+    "cards": ["Humility", "Glorious Anthem", "Grizzly Bears"],
+    "expected": "2/2. Humility sets base P/T to 1/1 (layer 7b) and Glorious Anthem's +1/+1 applies afterward (layer 7c).",
+    "source": "CR 613.4b, 613.4c"
+  },
+  {
+    "id": "M6",
+    "level": "medium",
+    "question": "My Colossal Dreadmaw is equipped with Basilisk Collar and is blocked by a 4/4. How much damage can I trample over to the player?",
+    "cards": ["Colossal Dreadmaw", "Basilisk Collar"],
+    "expected": "5. With deathtouch, 1 damage counts as lethal to the blocker, so you assign 1 to it and the remaining 5 of its 6 power to the player.",
+    "source": "CR 702.2c, 702.19b"
+  },
+  {
+    "id": "M7",
+    "level": "medium",
+    "question": "I cast Grasp of Darkness on my opponent's Darksteel Myr. Does it die?",
+    "cards": ["Grasp of Darkness", "Darksteel Myr"],
+    "expected": "Yes. -4/-4 makes its toughness 0 or less, and the state-based action puts it into the graveyard; indestructible only stops destruction.",
+    "source": "CR 704.5f, 702.12b"
+  },
+  {
+    "id": "M8",
+    "level": "medium",
+    "question": "I control Doubling Season and cast Raise the Alarm. How many Soldier tokens do I get?",
+    "cards": ["Doubling Season", "Raise the Alarm"],
+    "expected": "Four. Doubling Season doubles the tokens created, so two become four.",
+    "source": "Doubling Season Oracle text; CR 614.1a"
+  },
+  {
+    "id": "M9",
+    "level": "medium",
+    "question": "I control Panharmonicon and cast Mulldrifter for its normal cost. How many cards do I draw?",
+    "cards": ["Panharmonicon", "Mulldrifter"],
+    "expected": "Four. Mulldrifter's enters trigger triggers an additional time, so it draws two cards twice.",
+    "source": "Panharmonicon Oracle text and rulings"
+  },
+  {
+    "id": "M10",
+    "level": "medium",
+    "question": "Wrath of God destroys my Blood Artist and three other creatures at the same time. How many times does Blood Artist trigger?",
+    "cards": ["Blood Artist", "Wrath of God"],
+    "expected": "Four times: once for itself and once for each of the other three. Leaves-the-battlefield abilities look back in time, so Blood Artist sees all the creatures that died with it.",
+    "source": "CR 603.10a; Blood Artist official ruling"
+  },
+  {
+    "id": "M11",
+    "level": "medium",
+    "question": "I control Phyrexian Unlife and I'm at 0 life. If a creature deals 3 damage to me, what happens?",
+    "cards": ["Phyrexian Unlife"],
+    "expected": "You get 3 poison counters instead of losing life (damage is dealt as though it had infect), and you don't lose for having 0 or less life.",
+    "source": "Phyrexian Unlife Oracle text and rulings"
+  },
+  {
+    "id": "M12",
+    "level": "medium",
+    "question": "My opponent's Chalice of the Void has one charge counter. What happens if I cast Lightning Bolt?",
+    "cards": ["Chalice of the Void", "Lightning Bolt"],
+    "expected": "Chalice triggers because Lightning Bolt's mana value equals the number of charge counters (1), and when the trigger resolves Lightning Bolt is countered.",
+    "source": "Chalice of the Void Oracle text"
+  },
+  {
+    "id": "M13",
+    "level": "medium",
+    "question": "My Clone copies my opponent's Grizzly Bears, which has two +1/+1 counters on it. How big is my Clone?",
+    "cards": ["Clone", "Grizzly Bears"],
+    "expected": "2/2. Counters aren't copiable values, so the Clone copies only the printed Grizzly Bears.",
+    "source": "CR 707.2; Clone official ruling"
+  },
+  {
+    "id": "M14",
+    "level": "medium",
+    "question": "I control Thalia, Guardian of Thraben and cast Clone copying it. What happens?",
+    "cards": ["Clone", "Thalia, Guardian of Thraben"],
+    "expected": "You control two legendary permanents with the same name, so the legend rule makes you choose one and put the other into your graveyard.",
+    "source": "CR 704.5j"
+  },
+  {
+    "id": "M15",
+    "level": "medium",
+    "question": "Can I use Stifle to counter the ability of my opponent's Polluted Delta?",
+    "cards": ["Stifle", "Polluted Delta"],
+    "expected": "Yes. Stifle counters target activated or triggered ability, and Polluted Delta's ability is an activated ability that isn't a mana ability, so Stifle can counter it. Polluted Delta was already sacrificed as part of the cost, so your opponent doesn't search for a land.",
+    "source": "Stifle Oracle text; CR 602.1, 605.1a, 701.6a"
+  },
+  {
+    "id": "M16",
+    "level": "medium",
+    "question": "I target my opponent's Sedgemoor Witch with Lightning Bolt and choose not to pay 3 life for ward. What happens?",
+    "cards": ["Sedgemoor Witch", "Lightning Bolt"],
+    "expected": "Ward triggers and, since you don't pay 3 life, Lightning Bolt is countered.",
+    "source": "CR 702.21a"
+  },
+  {
+    "id": "M17",
+    "level": "medium",
+    "question": "My opponent has Pithing Needle naming Jace Beleren. Can I still activate Jace's loyalty abilities?",
+    "cards": ["Pithing Needle", "Jace Beleren"],
+    "expected": "No. Loyalty abilities are activated abilities and they aren't mana abilities, so Pithing Needle stops them.",
+    "source": "Pithing Needle official ruling; CR 606.3"
+  },
+  {
+    "id": "M18",
+    "level": "medium",
+    "question": "I cast my commander Atraxa, Praetors' Voice from the command zone for the third time this game. How much mana does it cost?",
+    "cards": ["Atraxa, Praetors' Voice"],
+    "expected": "Eight: its {G}{W}{U}{B} cost plus {4} commander tax, {2} for each previous time it was cast from the command zone.",
+    "source": "CR 903.8"
+  },
+  {
+    "id": "M19",
+    "level": "medium",
+    "question": "I have Thassa's Oracle in my hand and my library is empty. What happens when I cast it?",
+    "cards": ["Thassa's Oracle"],
+    "expected": "You win the game when its enters trigger resolves, because X (your devotion to blue) is always greater than or equal to the number of cards in your library (0).",
+    "source": "Thassa's Oracle official ruling (2020-01-24)"
+  },
+  {
+    "id": "M20",
+    "level": "medium",
+    "question": "Can I cast Stifle targeting the persist trigger of my opponent's Kitchen Finks?",
+    "cards": ["Stifle", "Kitchen Finks"],
+    "expected": "Yes. Persist is a triggered ability, so Stifle can counter it and Kitchen Finks stays in the graveyard.",
+    "source": "CR 702.79a, 603.1"
+  },
+  {
+    "id": "H1",
+    "level": "hard",
+    "question": "Humility entered the battlefield before Opalescence. What are Humility's power, toughness and abilities now?",
+    "cards": ["Humility", "Opalescence"],
+    "expected": "Humility is a 4/4 enchantment creature with no abilities: Opalescence animates it (layer 4), Humility removes abilities (layer 6), and in layer 7b Humility's 1/1 applies first and Opalescence's 4/4 (later timestamp) overrides it.",
+    "source": "Humility / Opalescence official ruling"
+  },
+  {
+    "id": "H2",
+    "level": "hard",
+    "question": "If I have a Gandalf, Party Guest, a Sakashima of a Thousand Faces copying it and Samut, at the beginning of combat can I cast and resolve two spells with split second?",
+    "cards": ["Gandalf, Party Guest", "Sakashima of a Thousand Faces", "Samut, Tyrant of Naktamun"],
+    "expected": "Yes. Both triggers go on the stack; you cast a spell while the first resolves, that spell (split second) resolves, then the second trigger resolves and lets you cast the other.",
+    "source": "CR 603.3b, 608.2g, 405.5, 702.61"
+  },
+  {
+    "id": "H3",
+    "level": "hard",
+    "question": "My opponent's Phantasmal Image is copying a Grizzly Bears. If I cast Clone copying the Phantasmal Image, what does my Clone become?",
+    "cards": ["Phantasmal Image", "Clone", "Grizzly Bears"],
+    "expected": "A Grizzly Bears that is also an Illusion and has 'When this creature becomes the target of a spell or ability, sacrifice it', because the copy exceptions become part of the copiable values.",
+    "source": "CR 707.9b; Clone official ruling (copying a copy)"
+  },
+  {
+    "id": "H4",
+    "level": "hard",
+    "question": "I control Laboratory Maniac with an empty library, but my opponent cast Angel's Grace this turn. If I draw a card, what happens?",
+    "cards": ["Laboratory Maniac", "Angel's Grace"],
+    "expected": "You don't win (Angel's Grace stops opponents winning this turn), but you don't lose either: the draw was still replaced by Laboratory Maniac.",
+    "source": "Laboratory Maniac official ruling"
+  },
+  {
+    "id": "H5",
+    "level": "hard",
+    "question": "My Kitchen Finks has a +1/+1 counter on it and my opponent puts three -1/-1 counters on it, so it dies. Does persist return it?",
+    "cards": ["Kitchen Finks"],
+    "expected": "No. When it dies it still has -1/-1 counters on it (the counters only cancel as a state-based action at the same time it dies), so persist doesn't return it.",
+    "source": "Kitchen Finks official ruling"
+  },
+  {
+    "id": "H6",
+    "level": "hard",
+    "question": "I sacrifice my Grizzly Bears to Fling after casting Giant Growth on it this turn. How much damage does Fling deal?",
+    "cards": ["Fling", "Grizzly Bears", "Giant Growth"],
+    "expected": "5. Fling uses the sacrificed creature's power as it last existed on the battlefield, including Giant Growth's +3/+3.",
+    "source": "Fling official ruling; CR 608.2h"
+  },
+  {
+    "id": "H7",
+    "level": "hard",
+    "question": "I cascade with Bloodbraid Elf. Can I cast Fire // Ice from cascade?",
+    "cards": ["Bloodbraid Elf", "Fire // Ice"],
+    "expected": "No. A split card's mana value in the library is the total of both halves (4), which isn't less than Bloodbraid Elf's mana value of 4, so cascade skips it.",
+    "source": "CR 709.4, 702.85a"
+  },
+  {
+    "id": "H8",
+    "level": "hard",
+    "question": "What does Dryad Arbor look like while Blood Moon is on the battlefield?",
+    "cards": ["Dryad Arbor", "Blood Moon"],
+    "expected": "It is a land creature with land type Mountain (no longer Forest) and creature type Dryad, still a green 1/1, and it taps for {R}.",
+    "source": "CR 305.7; Blood Moon official ruling (2020-08-07)"
+  },
+  {
+    "id": "H9",
+    "level": "hard",
+    "question": "What happens to my Urza's Saga when my opponent's Blood Moon is on the battlefield?",
+    "cards": ["Urza's Saga", "Blood Moon"],
+    "expected": "It isn't sacrificed. Blood Moon makes it a Mountain that loses its chapter abilities, and the state-based action that sacrifices a Saga applies only to a Saga with one or more chapter abilities.",
+    "source": "CR 714.4, 305.7"
+  },
+  {
+    "id": "H10",
+    "level": "hard",
+    "question": "I control Solemnity and Kitchen Finks. What happens when Kitchen Finks dies without counters on it?",
+    "cards": ["Solemnity", "Kitchen Finks"],
+    "expected": "Persist returns it to the battlefield, but Solemnity stops the -1/-1 counter from being put on it, so it can die and return again and again.",
+    "source": "Solemnity official ruling; CR 702.79a"
+  }
+]
