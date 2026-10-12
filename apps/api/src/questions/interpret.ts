@@ -106,6 +106,17 @@ export async function resolveQuestionInterpretation(
   });
 }
 
+/** The interpretation model request, shared with the judge benchmark. */
+export function interpretationRequest(question: string, priorTurns: PriorTurn[] = []) {
+  return {
+    schema: modelInterpretationSchema,
+    schemaName: "mtg_question_interpretation",
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt: JSON.stringify(priorTurns.length > 0 ? { priorTurns, question } : { question }),
+    promptVersion: QUESTION_INTERPRET_PROMPT_VERSION,
+  };
+}
+
 export async function interpretQuestion(
   question: string,
   clientIp: string,
@@ -119,15 +130,7 @@ export async function interpretQuestion(
     { kind: "INTERPRETATION", identity: { clientIp } },
     async (providerSignal) => {
       const generated = await provider.generateStructuredOutputWithUsage(
-        {
-          schema: modelInterpretationSchema,
-          schemaName: "mtg_question_interpretation",
-          systemPrompt: SYSTEM_PROMPT,
-          userPrompt: JSON.stringify(
-            priorTurns.length > 0 ? { priorTurns, question } : { question },
-          ),
-          promptVersion: QUESTION_INTERPRET_PROMPT_VERSION,
-        },
+        interpretationRequest(question, priorTurns),
         providerSignal,
       );
       return {

@@ -11,6 +11,7 @@
     "eval:rulings": "tsx --test src/rulings/evaluation.test.ts",
     "eval:export-reviewed": "tsx src/rulings/export-reviewed-evaluation-cases.ts",
     "eval:rulings:live": "tsx src/rulings/evaluate-live.ts",
+    "eval:judge": "tsx src/rulings/benchmark.ts",
     "import:rules": "tsx src/rules/import-cli.ts",
     "import:oracle": "tsx src/cards/import-cli.ts",
     "refresh:sources": "tsx src/sources/refresh-cli.ts",
