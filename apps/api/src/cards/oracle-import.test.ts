@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, it } from "node:test";
-import { normalizeOracleCard, readOracleCards } from "./oracle-import.js";
+import { normalizeOracleCard, readOfficialRulings, readOracleCards } from "./oracle-import.js";
 
 const doubleFacedCard = {
   oracle_id: "oracle-double-faced",
@@ -129,6 +129,40 @@ void describe("Oracle Cards bulk parser", () => {
         cards.map((card) => card.oracleId),
         ["oracle-single"],
       );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  void it("keeps only Wizards rulings from the rulings bulk file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mtg-rulings-test-"));
+    const filePath = join(directory, "bulk.jsonl.gz");
+    try {
+      const records = [
+        {
+          object: "ruling",
+          oracle_id: "oracle-a",
+          source: "wotc",
+          published_at: "2020-01-24",
+          comment: "Official.",
+        },
+        {
+          object: "ruling",
+          oracle_id: "oracle-a",
+          source: "scryfall",
+          published_at: "2020-01-25",
+          comment: "A note.",
+        },
+      ];
+      await writeFile(
+        filePath,
+        gzipSync(Buffer.from(records.map((r) => JSON.stringify(r)).join("\n"), "utf8")),
+      );
+      const rulings = [];
+      for await (const ruling of readOfficialRulings(filePath)) rulings.push(ruling);
+      assert.deepEqual(rulings, [
+        { oracleId: "oracle-a", publishedAt: new Date("2020-01-24T00:00:00Z"), text: "Official." },
+      ]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

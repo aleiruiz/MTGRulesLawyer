@@ -30,6 +30,20 @@ export interface OracleCardInput {
   faces: OracleFaceInput[];
 }
 
+export interface OfficialRulingInput {
+  oracleId: string;
+  publishedAt: Date;
+  text: string;
+}
+
+export interface OfficialRulingsSource {
+  sourceUrl: string;
+  sourceVersion: string;
+  sourcePublishedAt: Date;
+  checksumSha256: string;
+  rulings: AsyncIterable<OfficialRulingInput>;
+}
+
 export interface OracleSnapshotWriter {
   activateOracleSnapshot(input: {
     version: string;
@@ -41,6 +55,7 @@ export interface OracleSnapshotWriter {
     importedAt: Date;
     cards: AsyncIterable<OracleCardInput>;
     minimumCardCount: number;
+    officialRulings?: OfficialRulingsSource;
   }): Promise<{ id: string; version: string; cardCount: number }>;
 }
 
@@ -54,7 +69,8 @@ export interface ImportOracleResult {
 const MAX_ORACLE_JSONL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_ORACLE_RECORD_BYTES = 1024 * 1024;
 // Increment when normalization changes so an unchanged source can be re-imported.
-export const ORACLE_IMPORTER_REVISION = 3;
+export const ORACLE_IMPORTER_REVISION = 4;
+const MAX_RULING_CHARACTERS = 4_000;
 const IMPORTER_REVISION_NOTE = "oracle-importer-revision=";
 // Art-series cards are collectible art with a game card's name and no rules of their own;
 // importing them makes name lookups offer a duplicate, non-playable choice.
@@ -135,8 +151,42 @@ export function normalizeOracleCard(value: unknown): OracleCardInput {
 }
 
 export async function* readOracleCards(filePath: string): AsyncGenerator<OracleCardInput> {
+  for await (const record of readBulkRecords(filePath)) {
+    const card = normalizeOracleCard(record);
+    if (!isNonGameOracleCard(card)) yield card;
+  }
+}
+
+/**
+ * Official rulings from Scryfall's rulings bulk file. Only rulings published by Wizards of the
+ * Coast ("wotc") are kept; Scryfall's own notes are not official.
+ */
+export async function* readOfficialRulings(filePath: string): AsyncGenerator<OfficialRulingInput> {
+  for await (const record of readBulkRecords(filePath)) {
+    const ruling = normalizeOfficialRuling(record);
+    if (ruling) yield ruling;
+  }
+}
+
+export function normalizeOfficialRuling(value: unknown): OfficialRulingInput | null {
+  if (!isRecord(value) || value.source !== "wotc") return null;
+  // A few published rulings have no text; there is nothing to show or cite.
+  if (typeof value.comment !== "string" || value.comment.trim() === "") return null;
+  const oracleId = requireText(value.oracle_id, "a ruling Oracle ID");
+  const text = value.comment.trim();
+  const published = requireText(value.published_at, "a ruling date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(published)) {
+    throw new Error("Rulings bulk file contains an invalid ruling date.");
+  }
+  if (text.length > MAX_RULING_CHARACTERS) {
+    throw new Error("Rulings bulk file contains a ruling longer than expected.");
+  }
+  return { oracleId, publishedAt: new Date(`${published}T00:00:00Z`), text };
+}
+
+async function* readBulkRecords(filePath: string): AsyncGenerator<unknown> {
   if (filePath.endsWith(".jsonl.gz")) {
-    yield* readOracleJsonLines(filePath);
+    yield* readJsonLines(filePath);
     return;
   }
 
@@ -204,9 +254,8 @@ export async function* readOracleCards(filePath: string): AsyncGenerator<OracleC
         } catch {
           throw new Error("Oracle bulk file contains an invalid JSON card record.");
         }
-        const card = normalizeOracleCard(parsed);
-        if (!isNonGameOracleCard(card)) yield card;
         objectText = "";
+        yield parsed;
         afterObject = true;
       }
     }
@@ -217,7 +266,7 @@ export async function* readOracleCards(filePath: string): AsyncGenerator<OracleC
   }
 }
 
-async function* readOracleJsonLines(filePath: string): AsyncGenerator<OracleCardInput> {
+async function* readJsonLines(filePath: string): AsyncGenerator<unknown> {
   const lines = createInterface({
     input: createReadStream(filePath).pipe(createGunzip()),
     crlfDelay: Infinity,
@@ -239,8 +288,7 @@ async function* readOracleJsonLines(filePath: string): AsyncGenerator<OracleCard
     } catch {
       throw new Error("Oracle JSONL bulk file contains an invalid card record.");
     }
-    const card = normalizeOracleCard(record);
-    if (!isNonGameOracleCard(card)) yield card;
+    yield record;
   }
 }
 
@@ -249,9 +297,12 @@ export async function importOracleBulk(
   writer: OracleSnapshotWriter,
   importedAt = new Date(),
   minimumCardCount = 1000,
+  rulingsDownload?: DownloadedOracleBulk,
 ): Promise<ImportOracleResult> {
   const datePart = download.metadata.updatedAt.toISOString().slice(0, 10).replaceAll("-", "");
-  const version = `oracle-v${ORACLE_IMPORTER_REVISION}-${datePart}-${download.checksumSha256.slice(0, 12)}`;
+  // The rulings checksum is part of the version so new rulings alone produce a new snapshot.
+  const rulingsPart = rulingsDownload ? `-r${rulingsDownload.checksumSha256.slice(0, 8)}` : "";
+  const version = `oracle-v${ORACLE_IMPORTER_REVISION}-${datePart}-${download.checksumSha256.slice(0, 12)}${rulingsPart}`;
   const result = await writer.activateOracleSnapshot({
     version,
     sourceVersion: download.metadata.updatedAt.toISOString(),
@@ -262,6 +313,17 @@ export async function importOracleBulk(
     importedAt,
     cards: readOracleCards(download.filePath),
     minimumCardCount,
+    ...(rulingsDownload
+      ? {
+          officialRulings: {
+            sourceUrl: rulingsDownload.metadata.sourceUrl,
+            sourceVersion: rulingsDownload.metadata.updatedAt.toISOString(),
+            sourcePublishedAt: rulingsDownload.metadata.updatedAt,
+            checksumSha256: rulingsDownload.checksumSha256,
+            rulings: readOfficialRulings(rulingsDownload.filePath),
+          },
+        }
+      : {}),
   });
   return {
     checksumSha256: download.checksumSha256,
@@ -289,10 +351,15 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
         const activeImporterRevision = previous?.notes?.match(
           /(?:^|\n)oracle-importer-revision=(\d+)(?:$|\n)/,
         )?.[1];
+        const activeRulingsSource = previous?.sources.find(
+          (source) => source.kind === SourceKind.OFFICIAL_RULINGS,
+        );
         if (
           previous &&
           activeOracleSource?.checksumSha256 === input.checksumSha256 &&
-          activeImporterRevision === String(input.importerRevision)
+          activeImporterRevision === String(input.importerRevision) &&
+          (activeRulingsSource?.checksumSha256 ?? null) ===
+            (input.officialRulings?.checksumSha256 ?? null)
         ) {
           const cardCount = await transaction.card.count({ where: { snapshotId: previous.id } });
           return { id: previous.id, version: previous.version, cardCount };
@@ -386,6 +453,7 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
         let faceCount = 0;
         let cardBatch: Array<{ card: OracleCardInput; cardId: string }> = [];
         const seenOracleIds = new Set<string>();
+        const cardIdsByOracleId = new Map<string, string>();
         const flushCards = async (): Promise<void> => {
           if (cardBatch.length === 0) return;
           await transaction.card.createMany({
@@ -420,7 +488,9 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
             throw new Error(`Oracle bulk card ${card.name} contains invalid face data.`);
           }
           seenOracleIds.add(card.oracleId);
-          cardBatch.push({ card, cardId: randomUUID() });
+          const cardId = randomUUID();
+          cardIdsByOracleId.set(card.oracleId, cardId);
+          cardBatch.push({ card, cardId });
           cardCount += 1;
           faceCount += card.faces.length;
           if (cardBatch.length >= 250) await flushCards();
@@ -433,14 +503,57 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
           );
         }
 
-        const [candidateCardCount, candidateFaceCount, candidateSources] = await Promise.all([
-          transaction.card.count({ where: { snapshotId } }),
-          transaction.cardFace.count({ where: { card: { snapshotId } } }),
-          transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
-        ]);
+        let rulingCount = 0;
+        if (input.officialRulings) {
+          const source = input.officialRulings;
+          await transaction.sourceSnapshot.create({
+            data: {
+              id: randomUUID(),
+              snapshotId,
+              kind: SourceKind.OFFICIAL_RULINGS,
+              sourceUrl: source.sourceUrl,
+              sourceVersion: source.sourceVersion,
+              sourcePublishedAt: source.sourcePublishedAt,
+              importedAt: now,
+              checksumSha256: source.checksumSha256,
+            },
+          });
+          const positions = new Map<string, number>();
+          let rulingBatch: Prisma.CardRulingCreateManyInput[] = [];
+          for await (const ruling of source.rulings) {
+            // Rulings for cards this import skipped (art series, tokens) have no card to attach to.
+            const cardId = cardIdsByOracleId.get(ruling.oracleId);
+            if (!cardId) continue;
+            const position = positions.get(cardId) ?? 0;
+            positions.set(cardId, position + 1);
+            rulingBatch.push({
+              id: randomUUID(),
+              cardId,
+              position,
+              publishedAt: ruling.publishedAt,
+              text: ruling.text,
+            });
+            rulingCount += 1;
+            if (rulingBatch.length >= 1_000) {
+              await transaction.cardRuling.createMany({ data: rulingBatch });
+              rulingBatch = [];
+            }
+          }
+          if (rulingBatch.length > 0)
+            await transaction.cardRuling.createMany({ data: rulingBatch });
+        }
+
+        const [candidateCardCount, candidateFaceCount, candidateRulingCount, candidateSources] =
+          await Promise.all([
+            transaction.card.count({ where: { snapshotId } }),
+            transaction.cardFace.count({ where: { card: { snapshotId } } }),
+            transaction.cardRuling.count({ where: { card: { snapshotId } } }),
+            transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
+          ]);
         if (
           candidateCardCount !== cardCount ||
           candidateFaceCount !== faceCount ||
+          candidateRulingCount !== rulingCount ||
           !candidateSources.some((source) => source.kind === SourceKind.ORACLE_CARDS) ||
           (previous?.sources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES) &&
             !candidateSources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES))
@@ -458,7 +571,7 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
         });
         return { id: snapshotId, version: input.version, cardCount };
       },
-      { isolationLevel: "Serializable", timeout: 120_000, maxWait: 10_000 },
+      { isolationLevel: "Serializable", timeout: 300_000, maxWait: 10_000 },
     );
   }
 }

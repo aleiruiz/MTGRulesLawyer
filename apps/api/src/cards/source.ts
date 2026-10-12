@@ -8,7 +8,11 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
-const BULK_DATA_URL = "https://api.scryfall.com/bulk-data/oracle-cards";
+const BULK_DATA_URLS = {
+  oracle_cards: "https://api.scryfall.com/bulk-data/oracle-cards",
+  rulings: "https://api.scryfall.com/bulk-data/rulings",
+} as const;
+type ScryfallBulkType = keyof typeof BULK_DATA_URLS;
 const REQUEST_HEADERS = {
   accept: "application/json;q=0.9,*/*;q=0.8",
   "user-agent": "MTGRulesLawyer/0.1 (Oracle bulk import)",
@@ -32,7 +36,21 @@ export interface DownloadedOracleBulk {
 export async function fetchOracleBulkMetadata(
   fetcher: typeof fetch = fetch,
 ): Promise<OracleBulkMetadata> {
-  const response = await fetcher(BULK_DATA_URL, {
+  return fetchScryfallBulkMetadata("oracle_cards", fetcher);
+}
+
+/** Metadata for Scryfall's bulk file of official card rulings (Wizards and Scryfall notes). */
+export async function fetchRulingsBulkMetadata(
+  fetcher: typeof fetch = fetch,
+): Promise<OracleBulkMetadata> {
+  return fetchScryfallBulkMetadata("rulings", fetcher);
+}
+
+async function fetchScryfallBulkMetadata(
+  type: ScryfallBulkType,
+  fetcher: typeof fetch,
+): Promise<OracleBulkMetadata> {
+  const response = await fetcher(BULK_DATA_URLS[type], {
     headers: REQUEST_HEADERS,
     signal: AbortSignal.timeout(30_000),
   });
@@ -41,8 +59,8 @@ export async function fetchOracleBulkMetadata(
   }
 
   const metadata: unknown = await response.json();
-  if (!isRecord(metadata) || metadata.type !== "oracle_cards") {
-    throw new Error("Scryfall did not return Oracle Cards bulk metadata.");
+  if (!isRecord(metadata) || metadata.type !== type) {
+    throw new Error(`Scryfall did not return ${type} bulk metadata.`);
   }
   if (typeof metadata.updated_at !== "string" || Number.isNaN(Date.parse(metadata.updated_at))) {
     throw new Error("Scryfall Oracle Cards metadata did not include a valid update date.");
@@ -67,6 +85,7 @@ export async function fetchOracleBulkMetadata(
   };
 }
 
+/** Downloads a Scryfall bulk file (Oracle cards or rulings) described by its metadata. */
 export async function downloadOracleBulk(
   metadata: OracleBulkMetadata,
   fetcher: typeof fetch = fetch,
@@ -80,7 +99,7 @@ export async function downloadOracleBulk(
   }
 
   const directory = await mkdtemp(join(tmpdir(), "mtg-oracle-import-"));
-  const filePath = join(directory, "oracle-cards.jsonl.gz");
+  const filePath = join(directory, "bulk.jsonl.gz");
   const checksum = createHash("sha256");
   let byteLength = 0;
   const meter = new Transform({

@@ -250,6 +250,9 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
         const faceCount = active
           ? await transaction.cardFace.count({ where: { card: { snapshotId: active.id } } })
           : 0;
+        const rulingCount = active
+          ? await transaction.cardRuling.count({ where: { card: { snapshotId: active.id } } })
+          : 0;
         if (active && oracleSource) {
           await transaction.sourceSnapshot.create({
             data: {
@@ -263,20 +266,44 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
               checksumSha256: oracleSource.checksumSha256,
             },
           });
+          const rulingsSource = active.sources.find(
+            (source) => source.kind === SourceKind.OFFICIAL_RULINGS,
+          );
+          if (rulingsSource) {
+            await transaction.sourceSnapshot.create({
+              data: {
+                id: randomUUID(),
+                snapshotId,
+                kind: SourceKind.OFFICIAL_RULINGS,
+                sourceUrl: rulingsSource.sourceUrl,
+                sourceVersion: rulingsSource.sourceVersion,
+                sourcePublishedAt: rulingsSource.sourcePublishedAt,
+                importedAt: rulingsSource.importedAt,
+                checksumSha256: rulingsSource.checksumSha256,
+              },
+            });
+          }
           await copyCards(transaction, active.id, snapshotId);
         }
 
-        const [candidateRuleCount, candidateCardCount, candidateFaceCount, candidateSources] =
-          await Promise.all([
-            transaction.rule.count({ where: { snapshotId } }),
-            transaction.card.count({ where: { snapshotId } }),
-            transaction.cardFace.count({ where: { card: { snapshotId } } }),
-            transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
-          ]);
+        const [
+          candidateRuleCount,
+          candidateCardCount,
+          candidateFaceCount,
+          candidateRulingCount,
+          candidateSources,
+        ] = await Promise.all([
+          transaction.rule.count({ where: { snapshotId } }),
+          transaction.card.count({ where: { snapshotId } }),
+          transaction.cardFace.count({ where: { card: { snapshotId } } }),
+          transaction.cardRuling.count({ where: { card: { snapshotId } } }),
+          transaction.sourceSnapshot.findMany({ where: { snapshotId } }),
+        ]);
         if (
           candidateRuleCount !== input.rules.length ||
           candidateCardCount !== (oracleSource ? cardCount : 0) ||
           candidateFaceCount !== (oracleSource ? faceCount : 0) ||
+          candidateRulingCount !== (oracleSource ? rulingCount : 0) ||
           !candidateSources.some((source) => source.kind === SourceKind.COMPREHENSIVE_RULES) ||
           (oracleSource &&
             !candidateSources.some((source) => source.kind === SourceKind.ORACLE_CARDS))
@@ -295,7 +322,7 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
 
         return { id: snapshotId, version: input.version };
       },
-      { isolationLevel: "Serializable", timeout: 120_000, maxWait: 10_000 },
+      { isolationLevel: "Serializable", timeout: 300_000, maxWait: 10_000 },
     );
   }
 }
@@ -330,7 +357,10 @@ async function copyCards(
       orderBy: { id: "asc" },
       take: pageSize,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: { faces: { orderBy: { faceIndex: "asc" } } },
+      include: {
+        faces: { orderBy: { faceIndex: "asc" } },
+        rulings: { orderBy: { position: "asc" } },
+      },
     });
     if (cards.length === 0) return;
     const cardIds = new Map(cards.map((card) => [card.id, randomUUID()]));
@@ -365,6 +395,16 @@ async function copyCards(
         })),
       ),
     });
+    const rulings = cards.flatMap((card) =>
+      card.rulings.map((ruling) => ({
+        id: randomUUID(),
+        cardId: cardIds.get(card.id)!,
+        position: ruling.position,
+        publishedAt: ruling.publishedAt,
+        text: ruling.text,
+      })),
+    );
+    if (rulings.length > 0) await transaction.cardRuling.createMany({ data: rulings });
     cursor = cards[cards.length - 1].id;
   }
 }

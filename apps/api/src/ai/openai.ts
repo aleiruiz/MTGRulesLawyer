@@ -189,8 +189,8 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       // about 23,000 characters with ten cards), a 4,000-character question, five prior turns
       // the game state and up to 4,500 characters of verified notes, about 38,500 in the worst case. The cap sits above that so a
       // legitimate request never fails here after its quota was reserved.
-      if (!request.userPrompt.trim() || request.userPrompt.length > 40_000) {
-        throw new Error("User prompt must contain 1 to 40000 characters.");
+      if (!request.userPrompt.trim() || request.userPrompt.length > 50_000) {
+        throw new Error("User prompt must contain 1 to 50000 characters.");
       }
       const startedAt = Date.now();
       const metadata = {
