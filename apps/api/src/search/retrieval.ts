@@ -71,6 +71,8 @@ export const CORE_RULE_NUMBERS = [
   "117.4",
   "405.1",
   "405.5",
+  // Countering: what happens to a countered spell or ability.
+  "701.6a",
   "603.3b",
   "608.1",
   "608.2g",

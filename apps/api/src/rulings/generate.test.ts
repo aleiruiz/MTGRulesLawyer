@@ -725,4 +725,36 @@ void describe("Ruling evidence verification", () => {
     );
     assert.ok(prompt.length < MAX_USER_PROMPT_CHARACTERS, `prompt is ${prompt.length} characters`);
   });
+
+  void it("asks again for a rule the model only saw cut for length", async () => {
+    const baseRule = evidence.rules[0];
+    assert.ok(baseRule);
+    const cut = { ...evidence, rules: [{ ...baseRule, truncated: true }] };
+    const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, cut)) as {
+      evidence: { rules: Array<{ id: string; truncated?: boolean }> };
+    };
+    assert.equal(prompt.evidence.rules[0]?.truncated, true);
+    const asked: string[][] = [];
+    const retry = await retryWithRequestedRules(
+      {
+        outcome: "uncertain",
+        summary: "508.1 is cut.",
+        summarySupport: "UNSUPPORTED",
+        summaryCitationIds: [],
+        reasoningSteps: [],
+        assumptions: [],
+        clarificationQuestions: [],
+        neededRuleNumbers: ["508.1"],
+      },
+      cut,
+      () => Promise.reject(new Error("not needed")),
+      () => "",
+      (current, numbers) => {
+        asked.push(numbers);
+        return Promise.resolve(null);
+      },
+    );
+    assert.equal(retry, null);
+    assert.deepEqual(asked, [["508.1"]]);
+  });
 });
