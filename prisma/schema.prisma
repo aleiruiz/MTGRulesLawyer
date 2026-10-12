@@ -210,17 +210,34 @@ model CardFace {
 model Question {
   id             String         @id @default(uuid()) @db.Uuid
   userId         String?        @db.Uuid
+  conversationId String?        @db.Uuid
   text           String         @db.Text
   gameState      Json?
   status         QuestionStatus @default(SUBMITTED)
   createdAt      DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
   user           AppUser?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   confirmedCards QuestionCard[]
   ruling         Ruling?
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+/// A signed-in user's chat with the judge: a first question and its follow-ups, in order.
+/// Only each user's ten most recently active conversations are kept.
+model Conversation {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @db.Uuid
+  title     String     @db.VarChar(160)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(6)
+  user      AppUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([userId, updatedAt(sort: Desc)])
 }
 
 model QuestionCard {
@@ -295,15 +312,16 @@ model RulingCitation {
 }
 
 model AppUser {
-  id             String        @id @default(uuid()) @db.Uuid
-  supabaseUserId String        @unique
-  role           UserRole      @default(USER)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  id             String         @id @default(uuid()) @db.Uuid
+  supabaseUserId String         @unique
+  role           UserRole       @default(USER)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
   questions      Question[]
   challenges     Challenge[]
   reviewEvents   ReviewEvent[]
   usageWindows   UsageWindow[]
+  conversations  Conversation[]
 
   @@index([role, createdAt])
 }

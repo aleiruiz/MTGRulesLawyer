@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/app.test.ts src/auth/authorization.test.ts src/http/network-config.test.ts src/account/deletion.test.ts src/account/deletion.integration.test.ts src/challenges/service.integration.test.ts src/reviews/service.integration.test.ts src/ai/openai.test.ts src/ai/usage.test.ts src/ai/usage.integration.test.ts src/questions/interpret.test.ts src/rulings/generate.test.ts src/rulings/cache.test.ts src/rulings/cache.integration.test.ts src/rulings/evaluation.test.ts src/rulings/persistence.integration.test.ts src/rules/import.test.ts src/cards/oracle-import.test.ts src/cards/source.test.ts src/db/snapshot-activation.integration.test.ts",
+    "test": "tsx --test src/app.test.ts src/conversations/routes.test.ts src/conversations/service.integration.test.ts src/auth/authorization.test.ts src/http/network-config.test.ts src/account/deletion.test.ts src/account/deletion.integration.test.ts src/challenges/service.integration.test.ts src/reviews/service.integration.test.ts src/ai/openai.test.ts src/ai/usage.test.ts src/ai/usage.integration.test.ts src/questions/interpret.test.ts src/rulings/generate.test.ts src/rulings/cache.test.ts src/rulings/cache.integration.test.ts src/rulings/evaluation.test.ts src/rulings/persistence.integration.test.ts src/rules/import.test.ts src/cards/oracle-import.test.ts src/cards/source.test.ts src/db/snapshot-activation.integration.test.ts",
     "eval:rulings": "tsx --test src/rulings/evaluation.test.ts",
     "eval:export-reviewed": "tsx src/rulings/export-reviewed-evaluation-cases.ts",
     "eval:rulings:live": "tsx src/rulings/evaluate-live.ts",
