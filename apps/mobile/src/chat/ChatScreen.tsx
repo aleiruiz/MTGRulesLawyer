@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -8,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import type { PersistedRulingResponse, QuestionInterpretResponse } from "@mtg-rules/contracts";
@@ -25,7 +26,7 @@ import {
   type ChatGameState,
 } from "./api";
 import { discardDraft, getDraft } from "./draft-store";
-import JudgeMessage from "./JudgeMessage";
+import JudgeMessage, { outcomeLabel } from "./JudgeMessage";
 import { contextRulingIds, mergeCards, resolveMentions, toChatCard, type ChatCard } from "./turns";
 
 type Mention = QuestionInterpretResponse["cardMentions"][number];
@@ -42,14 +43,28 @@ interface Turn {
   pendingMentions?: Mention[];
   /** Cards resolved so far while the player picks the rest. */
   pendingCards?: ChatCard[];
+  /** Set once the question was interpreted; a retry without it interprets again. */
   gameState?: ChatGameState;
   unmatched?: string[];
+}
+
+interface RulingInput {
+  question: string;
+  cards: ChatCard[];
+  gameState: ChatGameState;
+  priorRulingIds: string[];
+  conversationId?: string;
 }
 
 let turnCounter = 0;
 const nextKey = () => `turn-${(turnCounter += 1)}`;
 
 const loadingLines = ["Consulting the rulebook…", "Checking the stack…", "Weighing the evidence…"];
+
+function announce(message: string) {
+  // Live regions only reach Android screen readers; this also covers VoiceOver.
+  AccessibilityInfo.announceForAccessibility(message);
+}
 
 export default function ChatScreen({
   draftId,
@@ -58,8 +73,9 @@ export default function ChatScreen({
   draftId?: string;
   conversationId?: string;
 }) {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
+  const insets = useSafeAreaInsets();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [loadError, setLoadError] = useState("");
@@ -67,43 +83,113 @@ export default function ChatScreen({
   const [input, setInput] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
   const started = useRef(false);
 
   const busy = turns.some((turn) => turn.status === "thinking" || turn.status === "choosing");
 
   const updateTurn = useCallback((key: string, patch: Partial<Turn>) => {
+    if (!mounted.current) return;
     setTurns((current) => current.map((turn) => (turn.key === key ? { ...turn, ...patch } : turn)));
   }, []);
 
+  /** One request at a time: each send, pick, or retry owns the controller until it ends. */
+  const beginRequest = useCallback(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    return controller;
+  }, []);
+
+  const fail = useCallback(
+    (key: string, error: unknown, fallback: string) => {
+      const note = error instanceof Error ? error.message : fallback;
+      updateTurn(key, { status: "failed", note });
+      announce(note);
+    },
+    [updateTurn],
+  );
+
   const runRuling = useCallback(
-    async (
-      key: string,
-      request: {
-        question: string;
-        cards: ChatCard[];
-        gameState: ChatGameState;
-        priorRulingIds: string[];
-        conversationId?: string;
-      },
-    ) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+    async (key: string, request: RulingInput, controller: AbortController) => {
       updateTurn(key, { status: "thinking", note: undefined, cards: request.cards });
       try {
         const ruling = await askJudge(request, accessToken, controller.signal);
+        if (controller.signal.aborted || !mounted.current) return;
         if (ruling.conversationId) setConversationId(ruling.conversationId);
         updateTurn(key, { status: "answered", ruling });
+        announce(`${outcomeLabel(ruling.ruling.outcome)}. ${ruling.ruling.summary}`);
       } catch (error) {
-        if (controller.signal.aborted) return;
-        updateTurn(key, {
-          status: "failed",
-          note: error instanceof Error ? error.message : "The judge could not answer.",
-        });
+        // Leaving the screen aborts quietly; anything else ends the turn so the chat never
+        // stays stuck on "thinking".
+        if (!mounted.current) return;
+        fail(
+          key,
+          controller.signal.aborted ? new Error("Stopped.") : error,
+          "The judge could not answer.",
+        );
       }
     },
-    [accessToken, updateTurn],
+    [accessToken, fail, updateTurn],
   );
+
+  /** Interprets a follow-up, resolves its cards, then asks for the ruling. */
+  const processFollowUp = useCallback(
+    async (key: string, question: string, carriedCards: ChatCard[], priorRulingIds: string[]) => {
+      const controller = beginRequest();
+      updateTurn(key, { status: "thinking", note: undefined });
+      try {
+        const interpretation = await interpretFollowUp(question, priorRulingIds, controller.signal);
+        if (controller.signal.aborted || !mounted.current) return;
+        if (!interpretation.inScope) {
+          updateTurn(key, { status: "out_of_scope", note: interpretation.scopeReason });
+          announce(`Outside what the judge can rule on. ${interpretation.scopeReason}`);
+          return;
+        }
+        const gameState: ChatGameState = {
+          events: interpretation.events,
+          knownFacts: interpretation.knownFacts,
+          missingFacts: interpretation.missingFacts,
+          searchTerms: interpretation.searchTerms,
+        };
+        const resolution = resolveMentions(interpretation.cardMentions);
+        const cards = mergeCards(carriedCards, resolution.resolved);
+        if (resolution.ambiguous.length > 0) {
+          updateTurn(key, {
+            status: "choosing",
+            pendingMentions: resolution.ambiguous,
+            pendingCards: cards,
+            gameState,
+            unmatched: resolution.unmatched,
+          });
+          announce(`Which card do you mean by ${resolution.ambiguous[0]?.text ?? "that name"}?`);
+          return;
+        }
+        updateTurn(key, { gameState, unmatched: resolution.unmatched });
+        await runRuling(
+          key,
+          { question, cards, gameState, priorRulingIds, conversationId },
+          controller,
+        );
+      } catch (error) {
+        if (!mounted.current) return;
+        fail(
+          key,
+          controller.signal.aborted ? new Error("Stopped.") : error,
+          "The judge could not read that.",
+        );
+      }
+    },
+    [beginRequest, conversationId, fail, runRuling, updateTurn],
+  );
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   // Start a new chat from the home screen's draft, or reopen a saved one.
   useEffect(() => {
@@ -121,77 +207,56 @@ export default function ChatScreen({
       started.current = true;
       const key = nextKey();
       setTurns([{ key, status: "thinking", ...draft }]);
-      void runRuling(key, { ...draft, priorRulingIds: [] }).finally(() => discardDraft(draftId));
+      void runRuling(key, { ...draft, priorRulingIds: [] }, beginRequest()).finally(() =>
+        discardDraft(draftId),
+      );
       return;
     }
-    if (initialConversationId && accessToken) {
-      started.current = true;
-      void fetchConversation(accessToken, initialConversationId)
-        .then((conversation) => {
-          setTurns(
-            conversation.turns.map((turn) => ({
-              key: nextKey(),
-              question: turn.ruling.question,
-              cards: turn.cards,
-              status: "answered" as const,
-              ruling: turn.ruling,
-            })),
-          );
-        })
-        .catch((error: unknown) =>
-          setLoadError(error instanceof Error ? error.message : "Could not open this chat."),
-        )
-        .finally(() => setLoadingConversation(false));
-    } else if (initialConversationId) {
+    if (!initialConversationId || authLoading) return;
+    if (!accessToken) {
       setLoadingConversation(false);
       setLoadError("Sign in to open your saved chats.");
+      return;
     }
-  }, [accessToken, draftId, initialConversationId, runRuling]);
+    started.current = true;
+    setLoadError("");
+    setLoadingConversation(true);
+    void fetchConversation(accessToken, initialConversationId)
+      .then((conversation) => {
+        if (!mounted.current) return;
+        setTurns(
+          conversation.turns.map((turn) => ({
+            key: nextKey(),
+            question: turn.ruling.question,
+            cards: turn.cards,
+            status: "answered" as const,
+            ruling: turn.ruling,
+          })),
+        );
+      })
+      .catch((error: unknown) => {
+        if (mounted.current)
+          setLoadError(error instanceof Error ? error.message : "Could not open this chat.");
+      })
+      .finally(() => {
+        if (mounted.current) setLoadingConversation(false);
+      });
+  }, [accessToken, authLoading, beginRequest, draftId, initialConversationId, runRuling]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  const cardsBefore = (index: number) =>
+    [...turns.slice(0, index)].reverse().find((turn) => turn.cards.length > 0)?.cards ?? [];
+  const rulingIdsBefore = (index: number) =>
+    contextRulingIds(turns.slice(0, index).map((turn) => turn.ruling));
 
-  const currentCards = [...turns].reverse().find((turn) => turn.cards.length > 0)?.cards ?? [];
-  const priorRulingIds = contextRulingIds(turns.map((turn) => turn.ruling));
-
-  async function sendFollowUp() {
+  function sendFollowUp() {
     const question = input.trim();
-    if (!question || busy) return;
+    if (!question || busy || loadError) return;
     setInput("");
     const key = nextKey();
-    const carriedCards = currentCards;
+    const carriedCards = cardsBefore(turns.length);
+    const priorRulingIds = rulingIdsBefore(turns.length);
     setTurns((current) => [...current, { key, question, cards: carriedCards, status: "thinking" }]);
-    try {
-      const interpretation = await interpretFollowUp(question, priorRulingIds);
-      if (!interpretation.inScope) {
-        updateTurn(key, { status: "out_of_scope", note: interpretation.scopeReason });
-        return;
-      }
-      const gameState: ChatGameState = {
-        events: interpretation.events,
-        knownFacts: interpretation.knownFacts,
-        missingFacts: interpretation.missingFacts,
-        searchTerms: interpretation.searchTerms,
-      };
-      const resolution = resolveMentions(interpretation.cardMentions);
-      const cards = mergeCards(carriedCards, resolution.resolved);
-      if (resolution.ambiguous.length > 0) {
-        updateTurn(key, {
-          status: "choosing",
-          pendingMentions: resolution.ambiguous,
-          pendingCards: cards,
-          gameState,
-          unmatched: resolution.unmatched,
-        });
-        return;
-      }
-      updateTurn(key, { unmatched: resolution.unmatched });
-      await runRuling(key, { question, cards, gameState, priorRulingIds, conversationId });
-    } catch (error) {
-      updateTurn(key, {
-        status: "failed",
-        note: error instanceof Error ? error.message : "The judge could not read that.",
-      });
-    }
+    void processFollowUp(key, question, carriedCards, priorRulingIds);
   }
 
   function chooseCard(turn: Turn, mention: Mention, choice: Mention["candidates"][number]) {
@@ -202,39 +267,52 @@ export default function ChatScreen({
       return;
     }
     updateTurn(turn.key, { pendingMentions: undefined, pendingCards: undefined });
-    const earlierRulings = turns
-      .slice(
-        0,
-        turns.findIndex((item) => item.key === turn.key),
-      )
-      .map((item) => item.ruling);
-    void runRuling(turn.key, {
-      question: turn.question,
-      cards,
-      gameState: turn.gameState ?? emptyGameState,
-      priorRulingIds: contextRulingIds(earlierRulings),
-      conversationId,
-    });
+    const index = turns.findIndex((item) => item.key === turn.key);
+    void runRuling(
+      turn.key,
+      {
+        question: turn.question,
+        cards,
+        gameState: turn.gameState ?? emptyGameState,
+        priorRulingIds: rulingIdsBefore(index),
+        conversationId,
+      },
+      beginRequest(),
+    );
   }
 
-  function retry(turn: Turn) {
+  /** Retries a failed turn, or asks again on an answered one (the old answer is replaced). */
+  function rerun(turn: Turn) {
+    if (busy) return;
     const index = turns.findIndex((item) => item.key === turn.key);
-    const earlierRulings = turns.slice(0, index).map((item) => item.ruling);
-    void runRuling(turn.key, {
-      question: turn.question,
-      cards: turn.cards,
-      gameState: turn.gameState ?? emptyGameState,
-      priorRulingIds: contextRulingIds(earlierRulings),
-      conversationId,
-    });
+    // A follow-up that failed before it was interpreted has to be interpreted again, or
+    // cards named in it would be lost.
+    if (!turn.gameState && !turn.ruling && index > 0) {
+      void processFollowUp(turn.key, turn.question, cardsBefore(index), rulingIdsBefore(index));
+      return;
+    }
+    void runRuling(
+      turn.key,
+      {
+        question: turn.question,
+        cards: turn.cards,
+        gameState: turn.gameState ?? emptyGameState,
+        priorRulingIds: rulingIdsBefore(index),
+        conversationId,
+      },
+      beginRequest(),
+    );
   }
+
+  const lastAnsweredKey = [...turns].reverse().find((turn) => turn.status === "answered")?.key;
 
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
       <GrimoireBackdrop />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        // The stack header sits above this view on iOS: status bar plus the 44pt bar.
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 44 : 0}
         style={styles.flex}
       >
         <ScrollView
@@ -318,7 +396,10 @@ export default function ChatScreen({
               ) : null}
 
               {turn.status === "answered" && turn.ruling ? (
-                <JudgeMessage result={turn.ruling} />
+                <JudgeMessage
+                  result={turn.ruling}
+                  onAskAgain={turn.key === lastAnsweredKey && !busy ? () => rerun(turn) : undefined}
+                />
               ) : null}
 
               {turn.status === "out_of_scope" ? (
@@ -334,8 +415,13 @@ export default function ChatScreen({
                   <Text accessibilityRole="alert" style={styles.errorText}>
                     {turn.note}
                   </Text>
-                  <Pressable accessibilityRole="button" onPress={() => retry(turn)}>
-                    <Text style={styles.link}>Try again</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy }}
+                    disabled={busy}
+                    onPress={() => rerun(turn)}
+                  >
+                    <Text style={[styles.link, busy && styles.disabledLink]}>Try again</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -365,7 +451,7 @@ export default function ChatScreen({
             accessibilityRole="button"
             accessibilityLabel="Send follow-up"
             disabled={busy || !input.trim() || Boolean(loadError)}
-            onPress={() => void sendFollowUp()}
+            onPress={sendFollowUp}
             style={[styles.send, (busy || !input.trim()) && styles.sendDisabled]}
           >
             <Ionicons name="arrow-up" size={20} color={colors.ink} />
@@ -449,6 +535,7 @@ const styles = StyleSheet.create({
   notice: { gap: 8, padding: 14, borderRadius: 12, backgroundColor: colors.surface },
   noticeText: { color: colors.text },
   link: { color: colors.goldBright, textDecorationLine: "underline" },
+  disabledLink: { opacity: 0.4 },
   composer: {
     width: "100%",
     maxWidth: 792,

@@ -20,6 +20,10 @@ const outcomeStyles: Record<Outcome, { label: string; color: string; background:
   uncertain: { label: "Not certain", color: colors.danger, background: colors.dangerSurface },
 };
 
+export function outcomeLabel(outcome: Outcome): string {
+  return outcomeStyles[outcome].label;
+}
+
 function citationLabels(ruling: PersistedRulingResponse["ruling"], ids: string[]): string {
   return ids
     .map((id) => {
@@ -29,14 +33,21 @@ function citationLabels(ruling: PersistedRulingResponse["ruling"], ids: string[]
     .join(", ");
 }
 
-export default function JudgeMessage({ result }: { result: PersistedRulingResponse }) {
+export default function JudgeMessage({
+  result,
+  onAskAgain,
+}: {
+  result: PersistedRulingResponse;
+  /** Offered on the latest answer: asks the judge the same question again. */
+  onAskAgain?: () => void;
+}) {
   const [showDetails, setShowDetails] = useState(false);
   const [showChallenge, setShowChallenge] = useState(false);
   const { ruling } = result;
   const outcome = outcomeStyles[ruling.outcome];
 
   return (
-    <View style={styles.bubble} accessibilityLiveRegion="polite">
+    <View style={styles.bubble}>
       <View style={[styles.badge, { backgroundColor: outcome.background }]}>
         <Text style={[styles.badgeText, { color: outcome.color }]}>{outcome.label}</Text>
       </View>
@@ -87,6 +98,9 @@ export default function JudgeMessage({ result }: { result: PersistedRulingRespon
               </Pressable>
             </View>
           ))}
+          <Text selectable style={styles.meta}>
+            Ruling ID {result.rulingId}
+          </Text>
           <Text style={styles.meta}>
             Rules snapshot {ruling.snapshot.version}
             {ruling.snapshot.activatedAt
@@ -128,6 +142,17 @@ export default function JudgeMessage({ result }: { result: PersistedRulingRespon
           <Ionicons name="flag-outline" size={15} color={colors.goldBright} />
           <Text style={styles.actionText}>Challenge</Text>
         </Pressable>
+        {onAskAgain ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ask the judge this question again"
+            onPress={onAskAgain}
+            style={styles.action}
+          >
+            <Ionicons name="refresh" size={15} color={colors.goldBright} />
+            <Text style={styles.actionText}>Ask again</Text>
+          </Pressable>
+        ) : null}
       </View>
       {showChallenge ? <ChallengeForm rulingId={result.rulingId} /> : null}
     </View>
