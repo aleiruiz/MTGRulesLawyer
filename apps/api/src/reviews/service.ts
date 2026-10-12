@@ -13,6 +13,7 @@ import {
   type ReviewQueueResponse,
 } from "@mtg-rules/contracts";
 import { prisma } from "../db/client.js";
+import { deleteNotesForCards } from "../rulings/notes.js";
 
 export class ReviewChallengeNotFoundError extends Error {
   constructor() {
@@ -263,6 +264,15 @@ export async function decideChallenge(
     let correctedVersionId: string | null = null;
     let correctedRulingVersion: number | null = null;
     if (decision.decision === "approve") {
+      // A corrected ruling means notes about these exact cards may carry the same mistake.
+      const questionCards = await tx.questionCard.findMany({
+        where: { question: { ruling: { id: challenge.rulingVersion.rulingId } } },
+        select: { card: { select: { oracleId: true } } },
+      });
+      await deleteNotesForCards(
+        questionCards.map(({ card }) => card.oracleId),
+        tx,
+      );
       const latestVersion = await tx.rulingVersion.aggregate({
         where: { rulingId: challenge.rulingVersion.rulingId },
         _max: { version: true },

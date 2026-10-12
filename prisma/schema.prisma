@@ -104,6 +104,7 @@ model DataSnapshot {
   cards          Card[]
   rulingVersions RulingVersion[]
   rulingCache    VerifiedRulingCache[]
+  judgeNotes     JudgeNote[]
 
   @@index([status, createdAt(sort: Desc)])
 }
@@ -418,4 +419,25 @@ model VerifiedRulingCache {
 
   @@index([snapshotId, expiresAt])
   @@index([expiresAt])
+}
+
+/// A verified conclusion the judge reached with web research, reused as guidance for later
+/// questions about the same cards so they need no new search. Only model-written text that
+/// passed citation verification and carries no links is stored; never the player's question.
+model JudgeNote {
+  id           String       @id @default(uuid()) @db.Uuid
+  snapshotId   String       @db.Uuid
+  /// Sorted Oracle IDs of the confirmed cards the conclusion is about.
+  oracleIds    String[]
+  outcome      RulingOutcome
+  summary      String       @db.Text
+  reasoning    String[]     @default([])
+  ruleNumbers  String[]     @default([])
+  /// Pages the research read. Kept for maintainers; never shown to players or models.
+  sourceUrls   String[]     @default([])
+  createdAt    DateTime     @default(now()) @db.Timestamptz(6)
+  snapshot     DataSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, createdAt(sort: Desc)])
+  @@index([oracleIds], type: Gin)
 }
