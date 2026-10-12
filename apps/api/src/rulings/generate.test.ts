@@ -5,6 +5,8 @@ import { estimateAiTokenCostMicros } from "../ai/usage.js";
 import {
   boundEvidenceForPrompt,
   buildModelPrompt,
+  chooseResearchedAnswer,
+  containsWebLinks,
   createClarificationResponse,
   RULING_SYSTEM_PROMPT,
   toClarificationQuestion,
@@ -173,6 +175,27 @@ void describe("Ruling evidence verification", () => {
     );
     assert.equal(result.outcome, "uncertain");
     assert.deepEqual(result.citations, []);
+  });
+
+  void it("keeps the first answer unless research settles the question without web links", () => {
+    const first = createClarificationResponse(evidence, ["who controls it"]);
+    const base = { ...first, clarificationQuestions: [] as string[] };
+    const uncertainFirst = { ...base, outcome: "uncertain" as const, summary: "Depends." };
+    const settled = { ...base, outcome: "resolved" as const, summary: "It resolves." };
+    assert.equal(chooseResearchedAnswer(uncertainFirst, settled).summary, "It resolves.");
+    assert.match(chooseResearchedAnswer(uncertainFirst, settled).promptVersion, /web-research/);
+    // A failed research attempt never replaces a verified first answer.
+    const fallback = { ...base, outcome: "uncertain" as const, summary: "No verified ruling." };
+    assert.equal(chooseResearchedAnswer(uncertainFirst, fallback), uncertainFirst);
+    for (const summary of [
+      "Yes. See https://example.com/ruling.",
+      "Yes, per www.example.com.",
+      "Yes ([judges](https://x.y)).",
+      "Yes, as magicjudges.org explains.",
+    ]) {
+      assert.equal(chooseResearchedAnswer(uncertainFirst, { ...settled, summary }), uncertainFirst);
+    }
+    assert.equal(containsWebLinks({ ...settled, summary: "Rule 702.61a applies." }), false);
   });
 
   void it("turns web research on by default and off only with an explicit false", () => {

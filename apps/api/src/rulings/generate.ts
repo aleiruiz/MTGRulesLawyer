@@ -371,6 +371,7 @@ export async function generateRuling(
     .enum(["none", "low", "medium", "high", "xhigh", "max"])
     .parse(process.env.OPENAI_REASONING_EFFORT ?? "low");
   const systemPrompt = RULING_SYSTEM_PROMPT;
+  const webResearchEnabled = readWebResearchEnabled();
   const userPrompt = buildModelPrompt(request, evidence, priorTurns);
   const schemaFingerprint = createHash("sha256")
     .update(JSON.stringify(z.toJSONSchema(modelRulingSchema)))
@@ -386,6 +387,7 @@ export async function generateRuling(
     userPrompt,
   });
   return reuseVerifiedRuling(cacheKey, evidence.snapshot.id, async () => {
+    const startedAt = Date.now();
     // Validate provider configuration before reserving so placeholders do not consume quota.
     const providerConfig = readOpenAiConfig();
     const provider = createOpenAiAdapter(providerConfig);
@@ -419,7 +421,14 @@ export async function generateRuling(
     // Verify against what the model was shown, not the full packet.
     const bounded = boundEvidenceForPrompt(evidence);
     const verified = verifyRulingOutput(result.value, bounded, providerConfig.model);
-    if (verified.outcome !== "uncertain" || !readWebResearchEnabled()) return verified;
+    if (verified.outcome !== "uncertain" || !webResearchEnabled) return verified;
+    // Both calls run inside the cache's single-flight transaction; skip research when a
+    // second provider call could outlast it.
+    if (
+      Date.now() - startedAt + providerConfig.timeoutMs + RESEARCH_TIME_MARGIN_MS >
+      RULING_TRANSACTION_BUDGET_MS
+    )
+      return verified;
 
     // Web research: one more attempt that may search the web once for how this interaction
     // is ruled. Pages only point the model at the right packet rules; the answer must still
@@ -481,8 +490,40 @@ export async function generateRuling(
         msg: "Web research ruling attempt completed",
       })}\n`,
     );
-    return researched;
+    return chooseResearchedAnswer(verified, researched);
   });
+}
+
+// The cache's single-flight transaction allows 130 seconds (cache.ts).
+const RULING_TRANSACTION_BUDGET_MS = 125_000;
+const RESEARCH_TIME_MARGIN_MS = 5_000;
+const WEB_LINK = /https?:\/\/|\bwww\.|\]\(|\b[a-z0-9-]+\.(?:com|org|net|io|gg|de|es|dk|wtf)\b/i;
+
+/** True when any player-facing text in the answer carries a link or web address. */
+export function containsWebLinks(answer: RulingGenerationResponse): boolean {
+  const texts = [
+    answer.summary,
+    ...answer.reasoningSteps.map((step) => step.text),
+    ...answer.assumptions,
+    ...answer.clarificationQuestions,
+  ];
+  return texts.some((text) => WEB_LINK.test(text));
+}
+
+/**
+ * The research answer replaces the first only when it settles the question (not uncertain)
+ * and carries no web links: page text must never reach the player, the cache, or stored
+ * rulings. Otherwise the first, verified answer stands.
+ */
+export function chooseResearchedAnswer(
+  first: RulingGenerationResponse,
+  researched: RulingGenerationResponse,
+): RulingGenerationResponse {
+  if (researched.outcome === "uncertain" || containsWebLinks(researched)) return first;
+  return {
+    ...researched,
+    promptVersion: `${researched.promptVersion}+${WEB_RESEARCH_PROMPT_VERSION}`,
+  };
 }
 
 // One web search per question bounds the extra cost (US$0.01 per search at current prices).
