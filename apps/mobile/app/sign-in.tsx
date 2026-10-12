@@ -2,8 +2,9 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { apiUrl } from "../src/api-url";
+import { readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
 import { SOCIAL_PROVIDERS } from "../src/auth/oauth";
 import type { SocialProvider } from "../src/auth/oauth";
@@ -56,6 +57,16 @@ export default function SignInScreen() {
         // removed it; clear this device's session so the player can sign in again if needed.
         await supabase.auth.signOut({ scope: "local" });
         setMessage("Your sign-in is no longer valid. If your account still exists, sign in again.");
+        return;
+      }
+      if (response.status === 429) {
+        setMessage("Too many deletion attempts. Wait an hour and try again. Nothing was deleted.");
+        return;
+      }
+      const denial = await readAdminAccessDenial(response);
+      if (denial === "mfa_required" || denial === "reauthentication_required") {
+        setMessage("Admin accounts need a fresh authenticator code before they can be deleted.");
+        router.push("/admin-verify");
         return;
       }
       if (!response.ok) {
