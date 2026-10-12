@@ -45,6 +45,9 @@ void describe("core rules", () => {
       "613.1",
       "104.4b",
       "732.",
+      "509.1h",
+      "510.",
+      "702.19d",
     ]) {
       assert.ok(
         CORE_RULE_NUMBERS.some((number) => number.startsWith(section)),
