@@ -1,4 +1,7 @@
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
+
+const ipv4MappedRange = new BlockList();
+ipv4MappedRange.addSubnet("::ffff:0:0", 96, "ipv6");
 
 /** Expo web preview origins allowed when no CORS list is configured outside production. */
 export const LOCAL_DEVELOPMENT_ORIGINS = ["http://localhost:8081", "http://127.0.0.1:8081"];
@@ -47,8 +50,9 @@ export function readTrustedProxies(value: string | undefined): string[] {
   return splitList(value).map((entry) => {
     const [address = "", prefix, extra] = entry.split("/");
     const version = isIP(address);
-    // IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) are ranges over the 128-bit address.
-    const mapped = version === 6 && address.includes(".");
+    // IPv4-mapped IPv6 addresses (::ffff:a.b.c.d or ::ffff:a00:0) are ranges over the 128-bit
+    // address, so they need at least /104 to stay as narrow as an IPv4 /8.
+    const mapped = version === 6 && ipv4MappedRange.check(address, "ipv6");
     const minPrefix = version === 4 ? 8 : mapped ? 104 : 16;
     const maxPrefix = version === 4 ? 32 : 128;
     const validPrefix =
