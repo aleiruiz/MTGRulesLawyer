@@ -39,26 +39,32 @@ function AppStack() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.backgroundDeep },
-          headerTintColor: colors.goldBright,
-          headerTitleStyle: fontsLoaded ? { fontFamily: fonts.display } : undefined,
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.background },
-        }}
+      <View
+        style={styles.root}
+        accessibilityElementsHidden={showSplash}
+        importantForAccessibility={showSplash ? "no-hide-descendants" : "auto"}
       >
-        <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ title: "Account" }} />
-        <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
-        <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
-        <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
-        <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
-        <Stack.Screen
-          name="auth/callback"
-          options={{ title: "Sign in", headerBackVisible: false }}
-        />
-      </Stack>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.backgroundDeep },
+            headerTintColor: colors.goldBright,
+            headerTitleStyle: fontsLoaded ? { fontFamily: fonts.display } : undefined,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ title: "Account" }} />
+          <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
+          <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
+          <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
+          <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
+          <Stack.Screen
+            name="auth/callback"
+            options={{ title: "Sign in", headerBackVisible: false }}
+          />
+        </Stack>
+      </View>
       {showSplash ? (
         <View style={StyleSheet.absoluteFill}>
           <LoadingScreen fontsReady={fontsLoaded} />
