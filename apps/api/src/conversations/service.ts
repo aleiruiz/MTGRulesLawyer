@@ -10,7 +10,7 @@ import { prisma } from "../db/client.js";
 import { getRuling } from "../rulings/persistence.js";
 
 // Detail views load each turn's full ruling; a very long chat only shows its latest turns.
-const MAX_TURNS_IN_DETAIL = 50;
+const MAX_TURNS_IN_DETAIL = 20;
 
 export async function listConversations(
   userId: string,
@@ -80,21 +80,28 @@ export async function getConversation(
     },
   });
   if (!conversation) return null;
-  const turns = [];
-  for (const question of [...conversation.questions].reverse()) {
-    if (!question.ruling) continue;
-    const ruling = await getRuling(question.ruling.id, client);
-    if (!ruling) continue;
-    turns.push({
-      ruling: { ...ruling, conversationId: conversation.id },
-      cards: question.confirmedCards.map((selection) => ({
-        oracleId: selection.card.oracleId,
-        name: selection.card.name,
-        faceIndex: selection.face?.faceIndex ?? 0,
-        quantity: selection.quantity,
-      })),
-    });
-  }
+  const questions = [...conversation.questions].reverse();
+  // Bounded by MAX_TURNS_IN_DETAIL; the reads run in parallel rather than one after another.
+  const rulings = await Promise.all(
+    questions.map((question) =>
+      question.ruling ? getRuling(question.ruling.id, client) : Promise.resolve(null),
+    ),
+  );
+  const turns = questions.flatMap((question, index) => {
+    const ruling = rulings[index];
+    if (!ruling) return [];
+    return [
+      {
+        ruling: { ...ruling, conversationId: conversation.id },
+        cards: question.confirmedCards.map((selection) => ({
+          oracleId: selection.card.oracleId,
+          name: selection.card.name,
+          faceIndex: selection.face?.faceIndex ?? 0,
+          quantity: selection.quantity,
+        })),
+      },
+    ];
+  });
   return conversationDetailResponseSchema.parse({
     id: conversation.id,
     title: conversation.title,
