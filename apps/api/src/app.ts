@@ -28,6 +28,10 @@ import {
   reviewDecisionResponseSchema,
   type ReviewDecisionRequest,
   type ReviewDecisionResponse,
+  conversationDetailResponseSchema,
+  conversationListResponseSchema,
+  type ConversationDetailResponse,
+  type ConversationListResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
 import { lookupCardsByExactFaceName } from "./cards/lookup.js";
@@ -36,6 +40,18 @@ import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/
 import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
 import { getRuling, saveRuling } from "./rulings/persistence.js";
+import {
+  loadPriorTurns,
+  type PriorTurn,
+  type PriorTurnLoader,
+} from "./conversations/prior-turns.js";
+import { ConversationNotFoundError, type RulingOwner } from "./conversations/attach.js";
+import {
+  deleteConversation,
+  getConversation,
+  listConversations,
+  ownsConversation,
+} from "./conversations/service.js";
 import { prisma } from "./db/client.js";
 import {
   createAuthenticationPreHandler,
@@ -71,6 +87,7 @@ export interface BuildAppOptions {
     question: string,
     clientIp: string,
     signal?: AbortSignal,
+    priorTurns?: PriorTurn[],
   ) => Promise<QuestionInterpretResponse>;
   assembleQuestionEvidence?: (
     request: ConfirmedQuestionEvidenceRequest,
@@ -79,11 +96,21 @@ export interface BuildAppOptions {
     request: ConfirmedQuestionEvidenceRequest,
     clientIp: string,
     signal?: AbortSignal,
+    priorTurns?: PriorTurn[],
   ) => Promise<RulingGenerationResponse>;
   saveRuling?: (
     request: ConfirmedQuestionEvidenceRequest,
     answer: RulingGenerationResponse,
+    owner?: RulingOwner,
   ) => Promise<PersistedRulingResponse>;
+  loadPriorTurns?: PriorTurnLoader;
+  listConversations?: (userId: string) => Promise<ConversationListResponse>;
+  getConversation?: (
+    userId: string,
+    conversationId: string,
+  ) => Promise<ConversationDetailResponse | null>;
+  deleteConversation?: (userId: string, conversationId: string) => Promise<boolean>;
+  ownsConversation?: (userId: string, conversationId: string) => Promise<boolean>;
   getRuling?: (rulingId: string, version?: number) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
   checkDatabase?: () => Promise<void>;
@@ -140,7 +167,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const interpret = options.interpretQuestion ?? interpretQuestion;
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
   const createRuling = options.generateRuling ?? generateRuling;
-  const persistRuling = options.saveRuling ?? saveRuling;
+  const persistRuling =
+    options.saveRuling ??
+    ((
+      request: ConfirmedQuestionEvidenceRequest,
+      answer: RulingGenerationResponse,
+      owner?: RulingOwner,
+    ) => saveRuling(request, answer, prisma, owner));
+  const readPriorTurns = options.loadPriorTurns ?? ((ids: string[]) => loadPriorTurns(ids));
+  const readConversations =
+    options.listConversations ?? ((userId: string) => listConversations(userId));
+  const readConversation =
+    options.getConversation ?? ((userId: string, id: string) => getConversation(userId, id));
+  const removeConversation =
+    options.deleteConversation ?? ((userId: string, id: string) => deleteConversation(userId, id));
+  const checkConversationOwner =
+    options.ownsConversation ?? ((userId: string, id: string) => ownsConversation(userId, id));
   const readRuling =
     options.getRuling ?? ((rulingId, version) => getRuling(rulingId, prisma, version));
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
@@ -253,6 +295,62 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(503).send({ error: "CHALLENGES_UNAVAILABLE" });
     }
   });
+  app.get("/api/me/conversations", { preHandler: authenticate }, async (request, reply) => {
+    const user = requireAuthenticatedUser(request, reply);
+    if (!user) return reply;
+    try {
+      return reply.send(conversationListResponseSchema.parse(await readConversations(user.id)));
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Conversation list failed",
+      );
+      return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+    }
+  });
+  app.get<{ Params: { conversationId: string } }>(
+    "/api/me/conversations/:conversationId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.conversationId))
+        return reply.code(400).send({ error: "INVALID_CONVERSATION_ID" });
+      try {
+        const conversation = await readConversation(user.id, request.params.conversationId);
+        // Another user's conversation looks the same as a missing one.
+        if (!conversation) return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+        return reply.send(conversationDetailResponseSchema.parse(conversation));
+      } catch (error) {
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Conversation read failed",
+        );
+        return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+      }
+    },
+  );
+  app.delete<{ Params: { conversationId: string } }>(
+    "/api/me/conversations/:conversationId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.conversationId))
+        return reply.code(400).send({ error: "INVALID_CONVERSATION_ID" });
+      try {
+        const deleted = await removeConversation(user.id, request.params.conversationId);
+        if (!deleted) return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+        return reply.code(204).send();
+      } catch (error) {
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Conversation delete failed",
+        );
+        return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+      }
+    },
+  );
   app.get("/api/admin/challenges", async (request, reply) => {
     if (request.appUser?.role !== "ADMIN") return reply.code(403).send({ error: "ADMIN_REQUIRED" });
     try {
@@ -363,7 +461,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await interpret(parsed.data.question, request.ip, disconnect.signal);
+      const priorTurns = await readPriorTurns(parsed.data.priorRulingIds);
+      const result = await interpret(
+        parsed.data.question,
+        request.ip,
+        disconnect.signal,
+        priorTurns,
+      );
       return reply.send(questionInterpretResponseSchema.parse(result));
     } catch (error) {
       if (disconnect.signal.aborted) return reply;
@@ -407,11 +511,37 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.success) {
       return reply.code(400).send({ error: "INVALID_RULING_REQUEST" });
     }
+    // Signing in is optional here; a signed-in ruling is saved to the user's conversation history.
+    if (request.headers.authorization !== undefined || parsed.data.conversationId) {
+      await authenticate(request, reply);
+      if (reply.sent) return reply;
+    }
+    const owner: RulingOwner | undefined = request.appUser
+      ? {
+          userId: request.appUser.id,
+          ...(parsed.data.conversationId ? { conversationId: parsed.data.conversationId } : {}),
+        }
+      : undefined;
+    try {
+      // Check before generating so a bad conversation ID does not spend a model call.
+      if (
+        owner?.conversationId &&
+        !(await checkConversationOwner(owner.userId, owner.conversationId))
+      )
+        return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Conversation lookup failed",
+      );
+      return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+    }
     const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await createRuling(parsed.data, request.ip, disconnect.signal);
+      const priorTurns = await readPriorTurns(parsed.data.priorRulingIds);
+      const result = await createRuling(parsed.data, request.ip, disconnect.signal, priorTurns);
       return reply.send(
-        persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result)),
+        persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result, owner)),
       );
     } catch (error) {
       if (disconnect.signal.aborted) return reply;
@@ -424,6 +554,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }
       if (error instanceof InvalidConfirmedCardsError) {
         return reply.code(400).send({ error: "CONFIRMED_CARD_UNAVAILABLE" });
+      }
+      if (error instanceof ConversationNotFoundError) {
+        return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
       }
       request.log.error(
         { errorName: error instanceof Error ? error.name : "UnknownError" },
