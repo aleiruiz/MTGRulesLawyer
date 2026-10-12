@@ -12,6 +12,12 @@ import { findExactFaceMatches } from "../cards/lookup.js";
 import { prisma } from "../db/client.js";
 
 const MAX_MATCHING_RULES = 8;
+const MAX_QUERY_TERMS = 32;
+const MAX_RANKING_TERMS = 16;
+// Terms found in more than this share of rules say little about which rule applies.
+const MAX_TERM_RULE_SHARE = 0.08;
+// ...except in small rule sets (fixtures, partial imports), where every term is "common".
+const MIN_COMMON_TERM_RULES = 25;
 const MAX_EXPANDED_RULES = 24;
 const MAX_REFERENCES_PER_RULE = 12;
 const MAX_CARDS_PER_NAME = 3;
@@ -114,19 +120,47 @@ export async function assembleEvidence(
         select: { id: true, number: true },
       })
     : [];
-  // Match rules containing any of the question's terms and rank by how many they share. Requiring
-  // every term (websearch_to_tsquery) found nothing for real questions, which also carry the
-  // interpreted events, facts, and search terms.
+  // Requiring every term (websearch_to_tsquery) found nothing for real questions. Instead, take
+  // the first MAX_QUERY_TERMS distinct terms of the question, keep the rarest ones that are not
+  // in most rules ("creature", "player"), and rank rules that contain any of them, discounting
+  // long rules. Bounding the terms keeps a 4,000-character question as fast as a short one.
   const fullTextHits = await client.$queryRaw<Array<{ id: string; number: string }>>(Prisma.sql`
-    WITH query AS (
-      SELECT replace(plainto_tsquery('english', ${request.question})::text, ' & ', ' | ')::tsquery AS terms
+    WITH snapshot_rules AS (
+      SELECT r."id", r."number", r."sortOrder", to_tsvector('english', r."text") AS document
+      FROM "Rule" AS r
+      WHERE r."snapshotId" = ${snapshot.id}::uuid
+    ),
+    question_terms AS (
+      SELECT term.lexeme
+      FROM unnest(to_tsvector('english', ${request.question})) AS term
+      ORDER BY term.positions[1]
+      LIMIT ${MAX_QUERY_TERMS}
+    ),
+    term_frequency AS (
+      SELECT question_terms.lexeme,
+        (SELECT count(*) FROM snapshot_rules
+          WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery) AS rules
+      FROM question_terms
+    ),
+    query AS (
+      SELECT string_agg(quote_literal(rare.lexeme), ' | ')::tsquery AS terms
+      FROM (
+        SELECT term_frequency.lexeme
+        FROM term_frequency
+        WHERE term_frequency.rules > 0
+          AND term_frequency.rules <= GREATEST(
+            (SELECT count(*) FROM snapshot_rules) * ${MAX_TERM_RULE_SHARE},
+            ${MIN_COMMON_TERM_RULES}
+          )
+        ORDER BY term_frequency.rules ASC
+        LIMIT ${MAX_RANKING_TERMS}
+      ) AS rare
     )
-    SELECT r."id", r."number"
-    FROM "Rule" AS r, query
-    WHERE r."snapshotId" = ${snapshot.id}::uuid
-      AND to_tsvector('english', r."text") @@ query.terms
-    ORDER BY ts_rank_cd(to_tsvector('english', r."text"), query.terms) DESC,
-      r."sortOrder" ASC
+    SELECT snapshot_rules."id", snapshot_rules."number"
+    FROM snapshot_rules, query
+    WHERE snapshot_rules.document @@ query.terms
+    ORDER BY ts_rank_cd(snapshot_rules.document, query.terms, 1) DESC,
+      snapshot_rules."sortOrder" ASC
     LIMIT ${MAX_MATCHING_RULES + 1}
   `);
   if (fullTextHits.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
@@ -249,12 +283,13 @@ export async function assembleConfirmedEvidence(
     if (!card || !face) throw new InvalidConfirmedCardsError();
     return { card, face, quantity: selection.quantity };
   });
+  // Search terms come first: the search keeps the earliest terms, and these were chosen for it.
   const query = [
+    ...request.gameState.searchTerms,
     request.question,
     ...request.gameState.events,
     ...request.gameState.knownFacts,
     ...request.gameState.missingFacts,
-    ...request.gameState.searchTerms,
   ]
     .join("\n")
     .slice(0, 4_000);
