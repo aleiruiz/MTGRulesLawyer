@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import Text from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
+import logo from "../../assets/logo.png";
 import AccountButton from "../ui/AccountButton";
 import GrimoireBackdrop from "../ui/GrimoireBackdrop";
 import ManaLoader from "../ui/ManaLoader";
@@ -434,9 +436,12 @@ export default function QuestionConfirmationScreen() {
       <GrimoireBackdrop />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text accessibilityRole="header" style={styles.title}>
-            Rules Lawyer
-          </Text>
+          <View style={styles.brand}>
+            <Image accessible={false} source={logo} style={styles.logo} />
+            <Text accessibilityRole="header" style={styles.title}>
+              Rules Lawyer
+            </Text>
+          </View>
           <AccountButton />
         </View>
         <Text style={styles.subtitle}>Unofficial Magic rules research assistant</Text>
@@ -917,6 +922,8 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  brand: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  logo: { width: 40, height: 40 },
   title: { flexShrink: 1, color: colors.goldBright, fontFamily: fonts.displayHeavy, fontSize: 28 },
   subtitle: { marginTop: -4, color: colors.textMuted, fontFamily: fonts.serif, fontSize: 18 },
   divider: { height: 1, marginVertical: 4, backgroundColor: colors.gold, opacity: 0.55 },
