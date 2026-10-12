@@ -235,6 +235,7 @@ export function buildModelPrompt(
 
 // The response contract allows at most this many citations per summary or step.
 const MAX_CITATIONS_PER_CLAIM = 8;
+const MAX_RESPONSE_CITATIONS = 64;
 const cardAlias = (cardIndex: number) => `card${cardIndex + 1}`;
 /** "Rule 704.5J." and "704.5j" name the same rule (also used for card aliases). */
 export const normalizeRuleNumber = (value: string) =>
@@ -385,7 +386,16 @@ export function verifyRulingOutput(
     });
   }
 
-  const citationIds = [...new Set(referencedIds)];
+  // Only references the response keeps (each list capped at the contract's limit), so the
+  // citation list stays within the contract's 64 entries: at most 12 steps and the summary.
+  const keptSteps = output.reasoningSteps.map((step) => ({
+    ...step,
+    citationIds: step.citationIds.slice(0, MAX_CITATIONS_PER_CLAIM),
+  }));
+  const keptSummaryIds = output.summaryCitationIds.slice(0, MAX_CITATIONS_PER_CLAIM);
+  const citationIds = [
+    ...new Set([...keptSummaryIds, ...keptSteps.flatMap((step) => step.citationIds)]),
+  ].slice(0, MAX_RESPONSE_CITATIONS);
   const citations = citationIds.map((id) => {
     const item = evidenceById.get(id);
     if (!item) throw new Error("Validated evidence reference disappeared.");
@@ -404,11 +414,8 @@ export function verifyRulingOutput(
     outcome: output.outcome,
     summary: output.summary,
     // Every reference was verified above; split references can exceed the contract's limit.
-    reasoningSteps: output.reasoningSteps.map((step) => ({
-      ...step,
-      citationIds: step.citationIds.slice(0, MAX_CITATIONS_PER_CLAIM),
-    })),
-    summaryCitationIds: output.summaryCitationIds.slice(0, MAX_CITATIONS_PER_CLAIM),
+    reasoningSteps: keptSteps,
+    summaryCitationIds: keptSummaryIds,
     assumptions: output.assumptions,
     clarificationQuestions: output.clarificationQuestions,
     citations,
