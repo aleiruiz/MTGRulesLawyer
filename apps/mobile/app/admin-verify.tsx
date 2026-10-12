@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/AuthProvider";
 import { supabase } from "../src/auth/supabase";
+import { colors, fonts } from "../src/theme";
 
 interface PendingEnrollment {
   factorId: string;
@@ -164,6 +166,7 @@ export default function AdminVerifyScreen() {
         {factorId ? (
           <>
             <TextInput
+              placeholderTextColor={colors.textSubtle}
               accessibilityLabel="Authenticator code"
               autoComplete="one-time-code"
               inputMode="numeric"
@@ -183,7 +186,7 @@ export default function AdminVerifyScreen() {
               style={[styles.button, verifying && styles.disabled]}
             >
               {verifying ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={colors.ink} />
               ) : (
                 <Text style={styles.buttonText}>Verify</Text>
               )}
@@ -210,28 +213,29 @@ export default function AdminVerifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f4f6f1" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   page: { width: "100%", maxWidth: 560, alignSelf: "center", padding: 24, gap: 14 },
-  title: { color: "#18312f", fontSize: 28, fontWeight: "800" },
-  description: { color: "#49615c", fontSize: 16, lineHeight: 23 },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  description: { color: colors.textMuted, fontSize: 16, lineHeight: 23 },
   setup: { gap: 10 },
-  meta: { color: "#5b5a55", fontSize: 13 },
+  meta: { color: colors.textMuted, fontSize: 13 },
   secret: {
     padding: 12,
     borderRadius: 8,
-    backgroundColor: "#ffffff",
-    color: "#18312f",
+    backgroundColor: colors.surface,
+    color: colors.text,
     fontFamily: "monospace",
     fontSize: 16,
     letterSpacing: 1,
   },
   input: {
+    color: colors.text,
     minHeight: 48,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     fontSize: 20,
     letterSpacing: 4,
   },
@@ -240,20 +244,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
     paddingHorizontal: 16,
   },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "700" },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#1f5d50",
+    borderColor: colors.gold,
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  secondaryButtonText: { color: "#1f5d50", fontSize: 15, fontWeight: "700" },
+  secondaryButtonText: { color: colors.goldBright, fontSize: 15, fontWeight: "700" },
   disabled: { opacity: 0.48 },
-  message: { color: "#7c2932", fontWeight: "600" },
+  message: { color: colors.danger, fontWeight: "600" },
 });

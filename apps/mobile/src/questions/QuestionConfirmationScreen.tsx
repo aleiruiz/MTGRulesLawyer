@@ -1,17 +1,22 @@
+import { colors, fonts } from "../theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import Text from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import logo from "../../assets/logo.png";
+import AccountButton from "../ui/AccountButton";
+import GrimoireBackdrop from "../ui/GrimoireBackdrop";
+import ManaLoader from "../ui/ManaLoader";
 import ConfirmedCardTile from "./ConfirmedCardTile";
 import ChallengeForm from "../challenges/ChallengeForm";
 import { apiUrl } from "../api-url";
@@ -428,19 +433,22 @@ export default function QuestionConfirmationScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <GrimoireBackdrop />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>MTG Rules Lawyer</Text>
+        <View style={styles.header}>
+          <View style={styles.brand}>
+            <Image accessible={false} source={logo} style={styles.logo} />
+            <Text accessibilityRole="header" style={styles.title}>
+              Rules Lawyer
+            </Text>
+          </View>
+          <AccountButton />
+        </View>
         <Text style={styles.subtitle}>Unofficial Magic rules research assistant</Text>
-        <Link href="/sign-in" asChild>
-          <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Sign in for account features</Text>
-          </Pressable>
-        </Link>
-        <Link href="/challenges" style={styles.link}>
-          Track my challenges
-        </Link>
+        <View style={styles.divider} />
         <Text style={styles.sectionTitle}>Describe the game situation</Text>
         <TextInput
+          placeholderTextColor={colors.inkMuted}
           accessibilityLabel="Magic rules question"
           accessibilityHint="Enter up to 4000 characters about a Magic game interaction."
           editable={!isInterpreting}
@@ -474,7 +482,7 @@ export default function QuestionConfirmationScreen() {
           ]}
         >
           {isInterpreting ? (
-            <ActivityIndicator color="#ffffff" />
+            <ManaLoader accessibilityLabel="Reading the question" size={11} />
           ) : (
             <Text style={styles.primaryButtonText}>Find cards and game facts</Text>
           )}
@@ -630,6 +638,7 @@ export default function QuestionConfirmationScreen() {
                     </Text>
                     <View style={styles.searchRow}>
                       <TextInput
+                        placeholderTextColor={colors.textSubtle}
                         accessibilityLabel="Exact card face name"
                         onChangeText={(value) => {
                           searchRequestId.current += 1;
@@ -719,7 +728,10 @@ export default function QuestionConfirmationScreen() {
                   ]}
                 >
                   {isRetrieving ? (
-                    <ActivityIndicator color="#fff" accessibilityLabel="Retrieving evidence" />
+                    <ActivityIndicator
+                      color={colors.ink}
+                      accessibilityLabel="Retrieving evidence"
+                    />
                   ) : (
                     <Text style={styles.primaryButtonText}>Confirm card identities</Text>
                   )}
@@ -778,10 +790,7 @@ export default function QuestionConfirmationScreen() {
                           ]}
                         >
                           {isGeneratingRuling ? (
-                            <ActivityIndicator
-                              color="#fff"
-                              accessibilityLabel="Generating ruling"
-                            />
+                            <ManaLoader accessibilityLabel="Generating ruling" size={11} />
                           ) : (
                             <Text style={styles.primaryButtonText}>Generate verified ruling</Text>
                           )}
@@ -903,7 +912,7 @@ export default function QuestionConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f6f3ec" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   page: {
     width: "100%",
     maxWidth: 760,
@@ -912,96 +921,125 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 48,
   },
-  title: { color: "#18312f", fontSize: 28, fontWeight: "800" },
-  subtitle: { color: "#49615c", fontSize: 15 },
-  sectionTitle: { marginTop: 12, color: "#18312f", fontSize: 20, fontWeight: "700" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  brand: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  logo: { width: 40, height: 40 },
+  title: { flexShrink: 1, color: colors.goldBright, fontFamily: fonts.displayHeavy, fontSize: 28 },
+  subtitle: { marginTop: -4, color: colors.textMuted, fontFamily: fonts.serif, fontSize: 18 },
+  divider: { height: 1, marginVertical: 4, backgroundColor: colors.gold, opacity: 0.55 },
+  sectionTitle: {
+    marginTop: 12,
+    color: colors.gold,
+    fontFamily: fonts.display,
+    fontSize: 14,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
   questionInput: {
     minHeight: 120,
-    borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderWidth: 2,
+    borderColor: colors.gold,
     borderRadius: 12,
     padding: 14,
-    backgroundColor: "#fff",
+    backgroundColor: colors.parchment,
+    color: colors.ink,
     fontSize: 16,
   },
-  helperText: { color: "#596d67", fontSize: 13 },
-  link: { color: "#145da0", fontSize: 15, textDecorationLine: "underline" },
+  helperText: { color: colors.textMuted, fontSize: 13 },
+  link: { color: colors.goldBright, fontSize: 15, textDecorationLine: "underline" },
   primaryButton: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
     borderRadius: 10,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
   },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "700", textAlign: "center" },
+  primaryButtonText: {
+    color: colors.ink,
+    fontFamily: fonts.display,
+    fontSize: 16,
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#31695d",
+    borderColor: colors.gold,
     borderRadius: 9,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  secondaryButtonText: { color: "#174b40", fontSize: 14, fontWeight: "700", textAlign: "center" },
+  secondaryButtonText: {
+    color: colors.goldBright,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   pressedButton: { opacity: 0.75 },
   disabledButton: { opacity: 0.45 },
-  errorText: { color: "#9d2634", fontWeight: "600" },
+  errorText: { color: colors.danger, fontWeight: "600" },
   results: { gap: 12 },
   scopeBox: { padding: 14, borderRadius: 10, gap: 5 },
-  scopeIn: { backgroundColor: "#e1efe7" },
-  scopeOut: { backgroundColor: "#f7e9df" },
-  scopeTitle: { color: "#18312f", fontSize: 17, fontWeight: "700" },
+  scopeIn: { backgroundColor: colors.successSurface },
+  scopeOut: { backgroundColor: colors.dangerSurface },
+  scopeTitle: { color: colors.text, fontSize: 17, fontWeight: "700" },
   questionPreview: {
     padding: 14,
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     fontSize: 16,
     lineHeight: 25,
   },
-  highlight: { borderRadius: 4, backgroundColor: "#ffe49a", color: "#402f00", fontWeight: "800" },
-  factsBox: { gap: 7, padding: 14, borderRadius: 10, backgroundColor: "#e9ecef" },
-  missingText: { color: "#804700", fontWeight: "600" },
+  highlight: {
+    borderRadius: 4,
+    backgroundColor: colors.goldBright,
+    color: colors.ink,
+    fontWeight: "800",
+  },
+  factsBox: { gap: 7, padding: 14, borderRadius: 10, backgroundColor: colors.surfaceRaised },
+  missingText: { color: colors.warning, fontWeight: "600" },
   mentionBox: {
     gap: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#d0b064",
+    borderColor: colors.gold,
     borderRadius: 10,
-    backgroundColor: "#fffaf0",
+    backgroundColor: colors.surfaceRaised,
   },
   cardRow: { gap: 12, paddingVertical: 4, paddingRight: 10 },
-  cardTitle: { color: "#18312f", fontSize: 16, fontWeight: "700" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
   inlineButtons: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   choiceButton: {
     minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#a5b4ab",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  choiceText: { color: "#18312f", fontWeight: "600" },
+  choiceText: { color: colors.text, fontWeight: "600" },
   searchPanel: {
     gap: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#abbab0",
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: "#eef3ee",
+    backgroundColor: colors.surfaceRaised,
   },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchInput: {
+    color: colors.text,
     flex: 1,
     minHeight: 46,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  confirmedBox: { gap: 8, padding: 14, borderRadius: 10, backgroundColor: "#e1efe7" },
+  confirmedBox: { gap: 8, padding: 14, borderRadius: 10, backgroundColor: colors.successSurface },
 });

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import Text from "../../src/ui/Text";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/auth/AuthProvider";
 import { completeOAuthCallback, getAuthRedirectUrl } from "../../src/auth/oauth";
+import { colors } from "../../src/theme";
 
 export default function AuthCallbackScreen() {
   const { loading, session } = useAuth();
@@ -33,7 +35,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.page}>
       {loading || (code && !session && !errorMessage) ? (
-        <ActivityIndicator color="#1f5d50" />
+        <ActivityIndicator color={colors.goldBright} />
       ) : null}
       <Text accessibilityRole={errorMessage ? "alert" : "text"} style={styles.message}>
         {errorMessage
@@ -51,5 +53,5 @@ export default function AuthCallbackScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 16 },
-  message: { color: "#18312f", fontSize: 16, textAlign: "center" },
+  message: { color: colors.text, fontSize: 16, textAlign: "center" },
 });
