@@ -3,7 +3,6 @@ import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
 import {
   boundEvidenceForPrompt,
   buildModelPrompt,
-  createClarificationResponse,
   modelRulingSchema,
   RULING_PROMPT_VERSION,
   RULING_SYSTEM_PROMPT,
@@ -23,21 +22,18 @@ let failures = 0;
 for (const [index, fixture] of rulingEvaluationSeedSet.entries()) {
   const evidence = makeEvaluationEvidence(fixture, index);
   const request = makeEvaluationRequest(fixture, evidence);
-  const missingFacts = request.gameState?.missingFacts ?? [];
-  const result =
-    missingFacts.length > 0
-      ? createClarificationResponse(evidence, missingFacts)
-      : verifyRulingOutput(
-          await model.generateStructuredOutput({
-            schema: modelRulingSchema,
-            schemaName: "mtg_ruling_evaluation",
-            systemPrompt: RULING_SYSTEM_PROMPT,
-            userPrompt: buildModelPrompt(request, evidence),
-            promptVersion: RULING_PROMPT_VERSION,
-          }),
-          boundEvidenceForPrompt(evidence),
-          config.model,
-        );
+  // Like generateRuling, missing facts are hints for the model, which decides whether to ask.
+  const result = verifyRulingOutput(
+    await model.generateStructuredOutput({
+      schema: modelRulingSchema,
+      schemaName: "mtg_ruling_evaluation",
+      systemPrompt: RULING_SYSTEM_PROMPT,
+      userPrompt: buildModelPrompt(request, evidence),
+      promptVersion: RULING_PROMPT_VERSION,
+    }),
+    boundEvidenceForPrompt(evidence),
+    config.model,
+  );
   const actualRules = getCitationRuleNumbers(result.citations);
   const outcomeMatches = result.outcome === fixture.expectedOutcome;
   const citationsMatch =

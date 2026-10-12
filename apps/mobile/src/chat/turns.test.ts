@@ -83,6 +83,38 @@ void describe("chat follow-up cards", () => {
     assert.deepEqual(resolution, { resolved: [], ambiguous: [], unmatched: [] });
   });
 
+  void it("settles a short name to the chat's card even among near matches", () => {
+    const near = (oracleId: string, name: string) => ({
+      ...candidate(oracleId, name),
+      matchKind: "approximate" as const,
+    });
+    const known = [
+      { oracleId: "gandalf-guest", name: "Gandalf, Party Guest", faceIndex: 0, quantity: 1 },
+      { oracleId: "brainstorm", name: "Brainstorm", faceIndex: 0, quantity: 1 },
+    ];
+    const resolution = resolveMentions(
+      [
+        {
+          text: "gandalf",
+          start: 0,
+          end: 7,
+          candidates: [
+            near("gandalf-grey", "Gandalf the Grey"),
+            near("gandalf-guest", "Gandalf, Party Guest"),
+          ],
+        },
+        // "Storm" is not a word of "Brainstorm", so the player still chooses.
+        { text: "Storm", start: 12, end: 17, candidates: [near("brainstorm", "Brainstorm")] },
+      ],
+      known,
+    );
+    assert.deepEqual(resolution.resolved, []);
+    assert.deepEqual(
+      resolution.ambiguous.map((mention) => mention.text),
+      ["Storm"],
+    );
+  });
+
   void it("keeps earlier cards, skips duplicates, and stops at the card limit", () => {
     assert.deepEqual(
       mergeCards([card("a"), card("b")], [card("b"), card("c")]).map((item) => item.oracleId),
