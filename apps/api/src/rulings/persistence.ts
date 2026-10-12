@@ -7,11 +7,13 @@ import {
   type RulingGenerationResponse,
 } from "@mtg-rules/contracts";
 import { prisma } from "../db/client.js";
+import { attachToConversation, type RulingOwner } from "../conversations/attach.js";
 
 export async function saveRuling(
   request: ConfirmedQuestionEvidenceRequest,
   answer: RulingGenerationResponse,
   client: PrismaClient = prisma,
+  owner?: RulingOwner,
 ): Promise<PersistedRulingResponse> {
   const normalizedRequest = confirmedQuestionEvidenceRequestSchema.parse(request);
   return client.$transaction(async (tx) => {
@@ -32,8 +34,12 @@ export async function saveRuling(
       }
     }
 
+    const conversationId = owner
+      ? await attachToConversation(tx, owner, normalizedRequest.question)
+      : null;
     const question = await tx.question.create({
       data: {
+        ...(owner ? { userId: owner.userId, conversationId } : {}),
         text: normalizedRequest.question,
         gameState: normalizedRequest.gameState,
         status: answer.outcome === "needs_information" ? "NEEDS_INFORMATION" : "ANSWERED",
@@ -96,6 +102,7 @@ export async function saveRuling(
       question: normalizedRequest.question,
       confirmedCards: normalizedRequest.confirmedCards,
       ruling: answer,
+      conversationId,
     });
   });
 }
