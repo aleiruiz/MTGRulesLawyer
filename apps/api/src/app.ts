@@ -71,9 +71,6 @@ import {
 } from "./account/deletion.js";
 import { evaluateAdminAssurance, readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
 import { createAttemptLimiter } from "./http/attempt-limiter.js";
-
-// Each attempt can reach the Supabase admin API; a person needs at most a few retries.
-const ACCOUNT_DELETION_ATTEMPTS_PER_HOUR = 3;
 import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
 import {
   createSupabaseAccessTokenVerifier,
@@ -94,6 +91,9 @@ import {
   ReviewEvaluationConsentRequiredError,
   ReviewChallengeNotFoundError,
 } from "./reviews/service.js";
+
+// Each attempt can reach the Supabase admin API; a person needs at most a few retries.
+const ACCOUNT_DELETION_ATTEMPTS_PER_HOUR = 3;
 
 export interface BuildAppOptions {
   lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
@@ -327,14 +327,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.delete("/api/me", { preHandler: authenticate }, async (request, reply) => {
     const user = requireAuthenticatedUser(request, reply);
     if (!user) return reply;
-    const retryAfterSeconds = accountDeletionLimiter.attempt(user.id);
-    if (retryAfterSeconds !== null) {
-      reply.header("Retry-After", String(retryAfterSeconds));
-      return reply.code(429).send({ error: "ACCOUNT_DELETION_RATE_LIMITED", retryAfterSeconds });
-    }
     if (user.role === "ADMIN") {
       // Deleting an admin account removes reviewer attribution, so it needs the same step-up
-      // check as any other admin action.
+      // check as any other admin action. It runs first: it calls nothing external, so a denied
+      // attempt should not use up the deletion limit.
       const assurance = evaluateAdminAssurance(request.authSession, now(), adminAuthMaxAgeSeconds);
       if (assurance !== "allowed") {
         return reply.code(403).send({
@@ -342,6 +338,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             assurance === "mfa_required" ? "ADMIN_MFA_REQUIRED" : "ADMIN_REAUTHENTICATION_REQUIRED",
         });
       }
+    }
+    // Keyed by the Supabase user: after a failed identity deletion the app record is recreated
+    // with a new ID, which must not reset the limit.
+    const retryAfterSeconds = accountDeletionLimiter.attempt(request.authSubject ?? user.id);
+    if (retryAfterSeconds !== null) {
+      reply.header("Retry-After", String(retryAfterSeconds));
+      return reply.code(429).send({ error: "ACCOUNT_DELETION_RATE_LIMITED", retryAfterSeconds });
     }
     try {
       await deleteAccount(user.id);

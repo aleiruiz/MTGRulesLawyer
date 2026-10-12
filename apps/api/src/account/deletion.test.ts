@@ -213,3 +213,26 @@ void describe("DELETE /api/me hardening", () => {
     });
   });
 });
+
+void describe("DELETE /api/me limit after a recreated app record", () => {
+  let recreated = 0;
+  const recreatingApp = buildApp({
+    corsAllowedOrigins: [],
+    verifyAccessToken: (token) =>
+      Promise.resolve(token === "player-token" ? { subject: "supabase-player" } : null),
+    // A failed identity deletion leaves the token valid, so each retry gets a new app record.
+    resolveAppUser: () => Promise.resolve({ id: `app-user-${(recreated += 1)}`, role: "USER" }),
+    deleteAccount: () => Promise.reject(new AuthIdentityDeletionError()),
+  });
+  void after(async () => recreatingApp.close());
+
+  void it("keys the limit on the Supabase user, not the app record", async () => {
+    const headers = { authorization: "Bearer player-token" };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await recreatingApp.inject({ method: "DELETE", url: "/api/me", headers });
+      assert.equal(response.statusCode, 502);
+    }
+    const limited = await recreatingApp.inject({ method: "DELETE", url: "/api/me", headers });
+    assert.equal(limited.statusCode, 429);
+  });
+});
