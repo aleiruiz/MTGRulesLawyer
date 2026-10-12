@@ -42,8 +42,9 @@ export function toChatCard(candidate: Candidate): ChatCard {
 function refersToKnownCard(text: string, knownCards: ChatCard[]): boolean {
   const words = text.toLocaleLowerCase("en-US").split(/\s+/).filter(Boolean);
   return knownCards.some((card) => {
-    const name = card.name.toLocaleLowerCase("en-US");
-    return words.length > 0 && words.every((word) => name.includes(word));
+    // Whole words only, so a known "Brainstorm" does not hide a mention of "Storm".
+    const nameWords = card.name.toLocaleLowerCase("en-US").split(/[\s,/-]+/);
+    return words.length > 0 && words.every((word) => nameWords.includes(word));
   });
 }
 
