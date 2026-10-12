@@ -63,7 +63,7 @@ async function fetchScryfallBulkMetadata(
     throw new Error(`Scryfall did not return ${type} bulk metadata.`);
   }
   if (typeof metadata.updated_at !== "string" || Number.isNaN(Date.parse(metadata.updated_at))) {
-    throw new Error("Scryfall Oracle Cards metadata did not include a valid update date.");
+    throw new Error(`Scryfall ${type} metadata did not include a valid update date.`);
   }
   const sourceUrl = requireScryfallUrl(metadata.uri, "metadata");
   const downloadUrl = requireScryfallUrl(metadata.jsonl_download_uri, "download");

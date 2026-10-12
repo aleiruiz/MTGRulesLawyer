@@ -31,6 +31,7 @@ const MAX_RULE_TEXT_CHARACTERS = 6_000;
 const MAX_CARD_TEXT_CHARACTERS = 2_000;
 const MAX_RULINGS_PER_CARD = 8;
 const MAX_RULING_TEXT_CHARACTERS = 800;
+// Shared equally between the confirmed cards.
 const MAX_RULING_EVIDENCE_CHARACTERS = 8_000;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
@@ -72,6 +73,7 @@ export const CORE_RULE_NUMBERS = [
   "608.2g",
   "500.1",
   "506.1",
+  "302.6",
   "704.3",
   "704.5a",
   "704.5f",
@@ -432,12 +434,16 @@ export async function assembleConfirmedEvidence(
     })),
   );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
-  const rulingBudget = { remaining: MAX_RULING_EVIDENCE_CHARACTERS, truncated: false };
+  const rulingShare = Math.floor(
+    MAX_RULING_EVIDENCE_CHARACTERS / Math.max(1, selectedCards.length),
+  );
+  let rulingsTruncated = false;
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
     const otherNames = selectedCards
       .filter((other) => other.card.id !== card.id)
       .flatMap((other) => namesOf(other.card));
-    const rulings = rankRulings(card.rulings, request.question, otherNames)
+    const rulingBudget = { remaining: rulingShare, truncated: false };
+    const rulings = rankRulings(card.rulings, request.question, otherNames, namesOf(card))
       .slice(0, MAX_RULINGS_PER_CARD)
       .flatMap((ruling) => {
         const text = takeText(ruling.text, MAX_RULING_TEXT_CHARACTERS, rulingBudget);
@@ -452,6 +458,7 @@ export async function assembleConfirmedEvidence(
             ]
           : [];
       });
+    rulingsTruncated ||= rulingBudget.truncated;
     const faces = card.faces.map((cardFace) => {
       const faceText = takeText(cardFace.oracleText, MAX_CARD_TEXT_CHARACTERS, cardBudget);
       return {
@@ -484,7 +491,7 @@ export async function assembleConfirmedEvidence(
     ...packet,
     cards,
     rules,
-    truncated: packet.truncated || cardBudget.truncated || rulingBudget.truncated,
+    truncated: packet.truncated || cardBudget.truncated || rulingsTruncated,
   });
 }
 
@@ -540,12 +547,26 @@ export function rankRulings<T extends { text: string; position: number }>(
   rulings: T[],
   question: string,
   otherCardNames: string[],
+  ownNames: string[] = [],
 ): T[] {
+  // The card's own name is in most of its rulings, so it says nothing about relevance.
+  const ownWords = new Set(
+    ownNames
+      .join(" ")
+      .toLowerCase()
+      .match(/[a-z][a-z'-]{3,}/g) ?? [],
+  );
   const words = new Set(
     (question.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [])
-      .filter((word) => !RULING_STOP_WORDS.has(word))
-      // A plain singular stem, so "lands" matches "land" and "swamps" matches "Swamp".
-      .map((word) => (word.length > 4 ? word.replace(/s$/, "") : word)),
+      .filter((word) => !RULING_STOP_WORDS.has(word) && !ownWords.has(word))
+      // Plain stems, so "lands" matches "land" and "copying" matches "copy".
+      .map((word) =>
+        word.length > 6 && word.endsWith("ing")
+          ? word.slice(0, -3)
+          : word.length > 4
+            ? word.replace(/s$/, "")
+            : word,
+      ),
   );
   const names = otherCardNames.map((name) => name.toLowerCase()).filter((name) => name.length > 2);
   const score = (text: string) => {

@@ -1,10 +1,4 @@
 import { CitationKind, type PrismaClient } from "@prisma/client";
-
-const CITATION_KINDS = {
-  RULE: CitationKind.RULE,
-  CARD_FACE: CitationKind.CARD,
-  CARD_RULING: CitationKind.CARD_RULING,
-} as const;
 import {
   persistedRulingResponseSchema,
   confirmedQuestionEvidenceRequestSchema,
@@ -14,6 +8,12 @@ import {
 } from "@mtg-rules/contracts";
 import { prisma } from "../db/client.js";
 import { attachToConversation, type RulingOwner } from "../conversations/attach.js";
+
+const CITATION_KINDS = {
+  RULE: CitationKind.RULE,
+  CARD_FACE: CitationKind.CARD,
+  CARD_RULING: CitationKind.CARD_RULING,
+} as const;
 
 export async function saveRuling(
   request: ConfirmedQuestionEvidenceRequest,

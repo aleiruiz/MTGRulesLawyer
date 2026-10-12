@@ -360,6 +360,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         },
         minimumRuleCount: 10,
         minimumOracleCardCount: 1,
+        minimumRulingCount: 1,
       };
       const firstRefresh = await refreshAllSources(
         prisma,

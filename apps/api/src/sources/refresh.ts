@@ -4,6 +4,7 @@ import { SourceRefreshStatus, SnapshotStatus } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import {
   importOracleBulk,
+  MINIMUM_OFFICIAL_RULINGS,
   ORACLE_IMPORTER_REVISION,
   PrismaOracleSnapshotWriter,
 } from "../cards/oracle-import.js";
@@ -31,6 +32,7 @@ export interface SourceRefreshDependencies {
   removeDownloadedOracleBulk: (download: DownloadedOracleBulk) => Promise<void>;
   minimumRuleCount: number;
   minimumOracleCardCount: number;
+  minimumRulingCount: number;
 }
 
 const defaultDependencies: SourceRefreshDependencies = {
@@ -41,6 +43,7 @@ const defaultDependencies: SourceRefreshDependencies = {
   removeDownloadedOracleBulk,
   minimumRuleCount: 1000,
   minimumOracleCardCount: 1000,
+  minimumRulingCount: MINIMUM_OFFICIAL_RULINGS,
 };
 
 interface RefreshOutcome {
@@ -151,6 +154,7 @@ async function refreshOracle(
         new Date(),
         dependencies.minimumOracleCardCount,
         rulingsDownload,
+        dependencies.minimumRulingCount,
       );
       return {
         sourceUrl: metadata.sourceUrl,

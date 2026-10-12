@@ -42,6 +42,8 @@ export interface OfficialRulingsSource {
   sourcePublishedAt: Date;
   checksumSha256: string;
   rulings: AsyncIterable<OfficialRulingInput>;
+  /** A short or empty rulings file (truncated, or its format changed) must not activate. */
+  minimumRulingCount: number;
 }
 
 export interface OracleSnapshotWriter {
@@ -71,6 +73,8 @@ const MAX_ORACLE_RECORD_BYTES = 1024 * 1024;
 // Increment when normalization changes so an unchanged source can be re-imported.
 export const ORACLE_IMPORTER_REVISION = 4;
 const MAX_RULING_CHARACTERS = 4_000;
+// Scryfall has about 80,000 Wizards rulings; far fewer means a truncated or changed file.
+export const MINIMUM_OFFICIAL_RULINGS = 10_000;
 const IMPORTER_REVISION_NOTE = "oracle-importer-revision=";
 // Art-series cards are collectible art with a game card's name and no rules of their own;
 // importing them makes name lookups offer a duplicate, non-playable choice.
@@ -298,6 +302,7 @@ export async function importOracleBulk(
   importedAt = new Date(),
   minimumCardCount = 1000,
   rulingsDownload?: DownloadedOracleBulk,
+  minimumRulingCount = MINIMUM_OFFICIAL_RULINGS,
 ): Promise<ImportOracleResult> {
   const datePart = download.metadata.updatedAt.toISOString().slice(0, 10).replaceAll("-", "");
   // The rulings checksum is part of the version so new rulings alone produce a new snapshot.
@@ -321,6 +326,7 @@ export async function importOracleBulk(
             sourcePublishedAt: rulingsDownload.metadata.updatedAt,
             checksumSha256: rulingsDownload.checksumSha256,
             rulings: readOfficialRulings(rulingsDownload.filePath),
+            minimumRulingCount,
           },
         }
       : {}),
@@ -541,6 +547,11 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
           }
           if (rulingBatch.length > 0)
             await transaction.cardRuling.createMany({ data: rulingBatch });
+          if (rulingCount < source.minimumRulingCount) {
+            throw new Error(
+              `Rulings bulk file contained only ${rulingCount} official rulings; expected at least ${source.minimumRulingCount}.`,
+            );
+          }
         }
 
         const [candidateCardCount, candidateFaceCount, candidateRulingCount, candidateSources] =
