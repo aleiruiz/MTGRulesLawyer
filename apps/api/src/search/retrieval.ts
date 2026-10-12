@@ -341,9 +341,24 @@ export async function assembleConfirmedEvidence(
     return { card, face, quantity: selection.quantity };
   });
   // Search terms come first: the search keeps the earliest terms, and these were chosen for it.
+  // Card names are removed from the text ("Sakashima of a Thousand Faces" otherwise pulls in the
+  // face-down rules) and the confirmed cards' rules text is searched instead, so keywords and
+  // abilities the cards have ("split second", "at the beginning of combat") find their rules.
+  const cardNames = selectedCards.flatMap(({ card }) => [
+    card.name,
+    ...card.faces.map((cardFace) => cardFace.name),
+  ]);
+  const cardText = selectedCards.map(({ card, face }) =>
+    withoutCardNames(face.oracleText || card.oracleText, cardNames),
+  );
+  const timingRules = needsStackTimingRules([request.question, ...cardText])
+    ? [`Rules ${STACK_TIMING_RULES.join(" ")}.`]
+    : [];
   const query = [
+    ...timingRules,
     ...request.gameState.searchTerms,
-    request.question,
+    withoutCardNames(request.question, cardNames),
+    ...cardText,
     ...request.gameState.events,
     ...request.gameState.knownFacts,
     ...request.gameState.missingFacts,
@@ -383,6 +398,34 @@ export async function assembleConfirmedEvidence(
     cards,
     truncated: packet.truncated || cardBudget.truncated,
   });
+}
+
+// How triggered abilities go on the stack, that the top object resolves first, and casting a
+// spell while an ability resolves. Questions about triggers and timing need these even when
+// their wording never appears in the question. The search reads rule numbers in the query.
+const STACK_TIMING_RULES = ["603.3b", "405.5", "608.2g"];
+const TIMING_WORDS =
+  /\b(?:at the beginning of|whenever|when|trigger(?:s|ed)?|stack|resolves?|resolution|respond)\b/i;
+
+function needsStackTimingRules(texts: string[]): boolean {
+  return texts.some((text) => TIMING_WORDS.test(text));
+}
+
+/** Removes card names (whole and before a comma, like "Gandalf") so they are not searched as rules terms. */
+function withoutCardNames(text: string, names: string[]): string {
+  const variants = [
+    ...new Set(
+      names.flatMap((name) => [name, name.split(",")[0] ?? ""]).filter((name) => name.length >= 3),
+    ),
+  ].sort((left, right) => right.length - left.length);
+  return variants.reduce(
+    (current, name) =>
+      current.replace(
+        new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"),
+        " ",
+      ),
+    text,
+  );
 }
 
 function takeText(

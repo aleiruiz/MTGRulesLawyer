@@ -173,6 +173,36 @@ void describe("Ruling evidence verification", () => {
     assert.deepEqual(result.citations, []);
   });
 
+  void it("accepts a supplied rule cited by its number but not an unseen one", () => {
+    const output = {
+      outcome: "resolved" as const,
+      summary: "Attackers are declared by the active player.",
+      summarySupport: "SUPPORTED" as const,
+      summaryCitationIds: ["508.1"],
+      reasoningSteps: [
+        {
+          text: "The active player declares.",
+          support: "SUPPORTED" as const,
+          citationIds: ["Rule 508.1"],
+        },
+      ],
+      assumptions: [],
+      clarificationQuestions: [],
+    };
+    const accepted = verifyRulingOutput(output, evidence, "test-model");
+    assert.equal(accepted.outcome, "resolved");
+    assert.deepEqual(
+      accepted.citations.map((citation) => citation.label),
+      ["508.1"],
+    );
+    const unseen = verifyRulingOutput(
+      { ...output, summaryCitationIds: ["999.9"] },
+      evidence,
+      "test-model",
+    );
+    assert.equal(unseen.outcome, "uncertain");
+  });
+
   void it("attaches citations only from the supplied snapshot and source records", () => {
     const result = verifyRulingOutput(
       {
