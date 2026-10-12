@@ -206,6 +206,18 @@ export function verifyRulingOutput(
   });
 }
 
+/** Turns a missing fact ("Whether the Bears are controlled by an opponent.") into a question. */
+export function toClarificationQuestion(fact: string): string {
+  const trimmed = fact.trim();
+  if (trimmed.endsWith("?")) return trimmed;
+  const statement = trimmed.replace(/[.;:,\s]+$/, "");
+  // Lowercase a leading connective so it reads as one sentence; keep names and card titles.
+  const phrased = /^(whether|if|who|what|which|when|where|how|why)\b/i.test(statement)
+    ? statement.charAt(0).toLowerCase() + statement.slice(1)
+    : statement;
+  return `Can you clarify ${phrased}?`;
+}
+
 export function createClarificationResponse(
   evidence: EvidenceSearchResponse,
   missingFacts: string[],
@@ -216,9 +228,7 @@ export function createClarificationResponse(
     reasoningSteps: [],
     summaryCitationIds: [],
     assumptions: [],
-    clarificationQuestions: missingFacts
-      .slice(0, 6)
-      .map((fact) => (fact.endsWith("?") ? fact : `Can you clarify ${fact}?`)),
+    clarificationQuestions: missingFacts.slice(0, 6).map(toClarificationQuestion),
     citations: [],
     snapshot: evidence.snapshot,
     sources: evidence.sources,
