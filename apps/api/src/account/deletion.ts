@@ -24,8 +24,10 @@ export class AuthIdentityDeletionError extends Error {
  * - reviewed challenges keep their audit trail but lose the player's text, proposed outcome and
  *   evaluation consent, and their user link is cleared;
  * - review events the account made as an admin keep the decision but lose the reviewer link;
- * - usage windows are deleted with the account.
- * Questions and rulings are not linked to accounts. Returns the Supabase user ID to delete next,
+ * - usage windows and saved judge conversations are deleted with the account;
+ * - the account's questions lose their user and conversation links, so their public rulings
+ *   (shared links, challenges) keep working without saying who asked.
+ * Returns the Supabase user ID to delete next,
  * or null when the account has no app record.
  */
 export async function deleteAppUserData(
