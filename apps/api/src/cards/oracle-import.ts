@@ -51,8 +51,16 @@ export interface ImportOracleResult {
 const MAX_ORACLE_JSONL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_ORACLE_RECORD_BYTES = 1024 * 1024;
 // Increment when normalization changes so an unchanged source can be re-imported.
-export const ORACLE_IMPORTER_REVISION = 1;
+export const ORACLE_IMPORTER_REVISION = 2;
 const IMPORTER_REVISION_NOTE = "oracle-importer-revision=";
+// Art-series cards are collectible art with a game card's name and no rules of their own;
+// importing them makes name lookups offer a duplicate, non-playable choice.
+const NON_GAME_LAYOUTS = new Set(["art_series"]);
+
+/** True for Oracle records that are not game pieces and should not be imported. */
+export function isNonGameOracleCard(card: OracleCardInput): boolean {
+  return NON_GAME_LAYOUTS.has(card.layout);
+}
 
 export function normalizeOracleCard(value: unknown): OracleCardInput {
   if (!isRecord(value)) {
@@ -186,7 +194,8 @@ export async function* readOracleCards(filePath: string): AsyncGenerator<OracleC
         } catch {
           throw new Error("Oracle bulk file contains an invalid JSON card record.");
         }
-        yield normalizeOracleCard(parsed);
+        const card = normalizeOracleCard(parsed);
+        if (!isNonGameOracleCard(card)) yield card;
         objectText = "";
         afterObject = true;
       }
@@ -220,7 +229,8 @@ async function* readOracleJsonLines(filePath: string): AsyncGenerator<OracleCard
     } catch {
       throw new Error("Oracle JSONL bulk file contains an invalid card record.");
     }
-    yield normalizeOracleCard(record);
+    const card = normalizeOracleCard(record);
+    if (!isNonGameOracleCard(card)) yield card;
   }
 }
 
