@@ -7,9 +7,14 @@ import { useAuth } from "../src/auth/AuthProvider";
 import { supabase } from "../src/auth/supabase";
 
 interface PendingEnrollment {
+  factorId: string;
   secret: string;
   uri: string;
 }
+
+// Keeps an unfinished setup key while the app runs, so leaving and reopening this screen does not
+// replace a key the admin may already have added to their authenticator app.
+const pendingEnrollments = new Map<string, PendingEnrollment>();
 
 /** Admin step-up: enroll an authenticator app once, then enter a fresh code before reviewing. */
 export default function AdminVerifyScreen() {
@@ -20,10 +25,16 @@ export default function AdminVerifyScreen() {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [message, setMessage] = useState("");
+  const [setupFailed, setSetupFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const userId = session?.user.id;
 
   useEffect(() => {
     let active = true;
+    // Never keep another account's setup key on screen while this account's factors load.
+    setFactorId(null);
+    setEnrollment(null);
+    setCode("");
     if (!userId) {
       setLoading(false);
       return () => {
@@ -31,12 +42,25 @@ export default function AdminVerifyScreen() {
       };
     }
     setLoading(true);
+    setSetupFailed(false);
+    setMessage("");
     void (async () => {
       const { data, error } = await supabase.auth.mfa.listFactors();
       if (error) throw error;
       const verified = data.totp[0];
       if (verified) {
+        pendingEnrollments.delete(userId);
         if (active) setFactorId(verified.id);
+        return;
+      }
+      const pending = pendingEnrollments.get(userId);
+      if (
+        pending &&
+        data.all.some((factor) => factor.id === pending.factorId && factor.status === "unverified")
+      ) {
+        if (!active) return;
+        setFactorId(pending.factorId);
+        setEnrollment(pending);
         return;
       }
       // An abandoned enrollment cannot be completed without its secret, so start a new one.
@@ -53,12 +77,20 @@ export default function AdminVerifyScreen() {
         friendlyName: "MTG Rules Lawyer admin",
       });
       if (enrollError) throw enrollError;
+      const created = {
+        factorId: enrolled.id,
+        secret: enrolled.totp.secret,
+        uri: enrolled.totp.uri,
+      };
+      pendingEnrollments.set(userId, created);
       if (!active) return;
-      setFactorId(enrolled.id);
-      setEnrollment({ secret: enrolled.totp.secret, uri: enrolled.totp.uri });
+      setFactorId(created.factorId);
+      setEnrollment(created);
     })()
       .catch(() => {
-        if (active) setMessage("Authenticator setup is unavailable. Try again later.");
+        if (!active) return;
+        setSetupFailed(true);
+        setMessage("Authenticator setup is unavailable. Check your connection and try again.");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -66,7 +98,7 @@ export default function AdminVerifyScreen() {
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [userId, attempt]);
 
   async function verify() {
     if (!factorId) return;
@@ -84,6 +116,7 @@ export default function AdminVerifyScreen() {
         return;
       }
       setCode("");
+      if (userId) pendingEnrollments.delete(userId);
       if (router.canGoBack()) router.back();
       else router.replace("/review-queue");
     } catch {
@@ -161,6 +194,15 @@ export default function AdminVerifyScreen() {
           <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.message}>
             {message}
           </Text>
+        ) : null}
+        {setupFailed ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setAttempt((current) => current + 1)}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>Try again</Text>
+          </Pressable>
         ) : null}
       </View>
     </SafeAreaView>

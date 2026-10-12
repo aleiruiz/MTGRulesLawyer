@@ -254,6 +254,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
   app.get("/api/admin/challenges", async (request, reply) => {
+    if (request.appUser?.role !== "ADMIN") return reply.code(403).send({ error: "ADMIN_REQUIRED" });
     try {
       return reply.send(reviewQueueResponseSchema.parse(await readReviewQueue()));
     } catch (error) {

@@ -11,7 +11,7 @@ export const DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS = 60 * 60;
 const MIN_ADMIN_AUTH_MAX_AGE_SECONDS = 60;
 const MAX_ADMIN_AUTH_MAX_AGE_SECONDS = 24 * 60 * 60;
 
-/** Reads ADMIN_AUTH_MAX_AGE_SECONDS, falling back to one hour for missing or out-of-range values. */
+/** Reads ADMIN_AUTH_MAX_AGE_SECONDS (one hour when unset); an invalid value stops startup. */
 export function readAdminAuthMaxAgeSeconds(value: string | undefined): number {
   if (value === undefined || value.trim() === "") return DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS;
   const seconds = Number(value);
@@ -20,7 +20,9 @@ export function readAdminAuthMaxAgeSeconds(value: string | undefined): number {
     seconds < MIN_ADMIN_AUTH_MAX_AGE_SECONDS ||
     seconds > MAX_ADMIN_AUTH_MAX_AGE_SECONDS
   ) {
-    return DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS;
+    throw new Error(
+      `ADMIN_AUTH_MAX_AGE_SECONDS must be a whole number from ${MIN_ADMIN_AUTH_MAX_AGE_SECONDS} to ${MAX_ADMIN_AUTH_MAX_AGE_SECONDS}.`,
+    );
   }
   return seconds;
 }

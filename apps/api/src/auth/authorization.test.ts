@@ -78,12 +78,12 @@ void describe("Supabase access token verification", () => {
 });
 
 void describe("admin sign-in age setting", () => {
-  void it("defaults to one hour and ignores invalid values", () => {
+  void it("defaults to one hour and rejects invalid values", () => {
     assert.equal(readAdminAuthMaxAgeSeconds(undefined), 3_600);
     assert.equal(readAdminAuthMaxAgeSeconds("900"), 900);
-    assert.equal(readAdminAuthMaxAgeSeconds("0"), 3_600);
-    assert.equal(readAdminAuthMaxAgeSeconds("not-a-number"), 3_600);
-    assert.equal(readAdminAuthMaxAgeSeconds("604800"), 3_600);
+    for (const invalid of ["0", "30", "not-a-number", "86401", "1.5"]) {
+      assert.throws(() => readAdminAuthMaxAgeSeconds(invalid), invalid);
+    }
   });
 });
 
@@ -149,6 +149,21 @@ void describe("API authorization", () => {
     });
     assert.equal(me.statusCode, 200);
     assert.deepEqual(me.json(), { userId: "valid-user", role: "USER" });
+  });
+
+  void it("protects admin and auth routes reached through percent-encoded paths", async () => {
+    for (const url of ["/api/%61dmin/test", "/%61pi/admin/test", "/api/admin/%74est"]) {
+      const anonymous = await authApp.inject({ method: "GET", url });
+      assert.equal(anonymous.statusCode, 401, url);
+      const staleAdmin = await authApp.inject({
+        method: "GET",
+        url,
+        headers: { authorization: "Bearer stale-admin" },
+      });
+      assert.deepEqual(staleAdmin.json(), { error: "ADMIN_REAUTHENTICATION_REQUIRED" }, url);
+    }
+    const encodedAuth = await authApp.inject({ method: "GET", url: "/api/%61uth/me" });
+    assert.equal(encodedAuth.statusCode, 401);
   });
 
   void it("checks admin role from the database-backed resolver on every request", async () => {
