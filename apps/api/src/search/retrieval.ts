@@ -114,12 +114,18 @@ export async function assembleEvidence(
         select: { id: true, number: true },
       })
     : [];
+  // Match rules containing any of the question's terms and rank by how many they share. Requiring
+  // every term (websearch_to_tsquery) found nothing for real questions, which also carry the
+  // interpreted events, facts, and search terms.
   const fullTextHits = await client.$queryRaw<Array<{ id: string; number: string }>>(Prisma.sql`
+    WITH query AS (
+      SELECT replace(plainto_tsquery('english', ${request.question})::text, ' & ', ' | ')::tsquery AS terms
+    )
     SELECT r."id", r."number"
-    FROM "Rule" AS r
+    FROM "Rule" AS r, query
     WHERE r."snapshotId" = ${snapshot.id}::uuid
-      AND to_tsvector('english', r."text") @@ websearch_to_tsquery('english', ${request.question})
-    ORDER BY ts_rank_cd(to_tsvector('english', r."text"), websearch_to_tsquery('english', ${request.question})) DESC,
+      AND to_tsvector('english', r."text") @@ query.terms
+    ORDER BY ts_rank_cd(to_tsvector('english', r."text"), query.terms) DESC,
       r."sortOrder" ASC
     LIMIT ${MAX_MATCHING_RULES + 1}
   `);

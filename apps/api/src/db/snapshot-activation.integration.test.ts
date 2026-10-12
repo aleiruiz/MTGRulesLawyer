@@ -219,6 +219,20 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
       assert.ok(
         packet.rules.some((rule) => rule.number === "100" && rule.includedBecause === "PARENT"),
       );
+      // A real question uses words no single rule contains; any shared term should still match.
+      const conversational = await assembleEvidence(
+        {
+          question:
+            "My opponent blocked my attacker with two creatures. How does my creature split its damage between them?",
+          cardNames: [],
+        },
+        prisma,
+      );
+      assert.ok(
+        conversational.rules.some(
+          (rule) => rule.number === "100.1" && rule.includedBecause === "MATCH",
+        ),
+      );
       const activeCard = await prisma.card.findFirstOrThrow({
         where: { snapshotId: refreshed.id },
         select: { oracleId: true },
