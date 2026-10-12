@@ -53,7 +53,17 @@ function stripUnsafeControlCharacters(value: string): string {
     .join("");
 }
 
+/** Earlier answers a follow-up question builds on, oldest first. */
+export const MAX_PRIOR_TURNS = 5;
+
+export const priorRulingIdsSchema = z
+  .array(z.string().uuid())
+  .max(MAX_PRIOR_TURNS)
+  .refine((ids) => new Set(ids).size === ids.length)
+  .default([]);
+
 export const questionInterpretRequestSchema = z.object({
+  priorRulingIds: priorRulingIdsSchema,
   question: z
     .string()
     .transform(stripUnsafeControlCharacters)
@@ -101,6 +111,9 @@ export const MAX_CONFIRMED_CARDS = 10;
 
 export const confirmedQuestionEvidenceRequestSchema = z.object({
   question: z.string().trim().min(1).max(4_000),
+  priorRulingIds: priorRulingIdsSchema,
+  /** A signed-in user's saved conversation to append this turn to. */
+  conversationId: z.string().uuid().optional(),
   gameState: z
     .object({
       events: z.array(z.string().trim().min(1).max(300)).max(12).default([]),
@@ -236,9 +249,48 @@ export const persistedRulingResponseSchema = z.object({
     )
     .max(MAX_CONFIRMED_CARDS),
   ruling: rulingGenerationResponseSchema,
+  /** Set when the ruling was saved to the signed-in user's conversation history. */
+  conversationId: z.string().uuid().nullable().optional(),
 });
 
 export type PersistedRulingResponse = z.infer<typeof persistedRulingResponseSchema>;
+
+export const MAX_SAVED_CONVERSATIONS = 10;
+
+export const conversationSummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().max(160),
+  updatedAt: z.string().datetime(),
+  turnCount: z.number().int().nonnegative(),
+  lastOutcome: rulingGenerationResponseSchema.shape.outcome.nullable(),
+});
+
+export const conversationListResponseSchema = z.object({
+  conversations: z.array(conversationSummarySchema).max(MAX_SAVED_CONVERSATIONS),
+});
+
+export const conversationDetailResponseSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().max(160),
+  updatedAt: z.string().datetime(),
+  turns: z.array(
+    z.object({
+      ruling: persistedRulingResponseSchema,
+      cards: z.array(
+        z.object({
+          oracleId: z.string(),
+          name: z.string(),
+          faceIndex: z.number().int().nonnegative(),
+          quantity: z.number().int().positive(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
+export type ConversationListResponse = z.infer<typeof conversationListResponseSchema>;
+export type ConversationDetailResponse = z.infer<typeof conversationDetailResponseSchema>;
 
 export const challengeSubmissionRequestSchema = z.object({
   explanation: z.string().trim().min(10).max(4_000),

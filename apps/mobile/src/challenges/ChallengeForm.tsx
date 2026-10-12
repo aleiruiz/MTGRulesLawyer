@@ -1,6 +1,8 @@
+import { colors, fonts } from "../theme";
 import { useState } from "react";
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import Text from "../ui/Text";
 import {
   challengeResponseSchema,
   challengeSubmissionRequestSchema,
@@ -79,6 +81,7 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
       ) : (
         <>
           <TextInput
+            placeholderTextColor={colors.textSubtle}
             accessibilityLabel="Challenge explanation"
             multiline
             maxLength={4_000}
@@ -142,41 +145,42 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 10, padding: 14, borderRadius: 10, backgroundColor: "#f5f2e9" },
-  title: { color: "#18312f", fontSize: 18, fontWeight: "700" },
-  help: { color: "#596d67", fontSize: 13, lineHeight: 19 },
+  container: { gap: 10, padding: 14, borderRadius: 10, backgroundColor: colors.background },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 18 },
+  help: { color: colors.textMuted, fontSize: 13, lineHeight: 19 },
   input: {
+    color: colors.text,
     minHeight: 110,
     textAlignVertical: "top",
     padding: 12,
     borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   consent: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 4 },
-  consentMark: { color: "#1f5d50", fontSize: 20, lineHeight: 22 },
+  consentMark: { color: colors.goldBright, fontSize: 20, lineHeight: 22 },
   choice: {
     paddingHorizontal: 9,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: "#a5b4ab",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  selectedChoice: { borderColor: "#1f5d50", backgroundColor: "#e1efe7" },
-  choiceText: { color: "#18312f", fontSize: 12, textTransform: "capitalize" },
+  selectedChoice: { borderColor: colors.gold, backgroundColor: colors.successSurface },
+  choiceText: { color: colors.text, fontSize: 12, textTransform: "capitalize" },
   button: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 9,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
   },
-  buttonText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  buttonText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
   disabled: { opacity: 0.45 },
-  link: { color: "#145da0", textDecorationLine: "underline" },
-  message: { color: "#49615c", fontWeight: "600" },
+  link: { color: colors.goldBright, textDecorationLine: "underline" },
+  message: { color: colors.textMuted, fontWeight: "600" },
 });

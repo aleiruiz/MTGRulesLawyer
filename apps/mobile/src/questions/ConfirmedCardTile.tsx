@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import Text from "../ui/Text";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
+import { colors } from "../theme";
 
 type Card = CardLookupResponse["cards"][number];
 
@@ -98,25 +100,30 @@ const styles = StyleSheet.create({
     gap: 9,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#d3d9d3",
+    borderColor: colors.border,
   },
-  cardTitle: { color: "#18312f", fontSize: 16, fontWeight: "700" },
-  faceName: { color: "#18312f", fontWeight: "700" },
-  oracleText: { color: "#33443f", minHeight: 52 },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  faceName: { color: colors.text, fontWeight: "700" },
+  oracleText: { color: colors.text, minHeight: 52 },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#31695d",
+    borderColor: colors.gold,
     borderRadius: 9,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  secondaryButtonText: { color: "#174b40", fontSize: 14, fontWeight: "700", textAlign: "center" },
-  countText: { textAlign: "center", color: "#33443f", fontWeight: "600" },
+  secondaryButtonText: {
+    color: colors.goldBright,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  countText: { textAlign: "center", color: colors.text, fontWeight: "600" },
   inlineButtons: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   smallButton: {
     minWidth: 48,
@@ -124,16 +131,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#e5eee9",
+    backgroundColor: colors.successSurface,
   },
-  smallButtonText: { color: "#174b40", fontSize: 24, fontWeight: "700" },
+  smallButtonText: { color: colors.goldBright, fontSize: 24, fontWeight: "700" },
   removeButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#fae9e7",
+    backgroundColor: colors.dangerSurface,
   },
-  removeButtonText: { color: "#8b2926", fontWeight: "700" },
-  oracleId: { color: "#68736d", fontSize: 11 },
+  removeButtonText: { color: colors.danger, fontWeight: "700" },
+  oracleId: { color: colors.textMuted, fontSize: 11 },
 });

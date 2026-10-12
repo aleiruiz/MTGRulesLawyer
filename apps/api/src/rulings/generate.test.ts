@@ -100,6 +100,21 @@ void describe("Ruling evidence verification", () => {
     assert.equal(toClarificationQuestion("Who controls it?"), "Who controls it?");
   });
 
+  void it("adds prior turns only for follow-ups and marks them as non-evidence", () => {
+    const request = { question: "What if it had hexproof?", confirmedCards: [] };
+    const firstQuestion = JSON.parse(buildModelPrompt(request, evidence)) as Record<
+      string,
+      unknown
+    >;
+    assert.equal("priorTurns" in firstQuestion, false);
+    const priorTurns = [{ question: "Does it fizzle?", outcome: "resolved", summary: "Yes." }];
+    const followUp = JSON.parse(buildModelPrompt(request, evidence, priorTurns)) as {
+      priorTurns: typeof priorTurns;
+    };
+    assert.deepEqual(followUp.priorTurns, priorTurns);
+    assert.match(RULING_SYSTEM_PROMPT, /not evidence and must never be cited/i);
+  });
+
   void it("estimates provider cost from recorded token usage only when rates are configured", () => {
     assert.equal(
       estimateAiTokenCostMicros(2_000, 1_000, {

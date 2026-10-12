@@ -246,8 +246,16 @@ export async function decideChallenge(
 
     const toStatus =
       decision.decision === "approve" ? ChallengeStatus.APPROVED : ChallengeStatus.REJECTED;
+    const includeInEvaluation =
+      decision.decision === "approve" && decision.correction.includeInEvaluation;
     const updated = await tx.challenge.updateMany({
-      where: { id: challengeId, status: challenge.status },
+      // Re-check consent with the status: the player may withdraw it (by deleting their account)
+      // after this transaction read the challenge.
+      where: {
+        id: challengeId,
+        status: challenge.status,
+        ...(includeInEvaluation ? { evaluationConsent: true } : {}),
+      },
       data: { status: toStatus },
     });
     if (updated.count !== 1) throw new ReviewChallengeConflictError();

@@ -210,17 +210,34 @@ model CardFace {
 model Question {
   id             String         @id @default(uuid()) @db.Uuid
   userId         String?        @db.Uuid
+  conversationId String?        @db.Uuid
   text           String         @db.Text
   gameState      Json?
   status         QuestionStatus @default(SUBMITTED)
   createdAt      DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
   user           AppUser?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   confirmedCards QuestionCard[]
   ruling         Ruling?
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+/// A signed-in user's chat with the judge: a first question and its follow-ups, in order.
+/// Only each user's ten most recently active conversations are kept.
+model Conversation {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @db.Uuid
+  title     String     @db.VarChar(160)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(6)
+  user      AppUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([userId, updatedAt(sort: Desc)])
 }
 
 model QuestionCard {
@@ -295,15 +312,16 @@ model RulingCitation {
 }
 
 model AppUser {
-  id             String        @id @default(uuid()) @db.Uuid
-  supabaseUserId String        @unique
-  role           UserRole      @default(USER)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  id             String         @id @default(uuid()) @db.Uuid
+  supabaseUserId String         @unique
+  role           UserRole       @default(USER)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
   questions      Question[]
   challenges     Challenge[]
   reviewEvents   ReviewEvent[]
   usageWindows   UsageWindow[]
+  conversations  Conversation[]
 
   @@index([role, createdAt])
 }
@@ -311,7 +329,8 @@ model AppUser {
 model Challenge {
   id                String          @id @default(uuid()) @db.Uuid
   rulingVersionId   String          @db.Uuid
-  userId            String          @db.Uuid
+  /// Null after the player deletes their account.
+  userId            String?         @db.Uuid
   explanation       String          @db.Text
   proposedOutcome   RulingOutcome?
   evaluationConsent Boolean         @default(false)
@@ -319,7 +338,7 @@ model Challenge {
   createdAt         DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
   rulingVersion     RulingVersion   @relation(fields: [rulingVersionId], references: [id], onDelete: Restrict)
-  user              AppUser         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              AppUser?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   reviewEvents      ReviewEvent[]
 
   @@unique([userId, rulingVersionId])
@@ -331,7 +350,8 @@ model Challenge {
 model ReviewEvent {
   id                  String               @id @default(uuid()) @db.Uuid
   challengeId         String               @db.Uuid
-  reviewerId          String               @db.Uuid
+  /// Null after the reviewer deletes their account.
+  reviewerId          String?              @db.Uuid
   decision            ReviewDecision
   errorCategory       ReviewErrorCategory?
   includeInEvaluation Boolean              @default(false)
@@ -342,7 +362,7 @@ model ReviewEvent {
   correctedVersionId  String?              @unique @db.Uuid
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   challenge           Challenge            @relation(fields: [challengeId], references: [id], onDelete: Restrict)
-  reviewer            AppUser              @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewer            AppUser?             @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
   correctedVersion    RulingVersion?       @relation("CorrectedVersion", fields: [correctedVersionId], references: [id], onDelete: Restrict)
 
   @@index([challengeId, createdAt])
