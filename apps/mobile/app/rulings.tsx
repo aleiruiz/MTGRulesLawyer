@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, Link } from "expo-router";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { persistedRulingResponseSchema, type PersistedRulingResponse } from "@mtg-rules/contracts";
 import { apiUrl } from "../src/api-url";

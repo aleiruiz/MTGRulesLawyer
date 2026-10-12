@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import Text from "./Text";
 import ManaLoader from "./ManaLoader";
 import GrimoireBackdrop from "./GrimoireBackdrop";
 import { colors, fonts } from "../theme";

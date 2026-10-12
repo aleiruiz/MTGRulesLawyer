@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import Text from "../../src/ui/Text";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/auth/AuthProvider";
 import { completeOAuthCallback, getAuthRedirectUrl } from "../../src/auth/oauth";

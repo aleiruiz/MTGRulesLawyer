@@ -7,10 +7,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import Text from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccountButton from "../ui/AccountButton";
 import GrimoireBackdrop from "../ui/GrimoireBackdrop";

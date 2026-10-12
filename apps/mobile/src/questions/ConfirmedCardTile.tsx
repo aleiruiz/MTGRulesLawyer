@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import Text from "../ui/Text";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
 import { colors } from "../theme";
 

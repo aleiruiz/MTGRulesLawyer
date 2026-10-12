@@ -7,10 +7,10 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import Text from "../src/ui/Text";
 import {
   reviewDecisionRequestSchema,
   reviewQueueResponseSchema,
@@ -554,7 +554,7 @@ export default function ReviewQueueScreen() {
                 onPress={() => void decide(item.challengeId, "reject")}
                 style={styles.rejectButton}
               >
-                <Text style={styles.buttonText}>Reject challenge</Text>
+                <Text style={styles.rejectButtonText}>Reject challenge</Text>
               </Pressable>
             </View>
           </View>
@@ -614,5 +614,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold,
   },
   buttonText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  rejectButtonText: { color: colors.text, fontSize: 14, fontWeight: "700" },
   message: { color: colors.warning, fontWeight: "600" },
 });

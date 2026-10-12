@@ -1,7 +1,8 @@
 import { colors, fonts } from "../theme";
 import { useState } from "react";
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import Text from "../ui/Text";
 import {
   challengeResponseSchema,
   challengeSubmissionRequestSchema,

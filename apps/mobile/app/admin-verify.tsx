@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/AuthProvider";
 import { supabase } from "../src/auth/supabase";
