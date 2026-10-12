@@ -372,15 +372,15 @@
     "level": "hard",
     "question": "I control Exquisite Blood and Sanguine Bond and my opponent is at 10 life. What happens if my opponent loses 1 life?",
     "cards": ["Exquisite Blood", "Sanguine Bond"],
-    "expected": "Your opponent loses the game. Each life loss triggers Exquisite Blood, each life gain triggers Sanguine Bond, and the two keep triggering each other until your opponent reaches 0 life and loses as a state-based action. The loop is mandatory but it ends, so it is not a draw.",
-    "source": "CR 704.5a, 732.4; Exquisite Blood and Sanguine Bond Oracle text"
+    "expected": "Your opponent loses the game. Each life loss triggers Exquisite Blood, and each life gain triggers Sanguine Bond, whose only legal target is your one opponent, so both triggers are mandatory and keep feeding each other. State-based actions are checked between them, so when your opponent reaches 0 life they lose. The loop is mandatory but it ends, so it is not a draw.",
+    "source": "CR 104.4b, 704.3, 704.5a; Sanguine Bond official ruling (2021-03-19)"
   },
   {
     "id": "H13",
     "level": "hard",
     "question": "I cast Animate Dead on Worldgorger Dragon in my graveyard. It's the only creature card in any graveyard and no player has any other spells or abilities. What happens?",
     "cards": ["Animate Dead", "Worldgorger Dragon"],
-    "expected": "The game is a draw. The Dragon exiles Animate Dead, so the Dragon is sacrificed, Animate Dead returns and must return the Dragon again, and nothing can stop this loop of mandatory actions.",
+    "expected": "The game is a draw. The Dragon's enter trigger exiles Animate Dead, so Animate Dead's leave trigger makes you sacrifice the Dragon. The Dragon's leave trigger then returns Animate Dead, which must enchant a creature card in a graveyard, and the Dragon is the only one, so it returns the Dragon again. Every step is mandatory and nothing can stop it, so the game is a draw.",
     "source": "CR 104.4b, 732.4; Worldgorger Dragon and Animate Dead Oracle text"
   }
 ]
