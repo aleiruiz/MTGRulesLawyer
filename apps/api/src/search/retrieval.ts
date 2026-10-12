@@ -87,6 +87,8 @@ export const CORE_RULE_NUMBERS = [
   "506.1",
   // A creature that leaves the battlefield is removed from combat (no longer blocking).
   "506.4",
+  // How a blocked creature assigns combat damage, including with no blockers left.
+  "510.1c",
   "302.6",
   // Loops: a mandatory loop is a draw, an optional one is shortcut to a chosen number.
   "104.4b",
@@ -677,10 +679,22 @@ export async function rulesForCardKeywords(
         .trim()
         .toLowerCase(),
     )
-    .filter(Boolean);
+    .filter(Boolean)
+    // Keywords a card grants ("Equipped creature gets +1/+1 and has double strike and
+    // trample.", "Creatures you control gain flying until end of turn.") count too: the list
+    // after has/have/gain(s) becomes its own keyword line.
+    .flatMap((line) => [
+      line,
+      ...[
+        ...line.matchAll(
+          /\b(?:has|have|gains?)\s+([a-z ,'-]+?)(?:\.|$|\s+until\b|\s+as long\b|\s+for\b)/g,
+        ),
+      ].map((match) => (match[1] ?? "").replace(/\s+and\s+/g, ", ")),
+    ]);
   if (keywordLines.length === 0) return [];
   const headings = await client.rule.findMany({
-    where: { snapshotId, number: { startsWith: "702." } },
+    // Only the keyword headings (children of 702), not their thousand subrules.
+    where: { snapshotId, parent: { number: "702" } },
     orderBy: { sortOrder: "asc" },
     select: { id: true, number: true, text: true },
   });
@@ -691,7 +705,13 @@ export async function rulesForCardKeywords(
       // A keyword line lists keywords separated by commas, each maybe followed by a cost or
       // number ("Ward {2}", "Disguise {3}{R}{R}", "Toxic 1").
       return keywordLines.some((line) =>
-        line.split(/[,;]\s*/).some((part) => part === keyword || part.startsWith(`${keyword} `)),
+        line.split(/[,;]\s*/).some(
+          (part) =>
+            part === keyword ||
+            part.startsWith(`${keyword} `) ||
+            // "Ward—Pay 3 life", "Escape—{3}{B}{B}, Exile five other cards"
+            part.startsWith(`${keyword}—`),
+        ),
       );
     })
     .slice(0, MAX_CARD_KEYWORDS);
@@ -701,11 +721,17 @@ export async function rulesForCardKeywords(
     orderBy: { sortOrder: "asc" },
     select: { id: true, number: true, text: true, parentId: true },
   });
+  // Each keyword gets an equal share, so an early keyword cannot crowd out a later one's
+  // exceptions (four rules each still reach 702.19d).
+  const perKeyword = Math.min(
+    MAX_RULES_PER_CARD_KEYWORD,
+    Math.max(4, Math.floor(MAX_CARD_KEYWORD_RULES / keywords.length)),
+  );
   return keywords
     .flatMap((keyword) =>
       subrules
         .filter(({ parentId }) => parentId === keyword.id)
-        .slice(0, MAX_RULES_PER_CARD_KEYWORD)
+        .slice(0, perKeyword)
         .map((rule) => ({
           id: rule.id,
           number: rule.number,

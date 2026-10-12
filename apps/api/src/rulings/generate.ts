@@ -273,6 +273,8 @@ export function citeRulesById(
         .flatMap((face) => [
           [cardAlias(cardIndex), face.id] as const,
           [`${cardAlias(cardIndex)}.face`, face.id] as const,
+          // The prompt also lists the card's Oracle ID; models sometimes cite it for the card.
+          [card.oracleId.toLowerCase(), face.id] as const,
         ]),
       ...(card.rulings ?? []).map(
         (ruling, rulingIndex) => [rulingAlias(cardIndex, rulingIndex), ruling.id] as const,

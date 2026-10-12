@@ -224,6 +224,10 @@ void describe("card keyword rules", () => {
       { id: "tr", number: "702.19", text: "Trample", parentId: null },
       { id: "wa", number: "702.21", text: "Ward", parentId: null },
       { id: "fl", number: "702.9", text: "Flying", parentId: null },
+      { id: "es", number: "702.138", text: "Escape", parentId: null },
+      { id: "es-a", number: "702.138a", text: "Escape a.", parentId: "es" },
+      { id: "ll", number: "702.15", text: "Lifelink", parentId: null },
+      { id: "ll-a", number: "702.15a", text: "Lifelink a.", parentId: "ll" },
       ...["a", "b", "c", "d"].map((letter) => ({
         id: `tr-${letter}`,
         number: `702.19${letter}`,
@@ -251,6 +255,7 @@ void describe("card keyword rules", () => {
       [
         "Double strike, trample\nWard {2} (Whenever this becomes the target...)",
         "This creature can't block flying creatures.",
+        "Escape—{3}{B}{B}, Exile five other cards from your graveyard.",
       ],
       "snapshot-id",
       client,
@@ -258,7 +263,17 @@ void describe("card keyword rules", () => {
     // Flying only appears in a sentence, not a keyword line, so it brings nothing.
     assert.deepEqual(
       rules.map(({ number }) => number),
-      ["702.4a", "702.19a", "702.19b", "702.19c", "702.19d", "702.21a"],
+      ["702.4a", "702.19a", "702.19b", "702.19c", "702.19d", "702.21a", "702.138a"],
+    );
+    // A keyword the card grants counts too.
+    const granted = await rulesForCardKeywords(
+      ["Equipped creature gets +1/+1 and has lifelink and trample."],
+      "snapshot-id",
+      client,
+    );
+    assert.deepEqual(
+      granted.map(({ number }) => number),
+      ["702.19a", "702.19b", "702.19c", "702.19d", "702.15a"],
     );
   });
 });
