@@ -13,9 +13,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/cinzel": "^0.4.2",
+    "@expo-google-fonts/cormorant-garamond": "^0.4.1",
+    "@expo/vector-icons": "^15.0.3",
     "@mtg-rules/contracts": "workspace:*",
     "@supabase/supabase-js": "2.117.3",
     "expo": "~54.0.20",
+    "expo-font": "~14.0.12",
+    "expo-linear-gradient": "~15.0.7",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.14",
     "expo-secure-store": "~15.0.8",

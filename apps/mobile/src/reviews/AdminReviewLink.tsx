@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "expo-router";
 import { useAuth } from "../auth/AuthProvider";
 import { apiUrl } from "../api-url";
+import { colors } from "../theme";
 
 export default function AdminReviewLink() {
   const { session } = useAuth();
@@ -39,7 +40,7 @@ export default function AdminReviewLink() {
       style={{
         alignSelf: "center",
         padding: 10,
-        color: "#145da0",
+        color: colors.goldBright,
         textDecorationLine: "underline",
       }}
     >

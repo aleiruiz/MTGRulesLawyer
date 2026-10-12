@@ -1,3 +1,4 @@
+import { colors, fonts } from "../src/theme";
 import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import {
@@ -6,10 +7,10 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import Text from "../src/ui/Text";
 import {
   reviewDecisionRequestSchema,
   reviewQueueResponseSchema,
@@ -303,6 +304,7 @@ export default function ReviewQueueScreen() {
               </Text>
             ) : null}
             <TextInput
+              placeholderTextColor={colors.textSubtle}
               accessibilityLabel={`Information needed for challenge ${item.challengeId}`}
               multiline
               maxLength={2_000}
@@ -322,6 +324,7 @@ export default function ReviewQueueScreen() {
             </Pressable>
             <Text style={styles.sectionTitle}>Record a decision</Text>
             <TextInput
+              placeholderTextColor={colors.textSubtle}
               accessibilityLabel={`Decision reason for challenge ${item.challengeId}`}
               multiline
               maxLength={2_000}
@@ -424,6 +427,7 @@ export default function ReviewQueueScreen() {
                   exporter uses this fixture as a unit and does not copy content from the challenge.
                 </Text>
                 <TextInput
+                  placeholderTextColor={colors.textSubtle}
                   accessibilityLabel={`Complete reviewed evaluation fixture JSON for challenge ${item.challengeId}`}
                   multiline
                   maxLength={20_000}
@@ -488,6 +492,7 @@ export default function ReviewQueueScreen() {
               )}
             </View>
             <TextInput
+              placeholderTextColor={colors.textSubtle}
               accessibilityLabel={`Corrected ruling summary for challenge ${item.challengeId}`}
               multiline
               maxLength={1_200}
@@ -512,6 +517,7 @@ export default function ReviewQueueScreen() {
               style={styles.input}
             />
             <TextInput
+              placeholderTextColor={colors.textSubtle}
               accessibilityLabel={`Corrected ruling reasoning for challenge ${item.challengeId}`}
               multiline
               maxLength={800}
@@ -548,7 +554,7 @@ export default function ReviewQueueScreen() {
                 onPress={() => void decide(item.challengeId, "reject")}
                 style={styles.rejectButton}
               >
-                <Text style={styles.buttonText}>Reject challenge</Text>
+                <Text style={styles.rejectButtonText}>Reject challenge</Text>
               </Pressable>
             </View>
           </View>
@@ -559,15 +565,15 @@ export default function ReviewQueueScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f4f1e8" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   container: { width: "100%", maxWidth: 800, alignSelf: "center", padding: 18, gap: 14 },
-  title: { color: "#17212b", fontSize: 28, fontWeight: "800" },
-  card: { gap: 10, padding: 16, borderRadius: 14, backgroundColor: "#fff" },
-  status: { color: "#145da0", fontSize: 13, fontWeight: "800", textTransform: "uppercase" },
-  sectionTitle: { color: "#17212b", fontSize: 16, fontWeight: "700" },
-  body: { color: "#303b45", fontSize: 15, lineHeight: 22 },
-  meta: { color: "#5b5a55", fontSize: 12, lineHeight: 18 },
-  citation: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: "#f7f6f2" },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  card: { gap: 10, padding: 16, borderRadius: 14, backgroundColor: colors.surface },
+  status: { color: colors.goldBright, fontSize: 13, fontWeight: "800", textTransform: "uppercase" },
+  sectionTitle: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 16 },
+  body: { color: colors.text, fontSize: 15, lineHeight: 22 },
+  meta: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  citation: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: colors.background },
   section: { gap: 8, paddingTop: 8 },
   evalToggle: { minHeight: 44, justifyContent: "center" },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -575,12 +581,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: "#a5b4ab",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  selectedChoice: { borderColor: "#1f5d50", backgroundColor: "#e1efe7" },
-  choiceText: { color: "#18312f", fontSize: 12, textTransform: "capitalize" },
+  selectedChoice: { borderColor: colors.gold, backgroundColor: colors.successSurface },
+  choiceText: { color: colors.text, fontSize: 12, textTransform: "capitalize" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   rejectButton: {
     minHeight: 44,
@@ -591,11 +597,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#8b3028",
   },
   input: {
+    color: colors.text,
     minHeight: 82,
     padding: 10,
     textAlignVertical: "top",
     borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderColor: colors.border,
     borderRadius: 8,
   },
   button: {
@@ -604,8 +611,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 9,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
   },
-  buttonText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  message: { color: "#804700", fontWeight: "600" },
+  buttonText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  rejectButtonText: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  message: { color: colors.warning, fontWeight: "600" },
 });
