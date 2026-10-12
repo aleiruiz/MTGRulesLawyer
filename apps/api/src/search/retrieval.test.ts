@@ -8,6 +8,7 @@ import {
   rankRulings,
   withCoreRules,
   withoutCardNames,
+  withSubrulesOfHeadings,
 } from "./retrieval.js";
 
 void describe("confirmed-card query text", () => {
@@ -171,5 +172,46 @@ void describe("requested rules", () => {
     assert.equal(await addRequestedRules(packet, ["card1", "uuid-like"], client), null);
     assert.deepEqual(queries, []);
     assert.equal(await addRequestedRules(packet, ["999.9"], client), null);
+  });
+});
+
+void describe("heading rules", () => {
+  void it("adds the first subrules right after a rule that only introduces them", async () => {
+    const rule = (id: string, number: string, text: string) => ({
+      id,
+      number,
+      text,
+      parentNumber: null,
+      includedBecause: "MATCH" as const,
+      truncated: false,
+    });
+    const children = ["a", "b", "c", "d", "e"].map((letter) => ({
+      id: `510.1${letter}`,
+      number: `510.1${letter}`,
+      text: `Subrule ${letter}.`,
+      parentId: "510.1",
+    }));
+    const client = {
+      rule: {
+        findMany: (args: { where: { parentId: { in: string[] } } }) =>
+          Promise.resolve(
+            children.filter(({ parentId }) => args.where.parentId.in.includes(parentId)),
+          ),
+      },
+    } as unknown as PrismaClient;
+    const rules = await withSubrulesOfHeadings(
+      [
+        rule("510.1", "510.1", "A player assigns combat damage according to the following rules:"),
+        rule("510.1b", "510.1b", "Already found."),
+        rule("702.7b", "702.7b", "First strike creatures deal damage first."),
+      ],
+      "snapshot-id",
+      client,
+    );
+    assert.deepEqual(
+      rules.map(({ number }) => number),
+      ["510.1", "510.1a", "510.1c", "510.1d", "510.1e", "510.1b", "702.7b"],
+    );
+    assert.equal(rules[1]?.includedBecause, "REFERENCE");
   });
 });

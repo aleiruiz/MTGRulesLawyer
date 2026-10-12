@@ -29,10 +29,13 @@ const MAX_CARD_EVIDENCE_CHARACTERS = 8_000;
 const MAX_RULE_EVIDENCE_CHARACTERS = 16_000;
 const MAX_RULE_TEXT_CHARACTERS = 6_000;
 const MAX_CARD_TEXT_CHARACTERS = 2_000;
-const MAX_RULINGS_PER_CARD = 8;
-const MAX_RULING_TEXT_CHARACTERS = 800;
-// Shared equally between the confirmed cards.
-const MAX_RULING_EVIDENCE_CHARACTERS = 8_000;
+// A rule whose text only introduces its subrules ("...according to the following rules:")
+// brings its first subrules, which hold the actual rule.
+const MAX_HEADING_RULE_CHARACTERS = 300;
+const MAX_SUBRULES_PER_HEADING = 4;
+const MAX_HEADINGS_EXPANDED = 3;
+// Subrules count against the prompt's searched-rule limit, so few are added overall.
+const MAX_SUBRULES_ADDED = 4;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
 interface RuleHit {
@@ -425,7 +428,11 @@ export async function assembleConfirmedEvidence(
   ]
     .join("\n")
     .slice(0, 4_000);
-  const packet = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const searched = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const packet = {
+    ...searched,
+    rules: await withSubrulesOfHeadings(searched.rules, snapshot.id, client),
+  };
   const coreRows = await client.rule.findMany({
     where: { snapshotId: snapshot.id, number: { in: CORE_RULE_NUMBERS } },
     orderBy: { sortOrder: "asc" },
@@ -443,31 +450,21 @@ export async function assembleConfirmedEvidence(
     })),
   );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
-  const rulingShare = Math.floor(
-    MAX_RULING_EVIDENCE_CHARACTERS / Math.max(1, selectedCards.length),
-  );
-  let rulingsTruncated = false;
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
     const otherNames = selectedCards
       .filter((other) => other.card.id !== card.id)
       .flatMap((other) => namesOf(other.card));
-    const rulingBudget = { remaining: rulingShare, truncated: false };
-    const rulings = rankRulings(card.rulings, request.question, otherNames, namesOf(card))
-      .slice(0, MAX_RULINGS_PER_CARD)
-      .flatMap((ruling) => {
-        const text = takeText(ruling.text, MAX_RULING_TEXT_CHARACTERS, rulingBudget);
-        return text.value
-          ? [
-              {
-                id: ruling.id,
-                publishedAt: ruling.publishedAt.toISOString().slice(0, 10),
-                text: text.value,
-                truncated: text.truncated,
-              },
-            ]
-          : [];
-      });
-    rulingsTruncated ||= rulingBudget.truncated;
+    // Every official ruling for the card, whole and never cut (as decided by the maintainer on
+    // 2026-10-12: a cut ruling can say the opposite of the full one), most relevant first. The
+    // largest card has 32 rulings and about 8,500 characters.
+    const rulings = rankRulings(card.rulings, request.question, otherNames, namesOf(card)).map(
+      (ruling) => ({
+        id: ruling.id,
+        publishedAt: ruling.publishedAt.toISOString().slice(0, 10),
+        text: ruling.text,
+        truncated: false,
+      }),
+    );
     const faces = card.faces.map((cardFace) => {
       const faceText = takeText(cardFace.oracleText, MAX_CARD_TEXT_CHARACTERS, cardBudget);
       return {
@@ -500,7 +497,7 @@ export async function assembleConfirmedEvidence(
     ...packet,
     cards,
     rules,
-    truncated: packet.truncated || cardBudget.truncated || rulingsTruncated,
+    truncated: packet.truncated || cardBudget.truncated,
   });
 }
 
@@ -634,6 +631,54 @@ export async function addRequestedRules(
       })),
     ],
   });
+}
+
+/**
+ * Adds the first subrules right after each searched rule whose text only introduces them
+ * ("A player assigns a creature's combat damage according to the following rules:"), so the
+ * packet holds the rule itself and not just its heading.
+ */
+export async function withSubrulesOfHeadings(
+  rules: EvidenceSearchResponse["rules"],
+  snapshotId: string,
+  client: PrismaClient = prisma,
+): Promise<EvidenceSearchResponse["rules"]> {
+  // A rule cut for length can end in ":" by chance; only whole rules count as headings.
+  const headings = rules
+    .filter(
+      (rule) =>
+        !rule.truncated &&
+        rule.text.trimEnd().endsWith(":") &&
+        rule.text.length <= MAX_HEADING_RULE_CHARACTERS,
+    )
+    .slice(0, MAX_HEADINGS_EXPANDED);
+  if (headings.length === 0) return rules;
+  const children = await client.rule.findMany({
+    where: { snapshotId, parentId: { in: headings.map(({ id }) => id) } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, number: true, text: true, parentId: true },
+  });
+  const present = new Set(rules.map(({ id }) => id));
+  const byParent = new Map<string, EvidenceSearchResponse["rules"]>();
+  let room = MAX_SUBRULES_ADDED;
+  for (const heading of headings) {
+    const added = children
+      .filter((child) => child.parentId === heading.id && !present.has(child.id))
+      .slice(0, Math.min(MAX_SUBRULES_PER_HEADING, room));
+    room -= added.length;
+    byParent.set(
+      heading.id,
+      added.map((child) => ({
+        id: child.id,
+        number: child.number,
+        text: child.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+        parentNumber: heading.number,
+        includedBecause: "REFERENCE" as const,
+        truncated: child.text.length > MAX_RULE_TEXT_CHARACTERS,
+      })),
+    );
+  }
+  return rules.flatMap((rule) => [rule, ...(byParent.get(rule.id) ?? [])]);
 }
 
 /**
