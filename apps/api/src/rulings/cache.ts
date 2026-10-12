@@ -80,6 +80,14 @@ export interface VerifiedRulingCacheOperations {
   set(key: string, snapshotId: string, answer: RulingGenerationResponse): Promise<void>;
 }
 
+/**
+ * The verifier's fallback (uncertain, nothing cited) means the model's answer was rejected. It is
+ * not cached, so asking again gets a fresh model answer instead of the same failure for hours.
+ */
+function isCacheable(answer: RulingGenerationResponse): boolean {
+  return !(answer.outcome === "uncertain" && answer.citations.length === 0);
+}
+
 export async function reuseVerifiedRuling(
   key: string,
   snapshotId: string,
@@ -90,7 +98,7 @@ export async function reuseVerifiedRuling(
     const cached = await operations.get(key);
     if (cached) return cached;
     const answer = rulingGenerationResponseSchema.parse(await generate());
-    await operations.set(key, snapshotId, answer);
+    if (isCacheable(answer)) await operations.set(key, snapshotId, answer);
     return answer;
   }
 
@@ -112,7 +120,7 @@ export async function reuseVerifiedRuling(
       if (existing) return existing;
 
       const answer = rulingGenerationResponseSchema.parse(await generate());
-      await cacheVerifiedRuling(key, snapshotId, answer, transaction);
+      if (isCacheable(answer)) await cacheVerifiedRuling(key, snapshotId, answer, transaction);
       return answer;
     },
     { maxWait: 5_000, timeout: 130_000 },

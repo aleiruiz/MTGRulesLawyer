@@ -21,12 +21,12 @@ const keyInput = {
 void describe("verified ruling cache", () => {
   void it("reuses a recent answer without invoking the model again", async () => {
     const cached: RulingGenerationResponse = {
-      outcome: "uncertain",
-      summary: "The evidence is insufficient.",
+      outcome: "needs_information",
+      summary: "A decisive game fact is missing.",
       reasoningSteps: [],
       summaryCitationIds: [],
       assumptions: [],
-      clarificationQuestions: [],
+      clarificationQuestions: ["Who controls the creature?"],
       citations: [],
       snapshot: { id: "snapshot-a", version: "rules-v1", activatedAt: null },
       sources: [],
@@ -56,6 +56,16 @@ void describe("verified ruling cache", () => {
       cached,
     );
     assert.equal(modelCalls, 1);
+
+    // A rejected answer (uncertain, nothing cited) is not kept, so asking again retries.
+    const rejected = { ...cached, outcome: "uncertain" as const, clarificationQuestions: [] };
+    const retry = () => {
+      modelCalls += 1;
+      return Promise.resolve(rejected);
+    };
+    await reuseVerifiedRuling("rejected-key", "snapshot-a", retry, operations);
+    await reuseVerifiedRuling("rejected-key", "snapshot-a", retry, operations);
+    assert.equal(modelCalls, 3);
   });
 
   void it("keys results by snapshot, model, prompt version, and full evidence prompt", () => {
