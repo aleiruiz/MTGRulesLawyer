@@ -68,7 +68,8 @@ type IncludeReason = "MATCH" | "REFERENCE" | "PARENT";
 /**
  * Foundational rules every ruling needs to reason about how Magic works, whatever the question
  * says: priority (117), the stack and resolution (405, 603.3b, 608), turn structure (500.1,
- * 506.1), state-based actions (704), and the layer system (613). They are added after the
+ * 506.1), combat damage and the everyday combat keywords (509-510, 702), state-based actions
+ * (704), the layer system (613) and loops (104.4b, 732). They are added after the
  * search results as CORE evidence, with their own prompt budget, so they never crowd out
  * question-specific rules.
  */
@@ -100,12 +101,11 @@ export const CORE_RULE_NUMBERS = [
   "510.2",
   "510.3",
   "510.4",
-  // The everyday combat keywords, whichever cards are involved: deathtouch, double strike,
-  // first strike, indestructible and trample.
+  // The everyday combat keywords, whichever cards are involved: deathtouch, indestructible
+  // and trample. First and double strike's extra damage step is 510.4 above (702.4b and
+  // 702.7b repeat it).
   "702.2b",
   "702.2c",
-  "702.4b",
-  "702.7b",
   "702.12b",
   "702.19b",
   "702.19d",

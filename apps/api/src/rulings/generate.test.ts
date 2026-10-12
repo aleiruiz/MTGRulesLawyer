@@ -692,12 +692,20 @@ void describe("Ruling evidence verification", () => {
         number: `500.${index}`,
         text: "y".repeat(6_000),
       })),
-      ...Array.from({ length: 40 }, (_, index) => ({
+      ...Array.from({ length: 60 }, (_, index) => ({
         ...baseRule,
         id: `core-${index}`,
         number: `117.${index}`,
         text: "z".repeat(6_000),
         includedBecause: "CORE" as const,
+      })),
+      // A second attempt adds the rules the first answer asked for.
+      ...Array.from({ length: 6 }, (_, index) => ({
+        ...baseRule,
+        id: `requested-${index}`,
+        number: `999.${index}`,
+        text: "w".repeat(6_000),
+        includedBecause: "REQUESTED" as const,
       })),
     ];
     const prompt = buildModelPrompt(

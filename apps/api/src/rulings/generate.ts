@@ -83,7 +83,7 @@ Only when a ruling states something a current Comprehensive Rule in the packet d
 
 // The cards' keyword subrules come first, then the search's own matches.
 const MAX_PROMPT_RULES = 20;
-// Foundational CORE rules (stack, priority, turns, state-based actions, layers) have their own
+// Foundational CORE rules (stack, priority, turns, combat, state-based actions, layers, loops) have their own
 // budget so they are always present without displacing the question's own rules.
 export const MAX_PROMPT_CORE_RULES = 60;
 const MAX_PROMPT_CORE_RULE_CHARACTERS = 2_000;

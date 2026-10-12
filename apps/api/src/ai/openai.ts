@@ -4,15 +4,16 @@ import { z } from "zod";
 export const OPENAI_PROMPT_VERSION = "rules-assistant-v1";
 export const OPENAI_DEFAULT_MODEL = "gpt-6-luna";
 /**
- * A ruling prompt is bounded by its parts: searched, core and requested rules and card text
- * (about 66,000 characters with ten cards), a 4,000-character question, five prior turns
- * (about 6,000), the game state, up to 4,500 characters of verified notes, and every official
- * ruling of the confirmed cards, whole (the largest card has 32 rulings and about 8,500
- * characters; with ids and dates, ten such cards add about 105,000): about 187,000 in the
- * worst case before JSON escaping, which can add more for a question full of quotes or control
- * characters. Ruling generation checks this cap before reserving quota.
+ * A ruling prompt is bounded by its parts: searched rules (20,000), core rules (24,000),
+ * rules requested on a second attempt (12,000) and card text with metadata (about 9,000), a
+ * 4,000-character question, five prior turns (about 6,000), the game state, up to 4,500
+ * characters of verified notes, and every official ruling of the confirmed cards, whole (the
+ * largest card has 32 rulings and about 8,500 characters; with ids and dates, ten such cards
+ * add about 105,000): about 196,000 in the worst case before JSON escaping, which can add more
+ * for a question full of quotes or control characters. A unit test builds that worst case.
+ * Ruling generation checks this cap before reserving quota.
  */
-export const MAX_USER_PROMPT_CHARACTERS = 200_000;
+export const MAX_USER_PROMPT_CHARACTERS = 220_000;
 
 const modelSchema = z.string().trim().min(1).max(100);
 const effortSchema = z.enum(["none", "low", "medium", "high", "xhigh", "max"]);
