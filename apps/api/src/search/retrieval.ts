@@ -50,12 +50,45 @@ interface RuleHit {
 
 type IncludeReason = "MATCH" | "REFERENCE" | "PARENT";
 
+/**
+ * Foundational rules every ruling needs to reason about how Magic works, whatever the question
+ * says: priority (117), the stack and resolution (405, 603.3b, 608), turn structure (500.1,
+ * 506.1), state-based actions (704), and the layer system (613). They are added after the
+ * search results as CORE evidence, with their own prompt budget, so they never crowd out
+ * question-specific rules.
+ */
+export const CORE_RULE_NUMBERS = [
+  "117.3a",
+  "117.3b",
+  "117.3c",
+  "117.4",
+  "405.1",
+  "405.5",
+  "603.3b",
+  "608.1",
+  "608.2g",
+  "500.1",
+  "506.1",
+  "704.3",
+  "704.5a",
+  "704.5f",
+  "704.5g",
+  "613.1",
+  "613.1a",
+  "613.1b",
+  "613.1c",
+  "613.1d",
+  "613.1e",
+  "613.1f",
+  "613.1g",
+  "613.7",
+  "613.8",
+];
+
 export async function assembleEvidence(
   input: EvidenceSearchRequest,
   client: PrismaClient = prisma,
   snapshotId?: string,
-  /** Rule numbers to include after the search matches, without affecting the search itself. */
-  supportingRuleNumbers: string[] = [],
 ): Promise<EvidenceSearchResponse> {
   const request = evidenceSearchRequestSchema.parse(input);
   const snapshot = await client.dataSnapshot.findFirst({
@@ -223,17 +256,6 @@ export async function assembleEvidence(
   const matches = new Map<string, IncludeReason>();
   for (const rule of exactHits) matches.set(rule.id, "MATCH");
   for (const rule of fullTextHits.slice(0, MAX_MATCHING_RULES)) matches.set(rule.id, "MATCH");
-  if (supportingRuleNumbers.length > 0) {
-    const supporting = await client.rule.findMany({
-      where: {
-        snapshotId: snapshot.id,
-        number: { in: supportingRuleNumbers.map((number) => number.toLowerCase()) },
-      },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true },
-    });
-    for (const rule of supporting) if (!matches.has(rule.id)) matches.set(rule.id, "MATCH");
-  }
 
   const included = new Map<string, { rule: RuleHit; reason: IncludeReason }>();
   const frontier = [...matches].map(([id, reason]) => ({ id, reason }));
@@ -376,17 +398,22 @@ export async function assembleConfirmedEvidence(
   ]
     .join("\n")
     .slice(0, 4_000);
-  const supportingRules = needsStackTimingRules(
-    request.question,
-    selectedCards.map(({ card, face }) => face.oracleText || card.oracleText),
-  )
-    ? STACK_TIMING_RULES
-    : [];
-  const packet = await assembleEvidence(
-    { question: query, cardNames: [] },
-    client,
-    snapshot.id,
-    supportingRules,
+  const packet = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const coreRows = await client.rule.findMany({
+    where: { snapshotId: snapshot.id, number: { in: CORE_RULE_NUMBERS } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, number: true, text: true, parent: { select: { number: true } } },
+  });
+  const rules = withCoreRules(
+    packet.rules,
+    coreRows.map((rule) => ({
+      id: rule.id,
+      number: rule.number,
+      text: rule.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+      parentNumber: rule.parent?.number ?? null,
+      includedBecause: "CORE" as const,
+      truncated: rule.text.length > MAX_RULE_TEXT_CHARACTERS,
+    })),
   );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
@@ -418,24 +445,22 @@ export async function assembleConfirmedEvidence(
   return evidenceSearchResponseSchema.parse({
     ...packet,
     cards,
+    rules,
     truncated: packet.truncated || cardBudget.truncated,
   });
 }
 
-// How triggered abilities go on the stack, that the top object resolves first, and casting a
-// spell while an ability resolves. Questions about the order of triggers and spells need these
-// even when their wording never appears in the question. They are added after the search
-// matches, so they never displace what the search found.
-const STACK_TIMING_RULES = ["603.3b", "405.5", "608.2g"];
-const QUESTION_TIMING_WORDS =
-  /\b(?:trigger(?:s|ed)?|stack|resolves?|resolution|respond(?:s|ing)?|beginning of)\b/i;
-// "When" and "whenever" appear on most creatures, so only phase and step triggers count here.
-const CARD_TIMING_WORDS = /\bat the beginning of\b/i;
-
-export function needsStackTimingRules(question: string, cardTexts: string[]): boolean {
-  return (
-    QUESTION_TIMING_WORDS.test(question) || cardTexts.some((text) => CARD_TIMING_WORDS.test(text))
-  );
+/**
+ * Searched rules followed by the core rules. A core rule the search also found is kept only as
+ * CORE, so the prompt's core budget always includes it; as a searched rule it could fall past
+ * the searched-rule cap.
+ */
+export function withCoreRules(
+  searched: EvidenceSearchResponse["rules"],
+  core: EvidenceSearchResponse["rules"],
+): EvidenceSearchResponse["rules"] {
+  const coreIds = new Set(core.map((rule) => rule.id));
+  return [...searched.filter((rule) => !coreIds.has(rule.id)), ...core];
 }
 
 /**

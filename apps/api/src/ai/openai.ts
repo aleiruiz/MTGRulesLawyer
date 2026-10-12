@@ -21,8 +21,8 @@ export function readOpenAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCo
     throw new Error("OPENAI_API_KEY must be configured before making a model request.");
   }
 
-  const timeoutMs = Number(env.OPENAI_TIMEOUT_MS ?? 20_000);
-  const maxOutputTokens = Number(env.OPENAI_MAX_OUTPUT_TOKENS ?? 1_200);
+  const timeoutMs = Number(env.OPENAI_TIMEOUT_MS ?? 45_000);
+  const maxOutputTokens = Number(env.OPENAI_MAX_OUTPUT_TOKENS ?? 2_500);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
     throw new Error("OPENAI_TIMEOUT_MS must be an integer between 1000 and 120000.");
   }
@@ -143,8 +143,12 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       if (!request.systemPrompt.trim() || request.systemPrompt.length > 8_000) {
         throw new Error("System prompt must contain 1 to 8000 characters.");
       }
-      if (!request.userPrompt.trim() || request.userPrompt.length > 12_000) {
-        throw new Error("User prompt must contain 1 to 12000 characters.");
+      // A ruling prompt is bounded by its parts: evidence (searched and core rules, card text;
+      // about 21,000 characters with ten cards), a 4,000-character question, five prior turns
+      // and the game state, about 32,000 in the worst case. The cap sits above that so a
+      // legitimate request never fails here after its quota was reserved.
+      if (!request.userPrompt.trim() || request.userPrompt.length > 40_000) {
+        throw new Error("User prompt must contain 1 to 40000 characters.");
       }
       const startedAt = Date.now();
       const metadata = {

@@ -115,7 +115,7 @@ export function readAiUsageConfig(env: NodeJS.ProcessEnv = process.env): AiUsage
     "AI_RESERVATION_TTL_MS",
     180_000,
   );
-  const providerTimeoutMs = Number(env.OPENAI_TIMEOUT_MS ?? 20_000);
+  const providerTimeoutMs = Number(env.OPENAI_TIMEOUT_MS ?? 45_000);
   if (
     !Number.isSafeInteger(providerTimeoutMs) ||
     providerTimeoutMs < 1_000 ||
