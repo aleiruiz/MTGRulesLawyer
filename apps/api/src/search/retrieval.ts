@@ -147,6 +147,7 @@ export async function assembleEvidence(
         oracleId: card.oracleId,
         name: card.name,
         layout: card.layout,
+        manaValue: card.manaValue,
         selectedFaceIndex: match.faceIndex,
         quantity: 1,
         matchedFace,

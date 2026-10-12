@@ -222,6 +222,31 @@ void describe("Ruling evidence verification", () => {
     assert.equal(prompt.evidence.cards[0]?.face.typeLine, "Creature — Bear");
   });
 
+  void it("does not make a face citable when its text was cut away", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const cutFace = { ...baseCard.matchedFace, oracleText: "", truncated: true };
+    const bounded = boundEvidenceForPrompt({
+      ...evidence,
+      cards: [{ ...baseCard, matchedFace: cutFace, faces: [cutFace] }],
+    });
+    assert.equal(bounded.cards[0]?.faces.length, 0);
+  });
+
+  void it("shows mana value only for one-face cards", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const backFace = { ...baseCard.matchedFace, id: "back-face", faceIndex: 1 };
+    const prompt = (card: typeof baseCard) =>
+      JSON.parse(buildModelPrompt({ question: "Cascade?" }, { ...evidence, cards: [card] })) as {
+        evidence: { cards: Array<{ manaValue?: number }> };
+      };
+    const single = { ...baseCard, manaValue: 3, faces: [baseCard.matchedFace] };
+    assert.equal(prompt(single).evidence.cards[0]?.manaValue, 3);
+    const modal = { ...single, matchedFace: backFace, faces: [baseCard.matchedFace, backFace] };
+    assert.equal(prompt(modal).evidence.cards[0]?.manaValue, undefined);
+  });
+
   void it("adds verified notes to the prompt only when there are some", () => {
     const request = { question: "Do both spells resolve?", confirmedCards: [] };
     const without = JSON.parse(buildModelPrompt(request, evidence)) as Record<string, unknown>;

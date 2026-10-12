@@ -105,6 +105,7 @@ async function loadFaces(faceIds: string[], client: PrismaClient) {
           oracleId: true,
           name: true,
           layout: true,
+          manaValue: true,
           snapshotId: true,
           faces: { orderBy: { faceIndex: "asc" } },
         },
