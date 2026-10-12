@@ -59,7 +59,7 @@ When web research settles a question (resolved or conditional, verified, no link
 
 ## Official card rulings
 
-The Oracle refresh also downloads Scryfall's rulings bulk file and keeps only the rulings Wizards of the Coast published (`source: "wotc"`), stored per card in the same snapshot (`CardRuling`, source `OFFICIAL_RULINGS`). A new rulings file alone produces a new snapshot. For each confirmed card the judge sees the rulings most relevant to the question (those naming another confirmed card first), and can cite them; the app labels those citations "<card> ruling (<date>)", separate from rules and Oracle text.
+The Oracle refresh also downloads Scryfall's rulings bulk file and keeps only the rulings Wizards of the Coast published (`source: "wotc"`), stored per card in the same snapshot (`CardRuling`, source `OFFICIAL_RULINGS`). A new rulings file alone produces a new snapshot. For each confirmed card the judge sees every official ruling, whole and never cut or left out (decided by the maintainer on 2026-10-12, after a cut ruling made the judge answer the opposite of the full one), ordered with the most relevant to the question first (those naming another confirmed card first), and can cite them; the app labels those citations "<card> ruling (<date>)", separate from rules and Oracle text.
 
 ## Judge benchmark
 

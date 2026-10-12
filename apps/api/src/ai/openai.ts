@@ -185,15 +185,16 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       if (!request.systemPrompt.trim() || request.systemPrompt.length > 8_000) {
         throw new Error("System prompt must contain 1 to 8000 characters.");
       }
-      // A ruling prompt is bounded by its parts: evidence (searched and core rules, card text;
-      // about 23,000 characters with ten cards), a 4,000-character question, five prior turns,
-      // the game state, up to 4,500 characters of verified notes and up to 4,000 characters of
-      // official rulings plus their ids and dates (about 4,000 more for 50 rulings), and on a
-      // second attempt up to 5,000 characters of requested rules; core rules may use 3,000
-      // more than the 23,000 above: about 54,500 in the worst case. The cap sits above that so a legitimate request never fails
-      // here after its quota was reserved.
-      if (!request.userPrompt.trim() || request.userPrompt.length > 56_000) {
-        throw new Error("User prompt must contain 1 to 56000 characters.");
+      // A ruling prompt is bounded by its parts: searched and core rules and card text (about
+      // 26,000 characters with ten cards), a 4,000-character question, five prior turns, the
+      // game state, up to 4,500 characters of verified notes, up to 5,000 characters of rules
+      // requested on a second attempt, and every official ruling of the confirmed cards, whole
+      // (the largest card has 32 rulings and about 8,500 characters; with their ids and dates,
+      // ten such cards add about 105,000). That is about 150,000 in the worst case, and a
+      // typical question is far below it. The cap sits above it so a legitimate request never
+      // fails here after its quota was reserved.
+      if (!request.userPrompt.trim() || request.userPrompt.length > 160_000) {
+        throw new Error("User prompt must contain 1 to 160000 characters.");
       }
       const startedAt = Date.now();
       const metadata = {

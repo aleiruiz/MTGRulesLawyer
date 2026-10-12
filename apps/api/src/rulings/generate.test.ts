@@ -648,4 +648,21 @@ void describe("Ruling evidence verification", () => {
     assert.equal(prompt.evidence.cards[0]?.combinedManaValue, 4);
     assert.equal(prompt.evidence.cards[0]?.manaValue, undefined);
   });
+
+  void it("always shows every official ruling, whole", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const ruling = (id: string, length: number) => ({
+      id,
+      publishedAt: "2026-10-01",
+      text: "x".repeat(length),
+      truncated: false,
+    });
+    const rulings = Array.from({ length: 32 }, (_, index) => ruling(`r${index}`, 2_500));
+    const bounded = boundEvidenceForPrompt({
+      ...evidence,
+      cards: [{ ...baseCard, rulings }],
+    });
+    assert.deepEqual(bounded.cards[0]?.rulings, rulings);
+  });
 });
