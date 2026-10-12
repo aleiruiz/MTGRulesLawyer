@@ -41,8 +41,17 @@ export interface ImportRulesResult {
   snapshot: { id: string; version: string };
 }
 
+// Increment when parsing changes so an unchanged rules document is imported again.
+export const RULES_IMPORTER_REVISION = 2;
+
 export function parseRulesDocument(input: string, minimumRuleCount = 1000): ParsedRulesDocument {
-  const normalized = input.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  // The official text uses Unicode line separators (U+2028) inside some rules. A rule line
+  // holding one did not match as a rule, so its text was appended to the previous rule
+  // (509.1b disappeared into 509.1a); they are ordinary line breaks.
+  const normalized = input
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u2028\u2029]/g, "\n");
   const effectiveDateMatch = normalized.match(/effective as of\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
   if (!effectiveDateMatch) {
     throw new Error("Rules document does not contain a valid effective date.");
@@ -143,7 +152,7 @@ export async function importRulesText(
   const parsed = parseRulesDocument(text, minimumRuleCount);
   const checksumSha256 = createHash("sha256").update(text, "utf8").digest("hex");
   const datePart = parsed.effectiveAt.toISOString().slice(0, 10).replaceAll("-", "");
-  const version = `rules-${datePart}-${checksumSha256.slice(0, 12)}`;
+  const version = `rules-v${RULES_IMPORTER_REVISION}-${datePart}-${checksumSha256.slice(0, 12)}`;
   const snapshot = await writer.activateRulesSnapshot({
     version,
     sourceUrl,
@@ -170,7 +179,13 @@ export class PrismaRulesSnapshotWriter implements RulesSnapshotWriter {
         const activeRulesSource = active?.sources.find(
           (source) => source.kind === SourceKind.COMPREHENSIVE_RULES,
         );
-        if (active && activeRulesSource?.checksumSha256 === input.checksumSha256) {
+        // The version names the importer revision and the document checksum, so the same
+        // document parsed by an older importer is imported again.
+        if (
+          active &&
+          activeRulesSource?.checksumSha256 === input.checksumSha256 &&
+          activeRulesSource.sourceVersion === input.version
+        ) {
           return { id: active.id, version: active.version };
         }
 

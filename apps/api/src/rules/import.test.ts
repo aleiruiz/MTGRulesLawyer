@@ -103,6 +103,22 @@ void describe("Comprehensive Rules importer", () => {
     assert.equal(writerCalled, false);
   });
 
+  void it("treats Unicode line separators as line breaks so no rule is lost", () => {
+    const withSeparators = rulesFixture
+      .replace(
+        "100.1a Example child rule text.\n",
+        "100.1a Example child rule text.\u2028Second paragraph.\n",
+      )
+      .replace(
+        "100.1b Example second child rule text.",
+        "100.1b Example second\u2028child rule text.",
+      );
+    const parsed = parseRulesDocument(withSeparators, 10);
+    const byNumber = new Map(parsed.rules.map((rule) => [rule.number, rule.text]));
+    assert.equal(byNumber.get("100.1a"), "Example child rule text.\nSecond paragraph.");
+    assert.equal(byNumber.get("100.1b"), "Example second\nchild rule text.");
+  });
+
   void it("rejects extracted cross-references to rules missing from the document", () => {
     assert.throws(
       () => parseRulesDocument(rulesFixture.replace("300.1-300.2", "300.1-300.999"), 10),

@@ -16,7 +16,11 @@ import {
   type DownloadedOracleBulk,
   type OracleBulkMetadata,
 } from "../cards/source.js";
-import { importRulesText, PrismaRulesSnapshotWriter } from "../rules/import.js";
+import {
+  importRulesText,
+  PrismaRulesSnapshotWriter,
+  RULES_IMPORTER_REVISION,
+} from "../rules/import.js";
 import { fetchLatestRulesDocument } from "../rules/source.js";
 import type { RulesSourceDocument } from "../rules/source.js";
 
@@ -80,7 +84,10 @@ async function refreshRules(
       const active = await getActiveSource(client, "COMPREHENSIVE_RULES");
       const document = await dependencies.fetchRulesDocument();
       const checksumSha256 = createHash("sha256").update(document.text, "utf8").digest("hex");
-      if (active?.checksumSha256 === checksumSha256) {
+      if (
+        active?.checksumSha256 === checksumSha256 &&
+        active.sourceVersion?.startsWith(`rules-v${RULES_IMPORTER_REVISION}-`)
+      ) {
         const activeSnapshot = await client.dataSnapshot.findFirst({
           where: { status: SnapshotStatus.ACTIVE },
           select: { version: true },
@@ -105,7 +112,8 @@ async function refreshRules(
         sourceVersion: result.snapshot.version,
         checksumSha256: result.checksumSha256,
         snapshotVersion: result.snapshot.version,
-        unchanged: active?.checksumSha256 === result.checksumSha256,
+        // A re-parse of the same document by a newer importer is still an import.
+        unchanged: active?.sourceVersion === result.snapshot.version,
       };
     },
   );
