@@ -54,6 +54,8 @@ export async function assembleEvidence(
   input: EvidenceSearchRequest,
   client: PrismaClient = prisma,
   snapshotId?: string,
+  /** Rule numbers to include after the search matches, without affecting the search itself. */
+  supportingRuleNumbers: string[] = [],
 ): Promise<EvidenceSearchResponse> {
   const request = evidenceSearchRequestSchema.parse(input);
   const snapshot = await client.dataSnapshot.findFirst({
@@ -221,6 +223,17 @@ export async function assembleEvidence(
   const matches = new Map<string, IncludeReason>();
   for (const rule of exactHits) matches.set(rule.id, "MATCH");
   for (const rule of fullTextHits.slice(0, MAX_MATCHING_RULES)) matches.set(rule.id, "MATCH");
+  if (supportingRuleNumbers.length > 0) {
+    const supporting = await client.rule.findMany({
+      where: {
+        snapshotId: snapshot.id,
+        number: { in: supportingRuleNumbers.map((number) => number.toLowerCase()) },
+      },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    });
+    for (const rule of supporting) if (!matches.has(rule.id)) matches.set(rule.id, "MATCH");
+  }
 
   const included = new Map<string, { rule: RuleHit; reason: IncludeReason }>();
   const frontier = [...matches].map(([id, reason]) => ({ id, reason }));
@@ -341,31 +354,40 @@ export async function assembleConfirmedEvidence(
     return { card, face, quantity: selection.quantity };
   });
   // Search terms come first: the search keeps the earliest terms, and these were chosen for it.
-  // Card names are removed from the text ("Sakashima of a Thousand Faces" otherwise pulls in the
-  // face-down rules) and the confirmed cards' rules text is searched instead, so keywords and
-  // abilities the cards have ("split second", "at the beginning of combat") find their rules.
-  const cardNames = selectedCards.flatMap(({ card }) => [
+  // Multi-word card names are removed from the text ("Sakashima of a Thousand Faces" otherwise
+  // pulls in the face-down rules) and the confirmed cards' rules text is searched too, so
+  // keywords and abilities the cards have ("split second") find their rules.
+  const namesOf = (card: (typeof selectedCards)[number]["card"]) => [
     card.name,
     ...card.faces.map((cardFace) => cardFace.name),
-  ]);
+  ];
+  const cardNames = selectedCards.flatMap(({ card }) => namesOf(card));
+  // Each card's text loses only its own name ("Samut" in Samut's text), never another card's.
   const cardText = selectedCards.map(({ card, face }) =>
-    withoutCardNames(face.oracleText || card.oracleText, cardNames),
+    withoutCardNames(face.oracleText || card.oracleText, namesOf(card)),
   );
-  const timingRules = needsStackTimingRules([request.question, ...cardText])
-    ? [`Rules ${STACK_TIMING_RULES.join(" ")}.`]
-    : [];
   const query = [
-    ...timingRules,
     ...request.gameState.searchTerms,
     withoutCardNames(request.question, cardNames),
-    ...cardText,
     ...request.gameState.events,
     ...request.gameState.knownFacts,
+    ...cardText,
     ...request.gameState.missingFacts,
   ]
     .join("\n")
     .slice(0, 4_000);
-  const packet = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
+  const supportingRules = needsStackTimingRules(
+    request.question,
+    selectedCards.map(({ card, face }) => face.oracleText || card.oracleText),
+  )
+    ? STACK_TIMING_RULES
+    : [];
+  const packet = await assembleEvidence(
+    { question: query, cardNames: [] },
+    client,
+    snapshot.id,
+    supportingRules,
+  );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
     const faces = card.faces.map((cardFace) => {
@@ -401,21 +423,33 @@ export async function assembleConfirmedEvidence(
 }
 
 // How triggered abilities go on the stack, that the top object resolves first, and casting a
-// spell while an ability resolves. Questions about triggers and timing need these even when
-// their wording never appears in the question. The search reads rule numbers in the query.
+// spell while an ability resolves. Questions about the order of triggers and spells need these
+// even when their wording never appears in the question. They are added after the search
+// matches, so they never displace what the search found.
 const STACK_TIMING_RULES = ["603.3b", "405.5", "608.2g"];
-const TIMING_WORDS =
-  /\b(?:at the beginning of|whenever|when|trigger(?:s|ed)?|stack|resolves?|resolution|respond)\b/i;
+const QUESTION_TIMING_WORDS =
+  /\b(?:trigger(?:s|ed)?|stack|resolves?|resolution|respond(?:s|ing)?|beginning of)\b/i;
+// "When" and "whenever" appear on most creatures, so only phase and step triggers count here.
+const CARD_TIMING_WORDS = /\bat the beginning of\b/i;
 
-function needsStackTimingRules(texts: string[]): boolean {
-  return texts.some((text) => TIMING_WORDS.test(text));
+export function needsStackTimingRules(question: string, cardTexts: string[]): boolean {
+  return (
+    QUESTION_TIMING_WORDS.test(question) || cardTexts.some((text) => CARD_TIMING_WORDS.test(text))
+  );
 }
 
-/** Removes card names (whole and before a comma, like "Gandalf") so they are not searched as rules terms. */
-function withoutCardNames(text: string, names: string[]): string {
+/**
+ * Removes multi-word card names (whole, and before a comma, like "Sakashima of a Thousand
+ * Faces") so their words are not searched as rules terms. Single-word names are kept: they are
+ * either absent from the rules anyway or are rules words themselves ("Flash", "Fog", "Island").
+ */
+export function withoutCardNames(text: string, names: string[]): string {
   const variants = [
     ...new Set(
-      names.flatMap((name) => [name, name.split(",")[0] ?? ""]).filter((name) => name.length >= 3),
+      names
+        .flatMap((name) => [name, name.split(",")[0] ?? ""])
+        .map((name) => name.trim())
+        .filter((name) => /\s/.test(name)),
     ),
   ].sort((left, right) => right.length - left.length);
   return variants.reduce(
