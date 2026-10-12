@@ -34,6 +34,8 @@ const MAX_CARD_TEXT_CHARACTERS = 2_000;
 const MAX_HEADING_RULE_CHARACTERS = 300;
 const MAX_SUBRULES_PER_HEADING = 4;
 const MAX_HEADINGS_EXPANDED = 3;
+// Subrules count against the prompt's searched-rule limit, so few are added overall.
+const MAX_SUBRULES_ADDED = 4;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
 interface RuleHit {
@@ -427,7 +429,10 @@ export async function assembleConfirmedEvidence(
     .join("\n")
     .slice(0, 4_000);
   const searched = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
-  const packet = { ...searched, rules: await withSubrulesOfHeadings(searched.rules, client) };
+  const packet = {
+    ...searched,
+    rules: await withSubrulesOfHeadings(searched.rules, snapshot.id, client),
+  };
   const coreRows = await client.rule.findMany({
     where: { snapshotId: snapshot.id, number: { in: CORE_RULE_NUMBERS } },
     orderBy: { sortOrder: "asc" },
@@ -635,36 +640,42 @@ export async function addRequestedRules(
  */
 export async function withSubrulesOfHeadings(
   rules: EvidenceSearchResponse["rules"],
+  snapshotId: string,
   client: PrismaClient = prisma,
 ): Promise<EvidenceSearchResponse["rules"]> {
+  // A rule cut for length can end in ":" by chance; only whole rules count as headings.
   const headings = rules
     .filter(
       (rule) =>
-        rule.text.trimEnd().endsWith(":") && rule.text.length <= MAX_HEADING_RULE_CHARACTERS,
+        !rule.truncated &&
+        rule.text.trimEnd().endsWith(":") &&
+        rule.text.length <= MAX_HEADING_RULE_CHARACTERS,
     )
     .slice(0, MAX_HEADINGS_EXPANDED);
   if (headings.length === 0) return rules;
   const children = await client.rule.findMany({
-    where: { parentId: { in: headings.map(({ id }) => id) } },
+    where: { snapshotId, parentId: { in: headings.map(({ id }) => id) } },
     orderBy: { sortOrder: "asc" },
     select: { id: true, number: true, text: true, parentId: true },
   });
   const present = new Set(rules.map(({ id }) => id));
   const byParent = new Map<string, EvidenceSearchResponse["rules"]>();
+  let room = MAX_SUBRULES_ADDED;
   for (const heading of headings) {
+    const added = children
+      .filter((child) => child.parentId === heading.id && !present.has(child.id))
+      .slice(0, Math.min(MAX_SUBRULES_PER_HEADING, room));
+    room -= added.length;
     byParent.set(
       heading.id,
-      children
-        .filter((child) => child.parentId === heading.id && !present.has(child.id))
-        .slice(0, MAX_SUBRULES_PER_HEADING)
-        .map((child) => ({
-          id: child.id,
-          number: child.number,
-          text: child.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
-          parentNumber: heading.number,
-          includedBecause: "REFERENCE" as const,
-          truncated: child.text.length > MAX_RULE_TEXT_CHARACTERS,
-        })),
+      added.map((child) => ({
+        id: child.id,
+        number: child.number,
+        text: child.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+        parentNumber: heading.number,
+        includedBecause: "REFERENCE" as const,
+        truncated: child.text.length > MAX_RULE_TEXT_CHARACTERS,
+      })),
     );
   }
   return rules.flatMap((rule) => [rule, ...(byParent.get(rule.id) ?? [])]);

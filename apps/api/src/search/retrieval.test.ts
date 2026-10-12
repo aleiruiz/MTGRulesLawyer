@@ -205,6 +205,7 @@ void describe("heading rules", () => {
         rule("510.1b", "510.1b", "Already found."),
         rule("702.7b", "702.7b", "First strike creatures deal damage first."),
       ],
+      "snapshot-id",
       client,
     );
     assert.deepEqual(

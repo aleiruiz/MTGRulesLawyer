@@ -13,6 +13,7 @@ import {
 } from "../ai/usage.js";
 import {
   createOpenAiAdapter,
+  MAX_USER_PROMPT_CHARACTERS,
   OPENAI_DEFAULT_MODEL,
   readOpenAiConfig,
   type StructuredOutputResult,
@@ -49,8 +50,8 @@ export type ModelRuling = z.infer<typeof modelRulingSchema>;
 type ModelRulingInput = Omit<ModelRuling, "neededRuleNumbers"> & { neededRuleNumbers?: string[] };
 
 // Long enough to keep the operative sentence of rules like 608.2b ("...doesn't resolve"),
-// which 180 characters cut off, and the full Oracle text of most cards. The totals keep the
-// evidence near 3,000 input tokens however many rules and cards are included.
+// which 180 characters cut off, and the full Oracle text of most cards. The totals bound the
+// rules and card text; official rulings are always shown whole and are not bounded.
 const MAX_PROMPT_RULE_CHARACTERS = 700;
 const MAX_PROMPT_RULES_TOTAL_CHARACTERS = 6_000;
 const MAX_PROMPT_CARD_CHARACTERS = 1_000;
@@ -391,6 +392,24 @@ export function verifyRulingOutput(
   });
 }
 
+/** An answer for a question whose cards bring more text than one prompt can hold. */
+export function promptTooLargeResponse(evidence: EvidenceSearchResponse): RulingGenerationResponse {
+  return rulingGenerationResponseSchema.parse({
+    outcome: "uncertain",
+    summary:
+      "These cards bring more rules text and official rulings than the judge can read at once. Ask about fewer cards at a time.",
+    reasoningSteps: [],
+    summaryCitationIds: [],
+    assumptions: [],
+    clarificationQuestions: [],
+    citations: [],
+    snapshot: evidence.snapshot,
+    sources: evidence.sources,
+    modelName: "not_called",
+    promptVersion: RULING_PROMPT_VERSION,
+  });
+}
+
 /** Turns a missing fact ("Whether the Bears are controlled by an opponent.") into a question. */
 export function toClarificationQuestion(fact: string): string {
   const trimmed = fact.trim();
@@ -475,6 +494,8 @@ export async function generateRuling(
     (request.confirmedCards ?? []).map(({ oracleId }) => oracleId),
   ).catch(() => []);
   const userPrompt = buildModelPrompt(request, evidence, priorTurns, notes);
+  // Checked before any quota is reserved: the provider adapter would reject it after.
+  if (userPrompt.length > MAX_USER_PROMPT_CHARACTERS) return promptTooLargeResponse(evidence);
   const schemaFingerprint = createHash("sha256")
     .update(JSON.stringify(z.toJSONSchema(modelRulingSchema)))
     .digest("hex");
@@ -540,31 +561,33 @@ export async function generateRuling(
           result.value,
           evidence,
           (extendedPrompt) =>
-            runReservedAiCallWithMetrics(
-              { kind: "RULING_RETRY", identity: { clientIp } },
-              async (providerSignal) => {
-                const generated = await provider.generateStructuredOutputWithUsage(
-                  {
-                    schema: modelRulingSchema,
-                    schemaName: "mtg_verified_ruling",
-                    systemPrompt,
-                    userPrompt: extendedPrompt,
-                    promptVersion: `${RULING_PROMPT_VERSION}+requested-rules`,
+            extendedPrompt.length > MAX_USER_PROMPT_CHARACTERS
+              ? Promise.reject(new Error("The extended prompt is too large."))
+              : runReservedAiCallWithMetrics(
+                  { kind: "RULING_RETRY", identity: { clientIp } },
+                  async (providerSignal) => {
+                    const generated = await provider.generateStructuredOutputWithUsage(
+                      {
+                        schema: modelRulingSchema,
+                        schemaName: "mtg_verified_ruling",
+                        systemPrompt,
+                        userPrompt: extendedPrompt,
+                        promptVersion: `${RULING_PROMPT_VERSION}+requested-rules`,
+                      },
+                      providerSignal,
+                    );
+                    return {
+                      value: generated.value,
+                      inputTokens: generated.inputTokens,
+                      outputTokens: generated.outputTokens,
+                      actualCostMicros: estimateAiTokenCostMicros(
+                        generated.inputTokens,
+                        generated.outputTokens,
+                      ),
+                    };
                   },
-                  providerSignal,
-                );
-                return {
-                  value: generated.value,
-                  inputTokens: generated.inputTokens,
-                  outputTokens: generated.outputTokens,
-                  actualCostMicros: estimateAiTokenCostMicros(
-                    generated.inputTokens,
-                    generated.outputTokens,
-                  ),
-                };
-              },
-              { config: usageConfig, signal },
-            ).then(({ value }) => value),
+                  { config: usageConfig, signal },
+                ).then(({ value }) => value),
           (extended) => buildModelPrompt(request, extended, priorTurns, notes),
         );
         if (retry) {

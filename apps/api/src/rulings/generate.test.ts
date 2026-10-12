@@ -15,6 +15,7 @@ import {
   retryWithRequestedRules,
   WEB_RESEARCH_PROMPT,
 } from "./generate.js";
+import { MAX_USER_PROMPT_CHARACTERS } from "../ai/openai.js";
 
 const evidence: EvidenceSearchResponse = {
   snapshot: { id: "snapshot-id", version: "rules-2026-10", activatedAt: null },
@@ -664,5 +665,64 @@ void describe("Ruling evidence verification", () => {
       cards: [{ ...baseCard, rulings }],
     });
     assert.deepEqual(bounded.cards[0]?.rulings, rulings);
+  });
+
+  void it("keeps the worst-case prompt with every ruling under the provider cap", () => {
+    const baseCard = evidence.cards[0];
+    const baseRule = evidence.rules[0];
+    assert.ok(baseCard && baseRule);
+    const longText = 'A "quoted" ruling. '.repeat(14); // about 265 characters
+    const cards = Array.from({ length: 10 }, (_, cardIndex) => ({
+      ...baseCard,
+      id: `card-${cardIndex}`,
+      oracleId: `oracle-${cardIndex}`,
+      matchedFace: { ...baseCard.matchedFace, oracleText: "x".repeat(2_000) },
+      faces: [{ ...baseCard.matchedFace, oracleText: "x".repeat(2_000) }],
+      rulings: Array.from({ length: 32 }, (_, rulingIndex) => ({
+        id: `ruling-${cardIndex}-${rulingIndex}`,
+        publishedAt: "2026-10-01",
+        text: longText,
+        truncated: false,
+      })),
+    }));
+    const rules = [
+      ...Array.from({ length: 30 }, (_, index) => ({
+        ...baseRule,
+        id: `match-${index}`,
+        number: `500.${index}`,
+        text: "y".repeat(6_000),
+      })),
+      ...Array.from({ length: 40 }, (_, index) => ({
+        ...baseRule,
+        id: `core-${index}`,
+        number: `117.${index}`,
+        text: "z".repeat(6_000),
+        includedBecause: "CORE" as const,
+      })),
+    ];
+    const prompt = buildModelPrompt(
+      {
+        question: '"'.repeat(4_000),
+        gameState: {
+          events: ["e".repeat(1_500)],
+          knownFacts: [],
+          missingFacts: [],
+          searchTerms: [],
+        },
+        confirmedCards: cards.map(({ oracleId }) => ({ oracleId, faceIndex: 0, quantity: 1 })),
+      },
+      { ...evidence, cards, rules },
+      Array.from({ length: 5 }, () => ({
+        question: "q".repeat(500),
+        outcome: "resolved",
+        summary: "s".repeat(1_200),
+      })),
+      Array.from({ length: 3 }, () => ({
+        conclusion: "c".repeat(800),
+        reasoning: ["r".repeat(500)],
+        ruleNumbers: ["704.5a"],
+      })),
+    );
+    assert.ok(prompt.length < MAX_USER_PROMPT_CHARACTERS, `prompt is ${prompt.length} characters`);
   });
 });
