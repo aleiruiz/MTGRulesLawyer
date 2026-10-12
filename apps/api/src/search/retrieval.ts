@@ -81,8 +81,16 @@ export const CORE_RULE_NUMBERS = [
   "613.1e",
   "613.1f",
   "613.1g",
+  "613.4",
+  "613.4a",
+  "613.4b",
+  "613.4c",
   "613.7",
+  "613.7a",
   "613.8",
+  "613.8a",
+  "613.8b",
+  "613.8c",
 ];
 
 export async function assembleEvidence(

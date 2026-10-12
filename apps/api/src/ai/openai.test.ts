@@ -52,6 +52,39 @@ void describe("OpenAI structured output adapter", () => {
     assert.equal(JSON.stringify(logEvents).includes("Does this resolve?"), false);
   });
 
+  void it("requests web search only when asked and returns its sources", async () => {
+    const sent: OpenAiRequest[] = [];
+    const adapter = createOpenAiAdapter(config, {
+      transport: (request) => {
+        sent.push(request);
+        return Promise.resolve({
+          outputText: JSON.stringify({ answer: "It resolves.", confidence: "high" }),
+          ...(request.webSearchMaxCalls
+            ? { webSearchCalls: 1, webSources: [{ url: "https://example.com/ruling" }] }
+            : {}),
+        });
+      },
+      logger: () => undefined,
+    });
+    const options = {
+      schema: resultSchema,
+      schemaName: "test_answer",
+      systemPrompt: "System prompt.",
+      userPrompt: "User question.",
+      promptVersion: OPENAI_PROMPT_VERSION,
+    };
+    const plain = await adapter.generateStructuredOutputWithUsage(options);
+    assert.equal(sent[0]?.webSearchMaxCalls, undefined);
+    assert.equal(plain.webSources, undefined);
+    const researched = await adapter.generateStructuredOutputWithUsage({
+      ...options,
+      webSearchMaxCalls: 1,
+    });
+    assert.equal(sent[1]?.webSearchMaxCalls, 1);
+    assert.equal(researched.webSearchCalls, 1);
+    assert.deepEqual(researched.webSources, [{ url: "https://example.com/ruling" }]);
+  });
+
   void it("rejects malformed provider output", async () => {
     const adapter = createOpenAiAdapter(config, {
       transport: () =>
