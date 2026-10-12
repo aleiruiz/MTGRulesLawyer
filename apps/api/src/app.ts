@@ -43,6 +43,15 @@ import {
   requireAuthenticatedUser,
   type AppUserResolver,
 } from "./auth/authorization.js";
+import {
+  AccountDeletionUnavailableError,
+  AuthIdentityDeletionError,
+  createAccountDeleter,
+  createSupabaseAuthIdentityDeleter,
+  deleteAppUserData,
+  deleteAppUserDataBySupabaseUserId,
+  hasSupabaseSecretKey,
+} from "./account/deletion.js";
 import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
 import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
 import {
@@ -108,6 +117,7 @@ export interface BuildAppOptions {
     reviewerId: string,
     decision: ReviewDecisionRequest,
   ) => Promise<ReviewDecisionResponse>;
+  deleteAccount?: (appUserId: string) => Promise<void>;
 }
 
 function createClientDisconnectController(request: FastifyRequest, reply: FastifyReply) {
@@ -168,6 +178,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const readReviewQueue = options.getReviewQueue ?? getReviewQueue;
   const requestChallengeInformation = options.requestMoreInformation ?? requestMoreInformation;
   const decideReview = options.decideChallenge ?? decideChallenge;
+  const deleteAccount =
+    options.deleteAccount ??
+    createAccountDeleter({
+      deleteAppUserData: (appUserId) => deleteAppUserData(appUserId),
+      deleteAppUserDataBySupabaseUserId: (supabaseUserId) =>
+        deleteAppUserDataBySupabaseUserId(supabaseUserId),
+      onCleanupError: () =>
+        app.log.warn(
+          { event: "account.cleanup_failed" },
+          "A record recreated during account deletion could not be removed",
+        ),
+      deleteAuthIdentity: hasSupabaseSecretKey(process.env.SUPABASE_SECRET_KEY)
+        ? createSupabaseAuthIdentityDeleter({
+            url: process.env.SUPABASE_URL ?? "https://your-project.supabase.co",
+            secretKey: process.env.SUPABASE_SECRET_KEY,
+          })
+        : null,
+    });
 
   registerAuthentication(app, verifyAccessToken, resolveAppUser, {
     adminAuthMaxAgeSeconds:
@@ -240,6 +268,30 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }
     },
   );
+  app.delete("/api/me", { preHandler: authenticate }, async (request, reply) => {
+    const user = requireAuthenticatedUser(request, reply);
+    if (!user) return reply;
+    try {
+      await deleteAccount(user.id);
+      request.log.info({ event: "account.deleted" }, "Account deleted");
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof AccountDeletionUnavailableError)
+        return reply.code(503).send({ error: "ACCOUNT_DELETION_UNAVAILABLE" });
+      if (error instanceof AuthIdentityDeletionError) {
+        request.log.error(
+          { event: "account.identity_deletion_failed" },
+          "App data was deleted but the sign-in identity remains",
+        );
+        return reply.code(502).send({ error: "ACCOUNT_IDENTITY_DELETION_FAILED" });
+      }
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Account deletion failed",
+      );
+      return reply.code(503).send({ error: "ACCOUNT_DELETION_FAILED" });
+    }
+  });
   app.get("/api/me/challenges", { preHandler: authenticate }, async (request, reply) => {
     const user = requireAuthenticatedUser(request, reply);
     if (!user) return reply;
