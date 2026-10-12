@@ -199,6 +199,29 @@ void describe("Ruling evidence verification", () => {
     assert.equal(containsWebLinks({ ...settled, summary: "Rule 702.61a applies." }), false);
   });
 
+  void it("keeps a vanilla card face citable and shows its characteristics", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const vanillaFace = {
+      ...baseCard.matchedFace,
+      oracleText: "",
+      typeLine: "Creature — Bear",
+      power: "2",
+      toughness: "2",
+    };
+    const vanilla = {
+      ...evidence,
+      cards: [{ ...baseCard, matchedFace: vanillaFace, faces: [vanillaFace] }],
+    };
+    const bounded = boundEvidenceForPrompt(vanilla);
+    assert.equal(bounded.cards[0]?.faces.length, 1);
+    const prompt = JSON.parse(buildModelPrompt({ question: "How big is it?" }, vanilla)) as {
+      evidence: { cards: Array<{ face: { power: string; typeLine: string } }> };
+    };
+    assert.equal(prompt.evidence.cards[0]?.face.power, "2");
+    assert.equal(prompt.evidence.cards[0]?.face.typeLine, "Creature — Bear");
+  });
+
   void it("adds verified notes to the prompt only when there are some", () => {
     const request = { question: "Do both spells resolve?", confirmedCards: [] };
     const without = JSON.parse(buildModelPrompt(request, evidence)) as Record<string, unknown>;

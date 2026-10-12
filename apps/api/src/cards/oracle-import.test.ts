@@ -71,6 +71,31 @@ void describe("Oracle Cards bulk parser", () => {
     assert.equal(records[1]?.faces[0]?.imageUri, "https://cards.scryfall.io/normal/single.jpg");
   });
 
+  void it("keeps mana value, loyalty and defense from the Oracle record", () => {
+    const planeswalker = normalizeOracleCard({
+      oracle_id: "oracle-walker",
+      name: "Walker",
+      layout: "normal",
+      type_line: "Legendary Planeswalker — Jace",
+      mana_cost: "{2}{U}{U}",
+      cmc: 4,
+      loyalty: "3",
+      oracle_text: "+2: Draw a card.",
+    });
+    assert.equal(planeswalker.manaValue, 4);
+    assert.equal(planeswalker.faces[0]?.loyalty, "3");
+    assert.equal(planeswalker.faces[0]?.defense, null);
+    const battle = normalizeOracleCard({
+      oracle_id: "oracle-battle",
+      name: "Battle",
+      layout: "normal",
+      type_line: "Battle — Siege",
+      defense: "5",
+    });
+    assert.equal(battle.manaValue, null);
+    assert.equal(battle.faces[0]?.defense, "5");
+  });
+
   void it("skips art-series records that share a game card's name", async () => {
     const artSeries = {
       oracle_id: "oracle-art-series",

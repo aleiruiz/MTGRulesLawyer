@@ -15,6 +15,8 @@ export interface OracleFaceInput {
   oracleText: string;
   power: string | null;
   toughness: string | null;
+  loyalty: string | null;
+  defense: string | null;
   imageUri: string | null;
 }
 
@@ -24,6 +26,7 @@ export interface OracleCardInput {
   layout: string;
   typeLine: string;
   oracleText: string;
+  manaValue: number | null;
   faces: OracleFaceInput[];
 }
 
@@ -51,7 +54,7 @@ export interface ImportOracleResult {
 const MAX_ORACLE_JSONL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_ORACLE_RECORD_BYTES = 1024 * 1024;
 // Increment when normalization changes so an unchanged source can be re-imported.
-export const ORACLE_IMPORTER_REVISION = 2;
+export const ORACLE_IMPORTER_REVISION = 3;
 const IMPORTER_REVISION_NOTE = "oracle-importer-revision=";
 // Art-series cards are collectible art with a game card's name and no rules of their own;
 // importing them makes name lookups offer a duplicate, non-playable choice.
@@ -98,6 +101,12 @@ export function normalizeOracleCard(value: unknown): OracleCardInput {
       oracleText: optionalText(sourceFace.oracle_text ?? value.oracle_text),
       power: nullableText(sourceFace.power),
       toughness: nullableText(sourceFace.toughness),
+      loyalty: nullableText(
+        sourceFace.loyalty ?? (sourceFaces.length === 1 ? value.loyalty : null),
+      ),
+      defense: nullableText(
+        sourceFace.defense ?? (sourceFaces.length === 1 ? value.defense : null),
+      ),
       imageUri: findImageUri(sourceFace.image_uris) ?? findImageUri(value.image_uris),
     };
   });
@@ -120,6 +129,7 @@ export function normalizeOracleCard(value: unknown): OracleCardInput {
     layout,
     typeLine: topLevelTypeLine,
     oracleText: topLevelOracleText,
+    manaValue: typeof value.cmc === "number" && Number.isFinite(value.cmc) ? value.cmc : null,
     faces,
   };
 }
@@ -387,6 +397,7 @@ export class PrismaOracleSnapshotWriter implements OracleSnapshotWriter {
               layout: card.layout,
               typeLine: card.typeLine,
               oracleText: card.oracleText,
+              manaValue: card.manaValue,
             })),
           });
           await transaction.cardFace.createMany({

@@ -137,6 +137,7 @@ export async function assembleEvidence(
           name: face.name,
           oracleText: faceText.value,
           truncated: faceText.truncated,
+          ...faceCharacteristics(face),
         };
       });
       const matchedFace = faces.find((face) => face.id === match.id);
@@ -434,6 +435,7 @@ export async function assembleConfirmedEvidence(
         name: cardFace.name,
         oracleText: faceText.value,
         truncated: faceText.truncated,
+        ...faceCharacteristics(cardFace),
       };
     });
     const matchedFace = faces.find(({ id }) => id === face.id);
@@ -443,6 +445,7 @@ export async function assembleConfirmedEvidence(
       oracleId: card.oracleId,
       name: card.name,
       layout: card.layout,
+      manaValue: card.manaValue,
       selectedFaceIndex: face.faceIndex,
       quantity,
       matchedFace,
@@ -506,4 +509,23 @@ function takeText(
   budget.remaining -= value.length;
   budget.truncated ||= truncated;
   return { value, truncated };
+}
+
+/** The printed characteristics the judge needs: cost, type, power/toughness, loyalty, defense. */
+function faceCharacteristics(face: {
+  manaCost: string;
+  typeLine: string;
+  power: string | null;
+  toughness: string | null;
+  loyalty: string | null;
+  defense: string | null;
+}) {
+  return {
+    manaCost: face.manaCost,
+    typeLine: face.typeLine,
+    power: face.power,
+    toughness: face.toughness,
+    loyalty: face.loyalty,
+    defense: face.defense,
+  };
 }
