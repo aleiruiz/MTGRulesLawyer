@@ -38,13 +38,34 @@ export function toChatCard(candidate: Candidate): ChatCard {
   };
 }
 
-/** Sorts a follow-up's card mentions into usable, needs-a-choice, and not found. */
-export function resolveMentions(mentions: Mention[]): MentionResolution {
+/** True when a mention like "Bears" names a card already in the chat ("Grizzly Bears"). */
+function refersToKnownCard(text: string, knownCards: ChatCard[]): boolean {
+  const words = text.toLocaleLowerCase("en-US").split(/\s+/).filter(Boolean);
+  return knownCards.some((card) => {
+    const name = card.name.toLocaleLowerCase("en-US");
+    return words.length > 0 && words.every((word) => name.includes(word));
+  });
+}
+
+/**
+ * Sorts a follow-up's card mentions into usable, needs-a-choice, and not found. Mentions of
+ * cards already in the chat are settled without asking: an ambiguous name resolves to the card
+ * the player already picked, and a short name like "Bears" is not reported as missing.
+ */
+export function resolveMentions(
+  mentions: Mention[],
+  knownCards: ChatCard[] = [],
+): MentionResolution {
   const resolution: MentionResolution = { resolved: [], ambiguous: [], unmatched: [] };
   for (const mention of mentions) {
+    const known = mention.candidates.find((candidate) =>
+      knownCards.some((card) => card.oracleId === candidate.oracleId),
+    );
     const [only, ...others] = mention.candidates;
-    if (!only) resolution.unmatched.push(mention.text);
-    else if (others.length === 0) resolution.resolved.push(toChatCard(only));
+    if (known) continue;
+    if (!only) {
+      if (!refersToKnownCard(mention.text, knownCards)) resolution.unmatched.push(mention.text);
+    } else if (others.length === 0) resolution.resolved.push(toChatCard(only));
     else resolution.ambiguous.push(mention);
   }
   return resolution;

@@ -54,6 +54,26 @@ void describe("chat follow-up cards", () => {
     assert.deepEqual(resolution.unmatched, ["Nonsense"]);
   });
 
+  void it("settles mentions of cards already in the chat without asking", () => {
+    const known = [{ oracleId: "bolt", name: "Lightning Bolt", faceIndex: 0, quantity: 1 }];
+    const resolution = resolveMentions(
+      [
+        {
+          text: "Lightning Bolt",
+          start: 0,
+          end: 14,
+          candidates: [
+            candidate("bolt-mdfc", "Emeritus // Lightning Bolt"),
+            candidate("bolt", "Lightning Bolt"),
+          ],
+        },
+        { text: "Bolt", start: 20, end: 24, candidates: [] },
+      ],
+      known,
+    );
+    assert.deepEqual(resolution, { resolved: [], ambiguous: [], unmatched: [] });
+  });
+
   void it("keeps earlier cards, skips duplicates, and stops at the card limit", () => {
     assert.deepEqual(
       mergeCards([card("a"), card("b")], [card("b"), card("c")]).map((item) => item.oracleId),

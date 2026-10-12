@@ -152,7 +152,7 @@ export default function ChatScreen({
           missingFacts: interpretation.missingFacts,
           searchTerms: interpretation.searchTerms,
         };
-        const resolution = resolveMentions(interpretation.cardMentions);
+        const resolution = resolveMentions(interpretation.cardMentions, carriedCards);
         const cards = mergeCards(carriedCards, resolution.resolved);
         if (resolution.ambiguous.length > 0) {
           updateTurn(key, {
