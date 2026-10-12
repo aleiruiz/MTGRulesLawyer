@@ -74,6 +74,11 @@ export const CORE_RULE_NUMBERS = [
   "500.1",
   "506.1",
   "302.6",
+  // Loops: a mandatory loop is a draw, an optional one is shortcut to a chosen number.
+  "104.4b",
+  "732.1b",
+  "732.2a",
+  "732.4",
   "704.3",
   "704.5a",
   "704.5f",

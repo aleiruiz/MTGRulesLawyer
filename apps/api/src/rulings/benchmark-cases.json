@@ -356,7 +356,31 @@
     "level": "hard",
     "question": "I control Solemnity and Kitchen Finks. What happens when Kitchen Finks dies without counters on it?",
     "cards": ["Solemnity", "Kitchen Finks"],
-    "expected": "Persist returns it to the battlefield, but Solemnity stops the -1/-1 counter from being put on it, so it can die and return again and again.",
+    "expected": "Persist returns Kitchen Finks, but Solemnity stops the -1/-1 counter from being put on it, so each time it dies again persist returns it again: a loop that repeats as long as something keeps killing it.",
     "source": "Solemnity official ruling; CR 702.79a"
+  },
+  {
+    "id": "H11",
+    "level": "hard",
+    "question": "I control Melira, Sylvok Outcast, Kitchen Finks and Viscera Seer. How much life can I gain this turn?",
+    "cards": ["Melira, Sylvok Outcast", "Kitchen Finks", "Viscera Seer"],
+    "expected": "As much as you want. Sacrificing Kitchen Finks to Viscera Seer makes persist return it, Melira stops the -1/-1 counter so persist works again, and each return gains 2 life. It is an optional loop: you choose how many times to repeat it.",
+    "source": "CR 702.79a, 732.2a; Melira and Kitchen Finks Oracle text"
+  },
+  {
+    "id": "H12",
+    "level": "hard",
+    "question": "I control Exquisite Blood and Sanguine Bond and my opponent is at 10 life. What happens if my opponent loses 1 life?",
+    "cards": ["Exquisite Blood", "Sanguine Bond"],
+    "expected": "Your opponent loses the game. Each life loss triggers Exquisite Blood, and each life gain triggers Sanguine Bond, whose only legal target is your one opponent, so both triggers are mandatory and keep feeding each other. State-based actions are checked between them, so when your opponent reaches 0 life they lose. The loop is mandatory but it ends, so it is not a draw.",
+    "source": "CR 104.4b, 704.3, 704.5a; Sanguine Bond official ruling (2021-03-19)"
+  },
+  {
+    "id": "H13",
+    "level": "hard",
+    "question": "I cast Animate Dead on Worldgorger Dragon in my graveyard. It's the only creature card in any graveyard and no player has any other spells or abilities. What happens?",
+    "cards": ["Animate Dead", "Worldgorger Dragon"],
+    "expected": "The game is a draw. The Dragon's enter trigger exiles Animate Dead, so Animate Dead's leave trigger makes you sacrifice the Dragon. The Dragon's leave trigger then returns Animate Dead, which must enchant a creature card in a graveyard, and the Dragon is the only one, so it returns the Dragon again. Every step is mandatory and nothing can stop it, so the game is a draw.",
+    "source": "CR 104.4b, 732.4; Worldgorger Dragon and Animate Dead Oracle text"
   }
 ]

@@ -32,8 +32,18 @@ void describe("confirmed-card query text", () => {
 });
 
 void describe("core rules", () => {
-  void it("covers priority, the stack, turn structure, state-based actions and layers", () => {
-    for (const section of ["117.", "405.", "603.3b", "608.", "500.1", "704.", "613.1"]) {
+  void it("covers priority, the stack, turn structure, state-based actions, layers and loops", () => {
+    for (const section of [
+      "117.",
+      "405.",
+      "603.3b",
+      "608.",
+      "500.1",
+      "704.",
+      "613.1",
+      "104.4b",
+      "732.",
+    ]) {
       assert.ok(
         CORE_RULE_NUMBERS.some((number) => number.startsWith(section)),
         `missing ${section}`,
