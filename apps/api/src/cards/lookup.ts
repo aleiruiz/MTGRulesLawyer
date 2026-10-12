@@ -10,6 +10,9 @@ const APPROXIMATE_SCORE_WINDOW = 0.1;
 const MIN_APPROXIMATE_SCORE = 0.45;
 // Faces read before grouping by card; several cards can share a face name.
 const APPROXIMATE_FACE_CANDIDATES = 40;
+const MAX_APPROXIMATE_INPUT_CHARACTERS = 60;
+const MAX_APPROXIMATE_INPUT_WORDS = 6;
+const APPROXIMATE_TIMEOUT_MS = 1_000;
 
 type FaceMatch = Awaited<ReturnType<typeof loadFaces>>[number];
 
@@ -21,7 +24,11 @@ async function activeSnapshotId(client: PrismaClient): Promise<string | null> {
   return snapshot?.id ?? null;
 }
 
-function toLookupResponse(matches: FaceMatch[], maxCards?: number): CardLookupResponse {
+function toLookupResponse(
+  matches: FaceMatch[],
+  matchKind: "exact" | "approximate",
+  maxCards?: number,
+): CardLookupResponse {
   const cards = new Map<string, CardLookupResponse["cards"][number]>();
   for (const match of matches) {
     if (cards.has(match.card.oracleId)) continue;
@@ -30,6 +37,7 @@ function toLookupResponse(matches: FaceMatch[], maxCards?: number): CardLookupRe
       oracleId: match.card.oracleId,
       name: match.card.name,
       layout: match.card.layout,
+      matchKind,
       matchedFace: {
         faceIndex: match.faceIndex,
         role: match.role,
@@ -63,7 +71,7 @@ export async function lookupCardsByExactFaceName(
 ): Promise<CardLookupResponse> {
   const snapshotId = await activeSnapshotId(client);
   if (!snapshotId) return { cards: [] };
-  return toLookupResponse(await findExactFaceMatches(name, snapshotId, client));
+  return toLookupResponse(await findExactFaceMatches(name, snapshotId, client), "exact");
 }
 
 /**
@@ -73,13 +81,16 @@ export async function lookupCardsByExactFaceName(
 export async function lookupCardsByName(
   name: string,
   client: PrismaClient = prisma,
+  /** Defaults to the active snapshot. */
+  snapshot?: string,
 ): Promise<CardLookupResponse> {
-  const snapshotId = await activeSnapshotId(client);
+  const snapshotId = snapshot ?? (await activeSnapshotId(client));
   if (!snapshotId) return { cards: [] };
   const exact = await findExactFaceMatches(name, snapshotId, client);
-  if (exact.length > 0) return toLookupResponse(exact);
+  if (exact.length > 0) return toLookupResponse(exact, "exact");
   return toLookupResponse(
     await findApproximateFaceMatches(name, snapshotId, client),
+    "approximate",
     MAX_APPROXIMATE_CARDS,
   );
 }
@@ -139,9 +150,20 @@ export async function findApproximateFaceMatches(
   snapshotId: string,
   client: PrismaClient = prisma,
 ) {
-  const query = name.trim().toLowerCase();
-  if (query.length < 3) return [];
-  const candidates = await client.$queryRaw<Array<{ id: string; score: number }>>(Prisma.sql`
+  const query = name.trim().replace(/\s+/g, " ").toLowerCase();
+  // Card names are short. Long or many-word input is not a name, and common short words in
+  // it make trigram matching scan most faces, so it gets no approximate pass.
+  if (
+    query.length < 3 ||
+    query.length > MAX_APPROXIMATE_INPUT_CHARACTERS ||
+    query.split(" ").length > MAX_APPROXIMATE_INPUT_WORDS
+  )
+    return [];
+  const [, , candidates] = await client.$transaction([
+    // Supabase installs extensions in the "extensions" schema; Postgres ignores missing schemas.
+    client.$executeRaw`SET LOCAL search_path = public, extensions`,
+    client.$executeRaw`SET LOCAL statement_timeout = ${Prisma.raw(String(APPROXIMATE_TIMEOUT_MS))}`,
+    client.$queryRaw<Array<{ id: string; score: number }>>(Prisma.sql`
     SELECT f."id",
       greatest(similarity(lower(f."name"), ${query}), word_similarity(${query}, lower(f."name")))
         AS score
@@ -152,7 +174,8 @@ export async function findApproximateFaceMatches(
     ORDER BY score DESC, similarity(lower(f."name"), ${query}) DESC, length(f."name") ASC,
       c."oracleId" ASC, f."faceIndex" ASC
     LIMIT ${APPROXIMATE_FACE_CANDIDATES}
-  `);
+  `),
+  ]);
   const best = candidates[0]?.score ?? 0;
   const kept = candidates.filter(
     ({ score }) => score >= MIN_APPROXIMATE_SCORE && score >= best - APPROXIMATE_SCORE_WINDOW,

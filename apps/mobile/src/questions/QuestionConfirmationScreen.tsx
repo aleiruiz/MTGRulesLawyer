@@ -183,7 +183,10 @@ export default function QuestionConfirmationScreen() {
       setSelectedByMention(
         Object.fromEntries(
           result.cardMentions.flatMap((mention, index) =>
-            mention.candidates.length === 1 ? [[index, mention.candidates[0]?.oracleId ?? ""]] : [],
+            // A near match (typo, partial name) is a guess; the player confirms it.
+            mention.candidates.length === 1 && mention.candidates[0]?.matchKind !== "approximate"
+              ? [[index, mention.candidates[0]?.oracleId ?? ""]]
+              : [],
           ),
         ),
       );
@@ -423,7 +426,11 @@ export default function QuestionConfirmationScreen() {
                   if (selectedByMention[mentionIndex] || ignoredSet.has(mentionIndex)) return null;
                   return (
                     <View key={`${mention.start}-${mention.end}`} style={styles.mentionBox}>
-                      <Text style={styles.cardTitle}>Choose a match for “{mention.text}”</Text>
+                      <Text style={styles.cardTitle}>
+                        {mention.candidates[0]?.matchKind === "approximate"
+                          ? `Did you mean one of these for “${mention.text}”?`
+                          : `Choose a match for “${mention.text}”`}
+                      </Text>
                       {mention.candidates.map((candidate) => (
                         <Pressable
                           key={candidate.oracleId}

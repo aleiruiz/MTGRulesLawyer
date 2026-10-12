@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { PrismaClient, SnapshotStatus } from "@prisma/client";
 import { after, describe, it } from "node:test";
-import { findApproximateFaceMatches, findExactFaceMatches } from "./lookup.js";
+import { findApproximateFaceMatches, findExactFaceMatches, lookupCardsByName } from "./lookup.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const prisma = new PrismaClient();
@@ -37,6 +37,21 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       assert.deepEqual((await names("Bolt")).sort(), ["Guiding Bolt", "Lightning Bolt"]);
       assert.deepEqual(await names("xq"), []);
       assert.deepEqual(await names("Completely unrelated words"), []);
+      // Long or many-word input is not a card name and gets no approximate pass.
+      assert.deepEqual(await names("the bolt of the bears and the jace of the bolt"), []);
+      assert.deepEqual(await names(`Lightning Bolt ${"x".repeat(60)}`), []);
+
+      // Lookups say whether a match is exact, so clients never auto-select a guess.
+      const exact = await lookupCardsByName("lightning bolt", prisma, snapshot.id);
+      assert.deepEqual(
+        exact.cards.map((card) => [card.name, card.matchKind]),
+        [["Lightning Bolt", "exact"]],
+      );
+      const guessed = await lookupCardsByName("Lighning Bolt", prisma, snapshot.id);
+      assert.deepEqual(
+        guessed.cards.map((card) => [card.name, card.matchKind]),
+        [["Lightning Bolt", "approximate"]],
+      );
     } finally {
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
     }
