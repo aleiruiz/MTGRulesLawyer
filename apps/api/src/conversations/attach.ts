@@ -46,10 +46,11 @@ export async function attachToConversation(
     });
     conversationId = created.id;
   }
+  // The conversation just used always stays, even if another one shares its timestamp.
   const stale = await tx.conversation.findMany({
-    where: { userId: owner.userId },
+    where: { userId: owner.userId, id: { not: conversationId } },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-    skip: MAX_SAVED_CONVERSATIONS,
+    skip: MAX_SAVED_CONVERSATIONS - 1,
     select: { id: true },
   });
   if (stale.length > 0) {

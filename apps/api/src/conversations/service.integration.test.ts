@@ -28,6 +28,7 @@ void describe("Conversation history integration", { skip: !enabled }, () => {
     });
     const owner = await prisma.appUser.create({ data: { supabaseUserId: randomUUID() } });
     const stranger = await prisma.appUser.create({ data: { supabaseUserId: randomUUID() } });
+    const orphanQuestionIds: string[] = [];
     try {
       const source = await prisma.sourceSnapshot.create({
         data: {
@@ -161,7 +162,20 @@ void describe("Conversation history integration", { skip: !enabled }, () => {
       assert.equal(newest.lastOutcome, "uncertain");
       assert.equal(await deleteConversation(owner.id, newest.id, prisma), true);
       assert.equal((await listConversations(owner.id, prisma)).conversations.length, 9);
+
+      // Deleting an account deletes its conversations and unlinks its questions, whose
+      // public rulings stay readable.
+      const strangerQuestionId = (
+        await prisma.ruling.findUniqueOrThrow({ where: { id: hijack.rulingId } })
+      ).questionId;
+      orphanQuestionIds.push(strangerQuestionId);
+      await prisma.appUser.delete({ where: { id: stranger.id } });
+      assert.equal(await prisma.conversation.count({ where: { userId: stranger.id } }), 0);
+      const orphan = await prisma.question.findUniqueOrThrow({ where: { id: strangerQuestionId } });
+      assert.equal(orphan.userId, null);
+      assert.equal(orphan.conversationId, null);
     } finally {
+      await prisma.question.deleteMany({ where: { id: { in: orphanQuestionIds } } });
       await prisma.question.deleteMany({ where: { userId: { in: [owner.id, stranger.id] } } });
       await prisma.appUser.deleteMany({ where: { id: { in: [owner.id, stranger.id] } } });
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
