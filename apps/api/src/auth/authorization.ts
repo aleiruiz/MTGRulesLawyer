@@ -40,7 +40,9 @@ export function registerAuthentication(
   const maxAgeSeconds = options.adminAuthMaxAgeSeconds ?? DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS;
   const now = options.now ?? Date.now;
   app.addHook("preHandler", async (request, reply) => {
-    const path = request.url.split("?", 1)[0] ?? request.url;
+    // Match on the routed pattern, not the raw URL: the router decodes %XX before matching, so a
+    // raw-URL check would miss requests such as /api/%61dmin/challenges.
+    const path = request.routeOptions.url ?? "";
     if (isNamespacePath(path, "/api/auth")) return authenticate(request, reply);
     if (!isNamespacePath(path, "/api/admin")) return;
     await authenticate(request, reply);
