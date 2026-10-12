@@ -85,14 +85,14 @@
     "question": "My opponent controls Leyline of Sanctity. Can I target them with Thoughtseize?",
     "cards": ["Leyline of Sanctity", "Thoughtseize"],
     "expected": "No. While they control Leyline of Sanctity, that player has hexproof and can't be the target of spells or abilities you control.",
-    "source": "Leyline of Sanctity Oracle text; CR 702.11d"
+    "source": "Leyline of Sanctity Oracle text; CR 702.11c"
   },
   {
     "id": "E12",
     "level": "easy",
     "question": "I control Platinum Angel and my life total is -5. Do I lose the game?",
     "cards": ["Platinum Angel"],
-    "expected": "No. Platinum Angel says you can't lose the game, so the state-based action for 0 or less life doesn't make you lose while you control it. If it leaves, you lose the next time state-based actions are checked.",
+    "expected": "No. Platinum Angel says you can't lose the game, so the state-based action for having 0 or less life doesn't make you lose while you control it.",
     "source": "Platinum Angel official ruling; CR 704.5a"
   },
   {
@@ -108,7 +108,7 @@
     "level": "easy",
     "question": "My opponent controls Thalia, Guardian of Thraben. How much do I have to pay to cast Lightning Bolt?",
     "cards": ["Thalia, Guardian of Thraben", "Lightning Bolt"],
-    "expected": "{1}{R}. Thalia makes noncreature spells cost {1} more; Lightning Bolt's mana value stays 1.",
+    "expected": "{1}{R}. Thalia makes noncreature spells cost {1} more to cast.",
     "source": "Thalia Oracle text; CR 601.2f, 202.3"
   },
   {
@@ -165,7 +165,7 @@
     "question": "My Colossal Dreadmaw is equipped with Basilisk Collar and is blocked by a 4/4. How much damage can I trample over to the player?",
     "cards": ["Colossal Dreadmaw", "Basilisk Collar"],
     "expected": "5. With deathtouch, 1 damage counts as lethal to the blocker, so you assign 1 to it and the remaining 5 of its 6 power to the player.",
-    "source": "CR 702.2c, 702.19c"
+    "source": "CR 702.2c, 702.19b"
   },
   {
     "id": "M7",
@@ -236,8 +236,8 @@
     "level": "medium",
     "question": "Can I use Stifle to counter the ability of my opponent's Polluted Delta?",
     "cards": ["Stifle", "Polluted Delta"],
-    "expected": "No. Polluted Delta's ability is an activated ability, and Stifle only counters triggered abilities.",
-    "source": "Stifle Oracle text; CR 602.1, 603.1"
+    "expected": "Yes. Stifle counters target activated or triggered ability, and Polluted Delta's ability is an activated ability that isn't a mana ability, so Stifle can counter it. Polluted Delta was already sacrificed as part of the cost, so your opponent doesn't search for a land.",
+    "source": "Stifle Oracle text; CR 602.1, 605.1a, 701.6a"
   },
   {
     "id": "M16",
@@ -266,10 +266,10 @@
   {
     "id": "M19",
     "level": "medium",
-    "question": "I control Thassa's Oracle in my hand and my library is empty. What happens when I cast it?",
+    "question": "I have Thassa's Oracle in my hand and my library is empty. What happens when I cast it?",
     "cards": ["Thassa's Oracle"],
-    "expected": "When its enters trigger resolves, your devotion to blue (at least 1) is greater than or equal to the number of cards in your library (0), so you win the game.",
-    "source": "Thassa's Oracle Oracle text and rulings"
+    "expected": "You win the game when its enters trigger resolves, because X (your devotion to blue) is always greater than or equal to the number of cards in your library (0).",
+    "source": "Thassa's Oracle official ruling (2020-01-24)"
   },
   {
     "id": "M20",
@@ -341,7 +341,7 @@
     "question": "What does Dryad Arbor look like while Blood Moon is on the battlefield?",
     "cards": ["Dryad Arbor", "Blood Moon"],
     "expected": "It is a land creature with land type Mountain (no longer Forest) and creature type Dryad, still a green 1/1, and it taps for {R}.",
-    "source": "CR 305.7; Blood Moon / Dryad Arbor official rulings"
+    "source": "CR 305.7; Blood Moon official ruling (2020-08-07)"
   },
   {
     "id": "H9",
