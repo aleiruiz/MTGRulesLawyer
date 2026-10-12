@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
 import {
+  boundEvidenceForPrompt,
   buildModelPrompt,
   createClarificationResponse,
   modelRulingSchema,
@@ -34,7 +35,7 @@ for (const [index, fixture] of rulingEvaluationSeedSet.entries()) {
             userPrompt: buildModelPrompt(request, evidence),
             promptVersion: RULING_PROMPT_VERSION,
           }),
-          evidence,
+          boundEvidenceForPrompt(evidence),
           config.model,
         );
   const actualRules = getCitationRuleNumbers(result.citations);

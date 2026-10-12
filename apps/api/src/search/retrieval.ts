@@ -12,6 +12,15 @@ import { findExactFaceMatches } from "../cards/lookup.js";
 import { prisma } from "../db/client.js";
 
 const MAX_MATCHING_RULES = 8;
+const MAX_QUERY_TERMS = 32;
+const MAX_RANKING_TERMS = 16;
+// Terms found in more than this share of rules say little about which rule applies.
+const MAX_TERM_RULE_SHARE = 0.08;
+// ...except in small rule sets (fixtures, partial imports), where every term is "common".
+const MIN_COMMON_TERM_RULES = 25;
+const MAX_KEYWORDS = 3;
+const KEYWORD_RULES_PER_HEADING = 2;
+const MAX_KEYWORD_HEADING_CHARACTERS = 40;
 const MAX_EXPANDED_RULES = 24;
 const MAX_REFERENCES_PER_RULE = 12;
 const MAX_CARDS_PER_NAME = 3;
@@ -114,13 +123,98 @@ export async function assembleEvidence(
         select: { id: true, number: true },
       })
     : [];
+  // Requiring every term (websearch_to_tsquery) found nothing for real questions. Instead, take
+  // the first MAX_QUERY_TERMS distinct terms of the question, keep the rarest ones that are not
+  // in most rules ("creature", "player"), and rank rules that contain any of them, discounting
+  // long rules. Bounding the terms keeps a 4,000-character question as fast as a short one.
+  // Keywords the question names ("hexproof", "trample") always bring the rules that define
+  // them, since rules sharing several commoner terms would otherwise outrank the definition.
   const fullTextHits = await client.$queryRaw<Array<{ id: string; number: string }>>(Prisma.sql`
-    SELECT r."id", r."number"
-    FROM "Rule" AS r
-    WHERE r."snapshotId" = ${snapshot.id}::uuid
-      AND to_tsvector('english', r."text") @@ websearch_to_tsquery('english', ${request.question})
-    ORDER BY ts_rank_cd(to_tsvector('english', r."text"), websearch_to_tsquery('english', ${request.question})) DESC,
-      r."sortOrder" ASC
+    WITH snapshot_rules AS NOT MATERIALIZED (
+      SELECT r."id", r."number", r."sortOrder", r."parentId", length(r."text") AS "textLength",
+        to_tsvector('english', r."text") AS document
+      FROM "Rule" AS r
+      WHERE r."snapshotId" = ${snapshot.id}::uuid
+    ),
+    question_terms AS (
+      SELECT term.lexeme, term.positions[1] AS position
+      FROM unnest(to_tsvector('english', ${request.question})) AS term
+      ORDER BY term.positions[1]
+      LIMIT ${MAX_QUERY_TERMS}
+    ),
+    term_frequency AS (
+      SELECT question_terms.lexeme, question_terms.position,
+        (SELECT count(*) FROM snapshot_rules
+          WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery) AS rules
+      FROM question_terms
+    ),
+    rare_terms AS (
+      SELECT quote_literal(term_frequency.lexeme)::tsquery AS term
+      FROM term_frequency
+      WHERE term_frequency.rules > 0
+        AND term_frequency.rules <= GREATEST(
+          (SELECT count(*) FROM snapshot_rules) * ${MAX_TERM_RULE_SHARE},
+          ${MIN_COMMON_TERM_RULES}
+        )
+      ORDER BY term_frequency.rules ASC
+      LIMIT ${MAX_RANKING_TERMS}
+    ),
+    query AS (
+      SELECT string_agg(rare_terms.term::text, ' | ')::tsquery AS terms FROM rare_terms
+    ),
+    keyword_headings AS (
+      -- Keyword abilities (702.x) are headed by a rule whose whole text is the keyword
+      -- ("702.2. Deathtouch", "702.19. Trample"). A heading counts when every word of it appears in
+      -- the question. Keyword actions (701.x: cast, destroy...) are everyday words, so they are left
+      -- to the ranked search; card names have no heading at all.
+      SELECT snapshot_rules."id",
+        (SELECT min(question_terms.position) FROM question_terms
+          WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery)
+          AS position
+      FROM snapshot_rules
+      WHERE snapshot_rules."number" ~ '^702[.][0-9]+$'
+        AND snapshot_rules."textLength" <= ${MAX_KEYWORD_HEADING_CHARACTERS}
+        AND length(snapshot_rules.document) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM unnest(snapshot_rules.document) AS heading_term
+          WHERE heading_term.lexeme NOT IN (SELECT question_terms.lexeme FROM question_terms)
+        )
+      ORDER BY position ASC
+      LIMIT ${MAX_KEYWORDS}
+    ),
+    keyword_hits AS (
+      -- The first rules under each heading define the keyword.
+      SELECT "id", "number", "sortOrder"
+      FROM (
+        SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
+          row_number() OVER (
+            PARTITION BY snapshot_rules."parentId" ORDER BY snapshot_rules."sortOrder"
+          ) AS position
+        FROM keyword_headings
+        JOIN snapshot_rules ON snapshot_rules."parentId" = keyword_headings."id"
+      ) AS defining
+      WHERE defining.position <= ${KEYWORD_RULES_PER_HEADING}
+    ),
+    ranked_hits AS (
+      -- A rule sharing more of the question's distinct terms comes first; cover density only
+      -- breaks ties, so one term repeated in a long rule cannot outrank broader overlap.
+      SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
+        (SELECT count(*) FROM rare_terms WHERE snapshot_rules.document @@ rare_terms.term)
+          AS shared,
+        ts_rank_cd(snapshot_rules.document, query.terms, 1) AS rank
+      FROM snapshot_rules, query
+      WHERE snapshot_rules.document @@ query.terms
+    )
+    SELECT hits."id", hits."number"
+    FROM (
+      SELECT "id", "number", "sortOrder", 0 AS tier, 0::bigint AS shared, 0::real AS rank
+      FROM keyword_hits
+      UNION ALL
+      SELECT "id", "number", "sortOrder", 1 AS tier, shared, rank FROM ranked_hits
+    ) AS hits
+    GROUP BY hits."id", hits."number"
+    ORDER BY min(hits.tier) ASC, max(hits.shared) DESC, max(hits.rank) DESC,
+      min(hits."sortOrder") ASC
     LIMIT ${MAX_MATCHING_RULES + 1}
   `);
   if (fullTextHits.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
@@ -151,6 +245,9 @@ export async function assembleEvidence(
       },
     })) as RuleHit[];
     const reasons = new Map(batch.map(({ id, reason }) => [id, reason]));
+    // findMany does not keep the order of `ids`; restore it so higher-priority rules come first.
+    const position = new Map(ids.map((id, index) => [id, index]));
+    rows.sort((left, right) => (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0));
     for (const rule of rows) {
       if (rule.referencesOut.length > MAX_REFERENCES_PER_RULE) ruleBudget.truncated = true;
       if (included.size >= MAX_EXPANDED_RULES) break;
@@ -243,12 +340,13 @@ export async function assembleConfirmedEvidence(
     if (!card || !face) throw new InvalidConfirmedCardsError();
     return { card, face, quantity: selection.quantity };
   });
+  // Search terms come first: the search keeps the earliest terms, and these were chosen for it.
   const query = [
+    ...request.gameState.searchTerms,
     request.question,
     ...request.gameState.events,
     ...request.gameState.knownFacts,
     ...request.gameState.missingFacts,
-    ...request.gameState.searchTerms,
   ]
     .join("\n")
     .slice(0, 4_000);
