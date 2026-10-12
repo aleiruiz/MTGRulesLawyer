@@ -59,12 +59,14 @@ export function resolveMentions(
 ): MentionResolution {
   const resolution: MentionResolution = { resolved: [], ambiguous: [], unmatched: [] };
   for (const mention of mentions) {
-    // Only an exact name settles to a card already in the chat; a near match still asks.
-    const known = mention.candidates.find(
-      (candidate) =>
-        candidate.matchKind !== "approximate" &&
-        knownCards.some((card) => card.oracleId === candidate.oracleId),
-    );
+    // A card already in the chat settles the mention when the name is exact, or when the
+    // mention's words all come from that card's name ("gandalf" for "Gandalf, Party Guest").
+    // Other near matches still ask, so a known "Brainstorm" does not swallow "Storm".
+    const known = mention.candidates.find((candidate) => {
+      const chatCard = knownCards.find((card) => card.oracleId === candidate.oracleId);
+      if (!chatCard) return false;
+      return candidate.matchKind !== "approximate" || refersToKnownCard(mention.text, [chatCard]);
+    });
     const [only, ...others] = mention.candidates;
     if (known) continue;
     if (!only) {
