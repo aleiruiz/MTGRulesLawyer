@@ -33,6 +33,8 @@ void describe("judge notes", () => {
   void it("uses a single-card note only for single-card questions and bounds the text", () => {
     assert.deepEqual(selectPromptNotes(["a", "b"], [note(["a"], "only a")]), []);
     assert.equal(selectPromptNotes(["a"], [note(["a"], "only a")]).length, 1);
+    // A note about a different interaction involving the card is not used.
+    assert.deepEqual(selectPromptNotes(["a"], [note(["a", "x"], "a with x")]), []);
     const long = selectPromptNotes(["a"], [note(["a"], "x".repeat(5_000))]);
     assert.equal(long[0]?.conclusion.length, 1_500);
   });

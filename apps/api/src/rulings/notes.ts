@@ -30,13 +30,24 @@ export async function findNotesForCards(
 ): Promise<PromptNote[]> {
   const key = noteCardKey(oracleIds);
   if (key.length === 0) return [];
-  const notes = await client.judgeNote.findMany({
-    where: { snapshotId, oracleIds: { hasSome: key } },
+  const select = { oracleIds: true, summary: true, reasoning: true, ruleNumbers: true } as const;
+  // Exact card sets first, so many newer notes about popular cards cannot crowd them out.
+  const exact = await client.judgeNote.findMany({
+    where: { snapshotId, oracleIds: { equals: key } },
     orderBy: { createdAt: "desc" },
-    take: 20,
-    select: { oracleIds: true, summary: true, reasoning: true, ruleNumbers: true },
+    take: MAX_NOTES_PER_PROMPT,
+    select,
   });
-  return selectPromptNotes(key, notes);
+  const related =
+    exact.length >= MAX_NOTES_PER_PROMPT
+      ? []
+      : await client.judgeNote.findMany({
+          where: { snapshotId, oracleIds: { hasSome: key }, NOT: { oracleIds: { equals: key } } },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select,
+        });
+  return selectPromptNotes(key, [...exact, ...related]);
 }
 
 /** Ranks candidate notes by shared cards (exact set first) and bounds what the prompt gets. */
@@ -55,11 +66,15 @@ export function selectPromptNotes(
     const exact = shared === key.length && note.oracleIds.length === key.length;
     return { note, index, score: (exact ? 1_000 : 0) + shared };
   });
-  // Notes about other cards add little; require at least two shared cards unless one was asked.
+  // Notes about other interactions add little: a multi-card question needs at least two shared
+  // cards, and a single-card question only uses notes about that card alone.
   const minimumShared = Math.min(2, key.length);
   let remaining = MAX_NOTE_CHARACTERS * MAX_NOTES_PER_PROMPT;
   return scored
-    .filter(({ score }) => score % 1_000 >= minimumShared)
+    .filter(
+      ({ note, score }) =>
+        score % 1_000 >= minimumShared && (key.length > 1 || note.oracleIds.length === 1),
+    )
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, MAX_NOTES_PER_PROMPT)
     .flatMap(({ note }) => {
