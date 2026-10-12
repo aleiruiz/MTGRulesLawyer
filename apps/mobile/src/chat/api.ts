@@ -72,6 +72,8 @@ async function requestJson(
       typeof body.retryAfterSeconds === "number"
         ? body.retryAfterSeconds
         : undefined;
+    // No JSON body means a proxy or gateway answered, not the API.
+    if (body === null) throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
     throw new QuestionRequestError(
       (code && errorMessages[code]) ??
         questionErrorMessage(

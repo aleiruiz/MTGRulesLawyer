@@ -176,7 +176,10 @@ export default function QuestionConfirmationScreen() {
           "retryAfterSeconds" in errorBody && typeof errorBody.retryAfterSeconds === "number"
             ? errorBody.retryAfterSeconds
             : undefined;
-        throw new QuestionRequestError(questionErrorMessage(errorCode, retryAfter));
+        // No JSON body means a proxy or gateway answered, not the API.
+        throw new QuestionRequestError(
+          body === null ? QUESTION_CONNECTION_ERROR : questionErrorMessage(errorCode, retryAfter),
+        );
       }
       const result = questionInterpretResponseSchema.parse(body);
       if (requestId !== interpretationRequestId.current) return;
