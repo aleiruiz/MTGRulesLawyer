@@ -38,6 +38,7 @@ const answer: RulingGenerationResponse = {
 function createApp() {
   const calls = {
     priorTurnIds: [] as string[][],
+    priorTurnScopes: [] as unknown[],
     interpretTurns: [] as PriorTurn[][],
     rulingTurns: [] as PriorTurn[][],
     owners: [] as Array<RulingOwner | undefined>,
@@ -54,8 +55,9 @@ function createApp() {
             : null,
       ),
     resolveAppUser: (subject) => Promise.resolve({ id: `user-${subject}`, role: "USER" }),
-    loadPriorTurns: (ids) => {
+    loadPriorTurns: (ids, scope) => {
       calls.priorTurnIds.push(ids);
+      calls.priorTurnScopes.push(scope);
       return Promise.resolve(ids.length > 0 ? [priorTurn] : []);
     },
     interpretQuestion: (_question, _ip, _signal, priorTurns = []) => {
@@ -180,9 +182,18 @@ void describe("signed-in conversation history", () => {
       method: "POST",
       url: "/api/questions/ruling",
       headers: { authorization: "Bearer owner-token" },
-      payload: { question: "And with hexproof?", conversationId: OWN_CONVERSATION_ID },
+      payload: {
+        question: "And with hexproof?",
+        conversationId: OWN_CONVERSATION_ID,
+        priorRulingIds: [FIRST_RULING_ID],
+      },
     });
     assert.equal(continued.statusCode, 200);
+    // Context for a saved conversation is limited to that conversation.
+    assert.deepEqual(calls.priorTurnScopes.at(-1), {
+      userId: "user-owner",
+      conversationId: OWN_CONVERSATION_ID,
+    });
     assert.deepEqual(calls.owners[1], {
       userId: "user-owner",
       conversationId: OWN_CONVERSATION_ID,

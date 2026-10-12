@@ -8,7 +8,6 @@ import type {
 import { MAX_SAVED_CONVERSATIONS } from "@mtg-rules/contracts";
 import { after, describe, it } from "node:test";
 import { saveRuling } from "../rulings/persistence.js";
-import { ConversationNotFoundError } from "./attach.js";
 import { loadPriorTurns } from "./prior-turns.js";
 import {
   deleteConversation,
@@ -110,13 +109,38 @@ void describe("Conversation history integration", { skip: !enabled }, () => {
 
       assert.equal(await getConversation(stranger.id, first.conversationId, prisma), null);
       assert.equal(await ownsConversation(stranger.id, first.conversationId, prisma), false);
-      await assert.rejects(
-        saveRuling(request("Hijack attempt"), answer("No."), prisma, {
-          userId: stranger.id,
+      // Naming someone else's conversation never joins it; the save starts the caller's own.
+      const hijack = await saveRuling(request("Hijack attempt"), answer("No."), prisma, {
+        userId: stranger.id,
+        conversationId: first.conversationId,
+      });
+      assert.notEqual(hijack.conversationId, first.conversationId);
+      assert.equal(
+        (await getConversation(owner.id, first.conversationId, prisma))?.turns.length,
+        2,
+      );
+      // Scoped context ignores rulings from other conversations and other users.
+      assert.deepEqual(
+        await loadPriorTurns([first.rulingId, hijack.rulingId], prisma, {
+          userId: owner.id,
           conversationId: first.conversationId,
         }),
-        ConversationNotFoundError,
+        [priorTurns[0]],
       );
+
+      // A conversation deleted while the judge was thinking does not lose the answer.
+      const doomed = await saveRuling(request("Short-lived chat"), answer("Yes."), prisma, {
+        userId: owner.id,
+      });
+      assert.ok(doomed.conversationId);
+      assert.equal(await deleteConversation(owner.id, doomed.conversationId, prisma), true);
+      const rescued = await saveRuling(request("Still there?"), answer("Saved."), prisma, {
+        userId: owner.id,
+        conversationId: doomed.conversationId,
+      });
+      assert.ok(rescued.conversationId);
+      assert.notEqual(rescued.conversationId, doomed.conversationId);
+      assert.ok(await prisma.ruling.findUnique({ where: { id: rescued.rulingId } }));
       assert.equal(await deleteConversation(stranger.id, first.conversationId, prisma), false);
 
       for (let index = 0; index < MAX_SAVED_CONVERSATIONS; index += 1) {

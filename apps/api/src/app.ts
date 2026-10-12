@@ -44,8 +44,9 @@ import {
   loadPriorTurns,
   type PriorTurn,
   type PriorTurnLoader,
+  type PriorTurnScope,
 } from "./conversations/prior-turns.js";
-import { ConversationNotFoundError, type RulingOwner } from "./conversations/attach.js";
+import type { RulingOwner } from "./conversations/attach.js";
 import {
   deleteConversation,
   getConversation,
@@ -174,7 +175,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       answer: RulingGenerationResponse,
       owner?: RulingOwner,
     ) => saveRuling(request, answer, prisma, owner));
-  const readPriorTurns = options.loadPriorTurns ?? ((ids: string[]) => loadPriorTurns(ids));
+  const readPriorTurns =
+    options.loadPriorTurns ??
+    ((ids: string[], scope?: PriorTurnScope) => loadPriorTurns(ids, prisma, scope));
   const readConversations =
     options.listConversations ?? ((userId: string) => listConversations(userId));
   const readConversation =
@@ -538,7 +541,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     const disconnect = createClientDisconnectController(request, reply);
     try {
-      const priorTurns = await readPriorTurns(parsed.data.priorRulingIds);
+      // In a saved conversation, context may only come from that conversation's own turns.
+      const priorTurns = await readPriorTurns(
+        parsed.data.priorRulingIds,
+        owner?.conversationId
+          ? { userId: owner.userId, conversationId: owner.conversationId }
+          : undefined,
+      );
       const result = await createRuling(parsed.data, request.ip, disconnect.signal, priorTurns);
       return reply.send(
         persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result, owner)),
@@ -554,9 +563,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }
       if (error instanceof InvalidConfirmedCardsError) {
         return reply.code(400).send({ error: "CONFIRMED_CARD_UNAVAILABLE" });
-      }
-      if (error instanceof ConversationNotFoundError) {
-        return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
       }
       request.log.error(
         { errorName: error instanceof Error ? error.name : "UnknownError" },

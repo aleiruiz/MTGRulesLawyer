@@ -1,13 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { MAX_SAVED_CONVERSATIONS } from "@mtg-rules/contracts";
 
-export class ConversationNotFoundError extends Error {
-  constructor() {
-    super("Conversation not found.");
-    this.name = "ConversationNotFoundError";
-  }
-}
-
 /** Who a new ruling belongs to, and which of their conversations it continues. */
 export interface RulingOwner {
   userId: string;
@@ -15,6 +8,7 @@ export interface RulingOwner {
 }
 
 const MAX_TITLE_CHARACTERS = 160;
+
 function titleFromQuestion(question: string): string {
   const singleLine = question.replace(/\s+/g, " ").trim();
   return singleLine.length <= MAX_TITLE_CHARACTERS
@@ -26,6 +20,10 @@ function titleFromQuestion(question: string): string {
  * Inside the ruling transaction: continue the owner's conversation or start a new one, then
  * forget all but the owner's most recently active conversations. Forgetting a conversation
  * only unlinks its questions; shared ruling links and challenges keep working.
+ *
+ * The route checks ownership before generating, but the conversation can still disappear
+ * while the model runs (deleted, or pruned by another save). The answer is already paid for,
+ * so it starts a new conversation instead of failing.
  */
 export async function attachToConversation(
   tx: Prisma.TransactionClient,
@@ -33,12 +31,13 @@ export async function attachToConversation(
   question: string,
 ): Promise<string> {
   let conversationId: string;
-  if (owner.conversationId) {
-    const updated = await tx.conversation.updateMany({
-      where: { id: owner.conversationId, userId: owner.userId },
-      data: { updatedAt: new Date() },
-    });
-    if (updated.count === 0) throw new ConversationNotFoundError();
+  const continued = owner.conversationId
+    ? await tx.conversation.updateMany({
+        where: { id: owner.conversationId, userId: owner.userId },
+        data: { updatedAt: new Date() },
+      })
+    : { count: 0 };
+  if (owner.conversationId && continued.count > 0) {
     conversationId = owner.conversationId;
   } else {
     const created = await tx.conversation.create({
