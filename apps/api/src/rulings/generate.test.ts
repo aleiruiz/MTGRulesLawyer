@@ -155,18 +155,19 @@ void describe("Ruling evidence verification", () => {
     const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, manyRules)) as {
       evidence: { rules: Array<{ id: string }> };
     };
+    // Rules are shown and cited by number.
     assert.deepEqual(
       prompt.evidence.rules.map(({ id }) => id),
-      bounded.rules.map(({ id }) => id),
+      bounded.rules.map(({ number }) => number),
     );
-    // Rule 13 was never sent, so citing it cannot verify.
+    // Rule 13 was never sent, so citing it by ID or number cannot verify.
     const result = verifyRulingOutput(
       {
         outcome: "resolved",
         summary: "Unseen evidence.",
         summarySupport: "SUPPORTED",
         summaryCitationIds: ["rule-12"],
-        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["rule-12"] }],
+        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["999.12"] }],
         assumptions: [],
         clarificationQuestions: [],
       },
@@ -220,6 +221,25 @@ void describe("Ruling evidence verification", () => {
     };
     assert.equal(prompt.evidence.cards[0]?.face.power, "2");
     assert.equal(prompt.evidence.cards[0]?.face.typeLine, "Creature — Bear");
+    // The face is cited by its alias and verified against the face it names.
+    const answer = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "It is a 2/2.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["card1"],
+        reasoningSteps: [
+          { text: "Its printed size.", support: "SUPPORTED", citationIds: ["card1"] },
+        ],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      bounded,
+      "test-model",
+    );
+    assert.equal(answer.outcome, "resolved");
+    assert.equal(answer.citations[0]?.id, vanillaFace.id);
+    assert.equal(answer.citations[0]?.excerpt, "Creature — Bear 2/2");
   });
 
   void it("does not make a face citable when its text was cut away", () => {
@@ -345,14 +365,15 @@ void describe("Ruling evidence verification", () => {
     const prompt = JSON.parse(buildModelPrompt({ question: "Alone?" }, withRulings)) as {
       evidence: { cards: Array<{ rulings?: Array<{ id: string; text: string }> }> };
     };
+    // Evidence is shown by alias, and the verifier maps the alias back to the ruling's ID.
     assert.deepEqual(prompt.evidence.cards[0]?.rulings, [
-      { id: "ruling-id", publishedAt: "2026-10-01", text: ruling.text },
+      { id: "card1.ruling1", publishedAt: "2026-10-01", text: ruling.text },
     ]);
     const output = {
       outcome: "resolved" as const,
       summary: "You still draw a card.",
       summarySupport: "SUPPORTED" as const,
-      summaryCitationIds: ["ruling-id"],
+      summaryCitationIds: ["card1.ruling1"],
       reasoningSteps: [
         {
           text: "The ruling covers attacking alone.",

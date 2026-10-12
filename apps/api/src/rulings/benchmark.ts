@@ -16,9 +16,12 @@ import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
 import { prisma } from "../db/client.js";
 import { interpretationRequest, resolveQuestionInterpretation } from "../questions/interpret.js";
 import { assembleConfirmedEvidence } from "../search/retrieval.js";
+import type { EvidenceSearchResponse } from "@mtg-rules/contracts";
 import {
   boundEvidenceForPrompt,
   buildModelPrompt,
+  citeRulesById,
+  type ModelRuling,
   modelRulingSchema,
   RULING_PROMPT_VERSION,
   RULING_SYSTEM_PROMPT,
@@ -85,7 +88,36 @@ interface CaseResult {
   summary?: string;
   graderExplanation?: string;
   rulingsCited?: number;
+  whyUncertain?: string;
   error?: string;
+}
+
+/** Why an answer came back uncertain: the model said so, or verification rejected it. */
+function explainUncertain(output: ModelRuling, evidence: EvidenceSearchResponse): string {
+  const cited = citeRulesById(output, evidence);
+  if (cited.outcome === "uncertain") return `model chose uncertain: ${cited.summary.slice(0, 160)}`;
+  const known = new Set([
+    ...evidence.rules.map(({ id }) => id),
+    ...evidence.cards.flatMap((card) => [
+      ...card.faces.map(({ id }) => id),
+      ...(card.rulings ?? []).map(({ id }) => id),
+    ]),
+  ]);
+  const unknown = [
+    ...cited.summaryCitationIds,
+    ...cited.reasoningSteps.flatMap((step) => step.citationIds),
+  ].filter((id) => !known.has(id));
+  const unsupported = [
+    ...(cited.summarySupport === "UNSUPPORTED" ? ["summary"] : []),
+    ...cited.reasoningSteps.flatMap((step, index) =>
+      step.support === "UNSUPPORTED" ? [`step ${index + 1}: ${step.text.slice(0, 120)}`] : [],
+    ),
+  ];
+  const reasons = [
+    ...(unknown.length > 0 ? [`cited ids not in the packet: ${unknown.join(", ")}`] : []),
+    ...(unsupported.length > 0 ? [`marked unsupported: ${unsupported.join(" | ")}`] : []),
+  ];
+  return reasons.join("; ") || `rejected (${cited.outcome} with missing citations or steps)`;
 }
 
 async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult> {
@@ -116,20 +148,24 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
       confirmedCards: cards.map((card) => ({ oracleId: card.oracleId, faceIndex: 0, quantity: 1 })),
     };
     const evidence = await assembleConfirmedEvidence(request);
-    const answer = verifyRulingOutput(
-      await model.generateStructuredOutput({
-        schema: modelRulingSchema,
-        schemaName: "mtg_verified_ruling",
-        systemPrompt: RULING_SYSTEM_PROMPT,
-        userPrompt: buildModelPrompt(request, evidence),
-        promptVersion: RULING_PROMPT_VERSION,
-      }),
-      boundEvidenceForPrompt(evidence),
-      config.model,
-    );
+    const bounded = boundEvidenceForPrompt(evidence);
+    const modelOutput = await model.generateStructuredOutput({
+      schema: modelRulingSchema,
+      schemaName: "mtg_verified_ruling",
+      systemPrompt: RULING_SYSTEM_PROMPT,
+      userPrompt: buildModelPrompt(request, evidence),
+      promptVersion: RULING_PROMPT_VERSION,
+    });
+    const answer = verifyRulingOutput(modelOutput, bounded, config.model);
     const rulingsCited = answer.citations.filter(({ kind }) => kind === "CARD_RULING").length;
     if (answer.outcome === "uncertain") {
-      return { ...base, verdict: "uncertain", outcome: answer.outcome, summary: answer.summary };
+      return {
+        ...base,
+        verdict: "uncertain",
+        outcome: answer.outcome,
+        summary: answer.summary,
+        whyUncertain: explainUncertain(modelOutput, bounded),
+      };
     }
     const grade = await model.generateStructuredOutput({
       schema: gradeSchema,
@@ -205,7 +241,7 @@ console.info(
 );
 for (const result of results.filter(({ verdict }) => verdict !== "correct")) {
   console.info(
-    `- ${result.id}#${result.run} ${result.verdict}: ${result.graderExplanation ?? result.error ?? result.summary ?? ""}`,
+    `- ${result.id}#${result.run} ${result.verdict}: ${result.graderExplanation ?? result.error ?? result.whyUncertain ?? result.summary ?? ""}`,
   );
 }
 if (values.out) {

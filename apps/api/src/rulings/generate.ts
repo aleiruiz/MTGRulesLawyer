@@ -22,7 +22,7 @@ import { findNotesForCards, saveResearchNote, type PromptNote } from "./notes.js
 import { createVerifiedRulingCacheKey, reuseVerifiedRuling } from "./cache.js";
 import type { PriorTurn } from "../conversations/prior-turns.js";
 
-export const RULING_PROMPT_VERSION = "verified-ruling-v8";
+export const RULING_PROMPT_VERSION = "verified-ruling-v9";
 
 export const modelRulingSchema = z.object({
   outcome: z.enum(["resolved", "conditional", "needs_information", "uncertain"]),
@@ -175,11 +175,12 @@ export function buildModelPrompt(
       missingFacts: takeState(request.gameState?.missingFacts),
       searchTerms: takeState(request.gameState?.searchTerms),
     },
+    // Evidence is cited by short aliases (a rule's number, "card1", "card1.ruling2") that the
+    // verifier maps back to IDs: models copy long UUIDs unreliably.
     evidence: {
-      snapshot: bounded.snapshot,
-      sources: bounded.sources.map(({ id, kind }) => ({ id, kind })),
-      rules: bounded.rules.map(({ id, number, text }) => ({ id, number, text })),
-      cards: bounded.cards.map((card) => ({
+      snapshotVersion: bounded.snapshot.version,
+      rules: bounded.rules.map(({ number, text }) => ({ id: number, text })),
+      cards: bounded.cards.map((card, cardIndex) => ({
         oracleId: card.oracleId,
         name: card.name,
         quantity: card.quantity,
@@ -188,7 +189,7 @@ export function buildModelPrompt(
           ? {}
           : { manaValue: card.manaValue }),
         face: {
-          id: card.matchedFace.id,
+          id: cardAlias(cardIndex),
           name: card.matchedFace.name,
           manaCost: card.matchedFace.manaCost,
           typeLine: card.matchedFace.typeLine,
@@ -201,8 +202,8 @@ export function buildModelPrompt(
         },
         ...(card.rulings?.length
           ? {
-              rulings: card.rulings.map(({ id, publishedAt, text, truncated }) => ({
-                id,
+              rulings: card.rulings.map(({ publishedAt, text, truncated }, rulingIndex) => ({
+                id: rulingAlias(cardIndex, rulingIndex),
                 publishedAt,
                 text,
                 ...(truncated ? { truncated: true } : {}),
@@ -215,27 +216,39 @@ export function buildModelPrompt(
   });
 }
 
+const cardAlias = (cardIndex: number) => `card${cardIndex + 1}`;
+const rulingAlias = (cardIndex: number, rulingIndex: number) =>
+  `${cardAlias(cardIndex)}.ruling${rulingIndex + 1}`;
+
 /**
- * Models sometimes cite a supplied rule by its number ("608.2g") instead of its ID. A number
- * names exactly one supplied rule, so it is mapped to that rule's ID before verification; any
- * other unknown reference is left for the verifier to reject.
+ * The prompt names evidence by alias: a rule by its number ("608.2g", also accepted as
+ * "Rule 608.2g"), the selected face of the first card as "card1", and its second ruling as
+ * "card1.ruling2". Aliases are mapped to evidence IDs before verification; a face whose text was
+ * cut away has no alias target, and any other unknown reference is left for the verifier to
+ * reject. `evidence` must be the bounded packet the prompt was built from.
  */
 export function citeRulesById(output: ModelRuling, evidence: EvidenceSearchResponse): ModelRuling {
   const knownIds = new Set([
     ...evidence.rules.map((rule) => rule.id),
     ...evidence.cards.flatMap((card) => card.faces.map((face) => face.id)),
   ]);
-  const ruleIdByNumber = new Map(
-    evidence.rules.map((rule) => [rule.number.toLowerCase(), rule.id]),
-  );
+  const idByAlias = new Map<string, string>([
+    ...evidence.rules.map((rule) => [rule.number.toLowerCase(), rule.id] as const),
+    ...evidence.cards.flatMap((card, cardIndex) => [
+      ...card.faces.map((face) => [cardAlias(cardIndex), face.id] as const),
+      ...(card.rulings ?? []).map(
+        (ruling, rulingIndex) => [rulingAlias(cardIndex, rulingIndex), ruling.id] as const,
+      ),
+    ]),
+  ]);
   const toId = (id: string) => {
     if (knownIds.has(id)) return id;
-    const number = id
+    const alias = id
       .trim()
       .replace(/^rule\s+/i, "")
       .replace(/\.$/, "")
       .toLowerCase();
-    return ruleIdByNumber.get(number) ?? id;
+    return idByAlias.get(alias) ?? id;
   };
   return {
     ...output,
