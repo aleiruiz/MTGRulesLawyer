@@ -382,5 +382,61 @@
     "cards": ["Animate Dead", "Worldgorger Dragon"],
     "expected": "The game is a draw. The Dragon's enter trigger exiles Animate Dead, so Animate Dead's leave trigger makes you sacrifice the Dragon. The Dragon's leave trigger then returns Animate Dead, which must enchant a creature card in a graveyard, and the Dragon is the only one, so it returns the Dragon again. Every step is mandatory and nothing can stop it, so the game is a draw.",
     "source": "CR 104.4b, 732.4; Worldgorger Dragon and Animate Dead Oracle text"
+  },
+  {
+    "id": "E16",
+    "level": "easy",
+    "question": "My Youthful Knight attacks and is blocked by Grizzly Bears. What happens?",
+    "cards": ["Youthful Knight", "Grizzly Bears"],
+    "expected": "Youthful Knight deals its 2 damage first, in the first-strike combat damage step, so Grizzly Bears dies before it can deal damage, and Youthful Knight survives.",
+    "source": "CR 702.7b, 510.4"
+  },
+  {
+    "id": "E17",
+    "level": "easy",
+    "question": "¿Puedo lanzar Giant Growth sobre mi propio Gladecover Scout?",
+    "cards": ["Giant Growth", "Gladecover Scout"],
+    "expected": "Sí. Hexproof solo impide que lo hagan objetivo los hechizos y habilidades de tus oponentes; puedes hacer objetivo a tu propia criatura con hexproof.",
+    "source": "CR 702.11b"
+  },
+  {
+    "id": "M21",
+    "level": "medium",
+    "question": "My Craw Wurm is blocked by Grizzly Bears and Llanowar Elves. Can I assign all 6 of its damage to Grizzly Bears?",
+    "cards": ["Craw Wurm", "Grizzly Bears", "Llanowar Elves"],
+    "expected": "Yes. A creature blocked by two or more creatures divides its combat damage among them as its controller chooses, so all 6 can go to Grizzly Bears.",
+    "source": "CR 510.1c"
+  },
+  {
+    "id": "M22",
+    "level": "medium",
+    "question": "My opponent's commander Atraxa, Praetors' Voice has dealt me 18 combat damage this game. If it attacks me and deals 4 more combat damage, what happens?",
+    "cards": ["Atraxa, Praetors' Voice"],
+    "expected": "You lose the game: you've been dealt 21 or more combat damage by the same commander over the game, whatever your life total.",
+    "source": "CR 903.10a, 704.6c"
+  },
+  {
+    "id": "M23",
+    "level": "medium",
+    "question": "My commander Atraxa, Praetors' Voice is destroyed. Can I put it into the command zone?",
+    "cards": ["Atraxa, Praetors' Voice"],
+    "expected": "Yes. When your commander is put into a graveyard, you may put it into the command zone the next time state-based actions are checked.",
+    "source": "CR 903.9a, 704.6d"
+  },
+  {
+    "id": "H14",
+    "level": "hard",
+    "question": "My Grizzly Bears equipped with Embercleave attacks and is blocked by Llanowar Elves. How much damage does the defending player take?",
+    "cards": ["Grizzly Bears", "Embercleave", "Llanowar Elves"],
+    "expected": "Up to 5, and 5 if you assign only lethal damage to the Elves. The Bears are a 3/3 with double strike and trample: in the first-strike step they must assign at least 1 (lethal) damage to the Elves and can assign the other 2 to the player; the Elves die, and in the regular step the Bears are still blocked but no creature is blocking them, so all 3 damage is assigned to the player.",
+    "source": "CR 702.4b, 702.19b, 702.19d"
+  },
+  {
+    "id": "H15",
+    "level": "hard",
+    "question": "Opalescence entered the battlefield before Humility. What are Humility's power, toughness and abilities now?",
+    "cards": ["Humility", "Opalescence"],
+    "expected": "Humility is a 1/1 enchantment creature with no abilities: Opalescence makes it a creature (layer 4), Humility removes abilities (layer 6) but its effect keeps applying (613.6), and in layer 7b Opalescence's 4/4 applies first and Humility's 1/1, with the later timestamp, overrides it.",
+    "source": "CR 613.6; Humility / Opalescence official ruling"
   }
 ]

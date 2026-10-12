@@ -83,6 +83,8 @@ export const CORE_RULE_NUMBERS = [
   "704.5a",
   "704.5f",
   "704.5g",
+  // +1/+1 and -1/-1 counters cancel as a state-based action, not before.
+  "704.5q",
   "613.1",
   "613.1a",
   "613.1b",
@@ -95,6 +97,8 @@ export const CORE_RULE_NUMBERS = [
   "613.4a",
   "613.4b",
   "613.4c",
+  // An effect that started applying keeps applying even if its ability is removed.
+  "613.6",
   "613.7",
   "613.7a",
   "613.8",

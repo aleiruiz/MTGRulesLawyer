@@ -239,6 +239,21 @@ void describe("Ruling evidence verification", () => {
       "test-model",
     );
     assert.equal(answer.outcome, "resolved");
+    // "card1.face" names the same face.
+    const viaFace = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "It is a 2/2.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["card1.face"],
+        reasoningSteps: [{ text: "Its size.", support: "SUPPORTED", citationIds: ["Card1.Face"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      bounded,
+      "test-model",
+    );
+    assert.deepEqual(viaFace.summaryCitationIds, [vanillaFace.id]);
     // The answer carries real IDs, never aliases.
     assert.deepEqual(answer.summaryCitationIds, [vanillaFace.id]);
     assert.deepEqual(answer.reasoningSteps[0]?.citationIds, [vanillaFace.id]);
