@@ -39,7 +39,8 @@ const MAX_SUBRULES_ADDED = 4;
 // Every subrule of a keyword ability a confirmed card has ("Double strike", "Trample"), so the
 // exceptions are there too (702.19d: a trampler whose blocker is gone deals all its damage to
 // the player).
-const MAX_CARD_KEYWORDS = 4;
+// Three keywords at four rules each fill the twelve slots, so none is dropped.
+const MAX_CARD_KEYWORDS = 3;
 const MAX_RULES_PER_CARD_KEYWORD = 8;
 const MAX_CARD_KEYWORD_RULES = 12;
 const SEARCHED_RULES_BEFORE_KEYWORDS = 6;
@@ -444,6 +445,7 @@ export async function assembleConfirmedEvidence(
   const searched = await assembleEvidence({ question: query, cardNames: [] }, client, snapshot.id);
   const keywordRules = await rulesForCardKeywords(
     selectedCards.map(({ card, face }) => face.oracleText || card.oracleText),
+    request.question,
     snapshot.id,
     client,
   );
@@ -668,6 +670,7 @@ export async function addRequestedRules(
  */
 export async function rulesForCardKeywords(
   cardTexts: string[],
+  question: string,
   snapshotId: string,
   client: PrismaClient = prisma,
 ): Promise<EvidenceSearchResponse["rules"]> {
@@ -714,6 +717,14 @@ export async function rulesForCardKeywords(
         ),
       );
     })
+    // Keywords the question names come first, then rules order.
+    .map((keyword, order) => ({
+      keyword,
+      named: question.toLowerCase().includes(keyword.text.trim().toLowerCase()) ? 0 : 1,
+      order,
+    }))
+    .sort((a, b) => a.named - b.named || a.order - b.order)
+    .map(({ keyword }) => keyword)
     .slice(0, MAX_CARD_KEYWORDS);
   if (keywords.length === 0) return [];
   const subrules = await client.rule.findMany({

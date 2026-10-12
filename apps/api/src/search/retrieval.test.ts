@@ -257,17 +257,19 @@ void describe("card keyword rules", () => {
         "This creature can't block flying creatures.",
         "Escape—{3}{B}{B}, Exile five other cards from your graveyard.",
       ],
+      "",
       "snapshot-id",
       client,
     );
     // Flying only appears in a sentence, not a keyword line, so it brings nothing.
     assert.deepEqual(
       rules.map(({ number }) => number),
-      ["702.4a", "702.19a", "702.19b", "702.19c", "702.19d", "702.21a", "702.138a"],
+      ["702.4a", "702.19a", "702.19b", "702.19c", "702.19d", "702.21a"],
     );
     // A keyword the card grants counts too.
     const granted = await rulesForCardKeywords(
       ["Equipped creature gets +1/+1 and has lifelink and trample."],
+      "Does it trample over?",
       "snapshot-id",
       client,
     );
