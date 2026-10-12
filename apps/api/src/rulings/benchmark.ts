@@ -21,6 +21,7 @@ import {
   boundEvidenceForPrompt,
   buildModelPrompt,
   citeRulesById,
+  retryWithRequestedRules,
   type ModelRuling,
   modelRulingSchema,
   RULING_PROMPT_VERSION,
@@ -156,7 +157,30 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
       userPrompt: buildModelPrompt(request, evidence),
       promptVersion: RULING_PROMPT_VERSION,
     });
-    const answer = verifyRulingOutput(modelOutput, bounded, config.model);
+    let answer = verifyRulingOutput(modelOutput, bounded, config.model);
+    let explained = { output: modelOutput, evidence: bounded };
+    let retried = false;
+    if (answer.outcome === "uncertain") {
+      // Like the app: one more attempt with the rules the first answer asked for.
+      const retry = await retryWithRequestedRules(
+        modelOutput,
+        evidence,
+        (userPrompt) =>
+          model.generateStructuredOutput({
+            schema: modelRulingSchema,
+            schemaName: "mtg_verified_ruling",
+            systemPrompt: RULING_SYSTEM_PROMPT,
+            userPrompt,
+            promptVersion: RULING_PROMPT_VERSION,
+          }),
+        (extended) => buildModelPrompt(request, extended),
+      );
+      if (retry) {
+        retried = true;
+        explained = { output: retry.output, evidence: boundEvidenceForPrompt(retry.evidence) };
+        answer = verifyRulingOutput(retry.output, explained.evidence, config.model);
+      }
+    }
     const rulingsCited = answer.citations.filter(({ kind }) => kind === "CARD_RULING").length;
     if (answer.outcome === "uncertain") {
       return {
@@ -164,7 +188,7 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
         verdict: "uncertain",
         outcome: answer.outcome,
         summary: answer.summary,
-        whyUncertain: explainUncertain(modelOutput, bounded),
+        whyUncertain: `${retried ? "(after requested rules) " : ""}${explainUncertain(explained.output, explained.evidence)}`,
       };
     }
     const grade = await model.generateStructuredOutput({

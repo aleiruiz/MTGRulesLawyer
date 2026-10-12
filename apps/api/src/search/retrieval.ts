@@ -581,6 +581,52 @@ export function rankRulings<T extends { text: string; position: number }>(
     .map(({ ruling }) => ruling);
 }
 
+const MAX_REQUESTED_RULES = 6;
+const normalizeRuleNumber = (value: string) =>
+  value
+    .trim()
+    .replace(/^rule\s+/i, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
+const REQUESTABLE_RULE_NUMBER = /^\d{3}\.\d+[a-z]?$/;
+
+/**
+ * Adds the rules a first answer asked for (by number) to the evidence, as REQUESTED rules with
+ * their real text from the same snapshot. Returns null when none of the numbers names a rule.
+ * A requested rule already in the packet moves to REQUESTED, so the prompt bound keeps it.
+ */
+export async function addRequestedRules(
+  evidence: EvidenceSearchResponse,
+  numbers: string[],
+  client: PrismaClient = prisma,
+): Promise<EvidenceSearchResponse | null> {
+  const wanted = [...new Set(numbers.map(normalizeRuleNumber))]
+    .filter((number) => REQUESTABLE_RULE_NUMBER.test(number))
+    .slice(0, MAX_REQUESTED_RULES);
+  if (wanted.length === 0) return null;
+  const rows = await client.rule.findMany({
+    where: { snapshotId: evidence.snapshot.id, number: { in: wanted } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, number: true, text: true, parent: { select: { number: true } } },
+  });
+  if (rows.length === 0) return null;
+  const requestedIds = new Set(rows.map(({ id }) => id));
+  return evidenceSearchResponseSchema.parse({
+    ...evidence,
+    rules: [
+      ...evidence.rules.filter(({ id }) => !requestedIds.has(id)),
+      ...rows.map((rule) => ({
+        id: rule.id,
+        number: rule.number,
+        text: rule.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+        parentNumber: rule.parent?.number ?? null,
+        includedBecause: "REQUESTED" as const,
+        truncated: rule.text.length > MAX_RULE_TEXT_CHARACTERS,
+      })),
+    ],
+  });
+}
+
 /**
  * Searched rules followed by the core rules. A core rule the search also found is kept only as
  * CORE, so the prompt's core budget always includes it; as a searched rule it could fall past

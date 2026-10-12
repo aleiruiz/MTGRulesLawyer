@@ -101,6 +101,7 @@ export function makeRecordedModelOutput(
 ): ModelRuling {
   const ruleIdByNumber = new Map(evidence.rules.map((rule) => [rule.number, rule.id]));
   return {
+    neededRuleNumbers: [],
     outcome: fixture.modelOutput.outcome,
     summary: fixture.modelOutput.summary,
     summarySupport: fixture.modelOutput.summarySupport,

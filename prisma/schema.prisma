@@ -84,6 +84,8 @@ enum UsageKind {
   RULING
   /// A second ruling attempt that may use web search, only after an uncertain answer.
   RULING_RESEARCH
+  /// A second ruling attempt with the rules the first answer asked for.
+  RULING_RETRY
 }
 
 enum AiReservationStatus {

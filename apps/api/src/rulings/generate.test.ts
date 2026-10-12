@@ -12,6 +12,7 @@ import {
   toClarificationQuestion,
   readWebResearchEnabled,
   verifyRulingOutput,
+  retryWithRequestedRules,
   WEB_RESEARCH_PROMPT,
 } from "./generate.js";
 
@@ -532,5 +533,104 @@ void describe("Ruling evidence verification", () => {
     ]);
     assert.equal(result.modelName, "not_called");
     assert.equal(result.citations.length, 0);
+  });
+
+  void it("asks once more with the rules a first answer needed, and verifies against them", async () => {
+    const needsRule = {
+      outcome: "uncertain" as const,
+      summary: "The packet lacks the legend rule.",
+      summarySupport: "UNSUPPORTED" as const,
+      summaryCitationIds: [],
+      reasoningSteps: [],
+      assumptions: [],
+      clarificationQuestions: [],
+      neededRuleNumbers: ["Rule 704.5j"],
+    };
+    const legendRule = {
+      id: "legend-rule-id",
+      number: "704.5j",
+      text: "If two or more legendary permanents with the same name are controlled by the same player, that player chooses one of them, and the rest are put into their owners' graveyards.",
+      parentNumber: "704.5",
+      includedBecause: "REQUESTED" as const,
+      truncated: false,
+    };
+    const asked: string[][] = [];
+    let prompt = "";
+    const retry = await retryWithRequestedRules(
+      needsRule,
+      evidence,
+      (userPrompt) => {
+        prompt = userPrompt;
+        return Promise.resolve({
+          ...needsRule,
+          outcome: "resolved",
+          summary: "You keep one.",
+          summarySupport: "SUPPORTED",
+          summaryCitationIds: ["704.5j"],
+          reasoningSteps: [{ text: "Legend rule.", support: "SUPPORTED", citationIds: ["704.5j"] }],
+          neededRuleNumbers: [],
+        });
+      },
+      (extended) => buildModelPrompt({ question: "Two Thalias?" }, extended),
+      (current, numbers) => {
+        asked.push(numbers);
+        return Promise.resolve({ ...current, rules: [...current.rules, legendRule] });
+      },
+    );
+    assert.deepEqual(asked, [["Rule 704.5j"]]);
+    assert.ok(retry);
+    assert.match(prompt, /704\.5j/);
+    const answer = verifyRulingOutput(retry.output, boundEvidenceForPrompt(retry.evidence), "m");
+    assert.equal(answer.outcome, "resolved");
+    assert.deepEqual(answer.summaryCitationIds, ["legend-rule-id"]);
+    // Nothing requested and nothing unknown cited: no second call.
+    const none = await retryWithRequestedRules(
+      { ...needsRule, neededRuleNumbers: [] },
+      evidence,
+      () => Promise.reject(new Error("must not be called")),
+      () => "",
+    );
+    assert.equal(none, null);
+  });
+
+  void it("keeps requested rules in the prompt next to a full set of searched rules", () => {
+    const baseRule = evidence.rules[0];
+    assert.ok(baseRule);
+    const searched = Array.from({ length: 13 }, (_, index) => ({
+      ...baseRule,
+      id: `rule-${index}`,
+      number: `999.${index}`,
+    }));
+    const bounded = boundEvidenceForPrompt({
+      ...evidence,
+      rules: [
+        ...searched,
+        { ...baseRule, id: "requested", number: "704.5j", includedBecause: "REQUESTED" },
+      ],
+    });
+    assert.equal(
+      bounded.rules.filter(({ includedBecause }) => includedBecause === "MATCH").length,
+      12,
+    );
+    assert.ok(bounded.rules.some(({ id }) => id === "requested"));
+  });
+
+  void it("shows a split card's combined mana value", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const half = { ...baseCard.matchedFace, id: "ice", faceIndex: 1 };
+    const split = {
+      ...baseCard,
+      layout: "split",
+      manaValue: 4,
+      faces: [baseCard.matchedFace, half],
+    };
+    const prompt = JSON.parse(
+      buildModelPrompt({ question: "Cascade?" }, { ...evidence, cards: [split] }),
+    ) as {
+      evidence: { cards: Array<{ manaValue?: number; combinedManaValue?: number }> };
+    };
+    assert.equal(prompt.evidence.cards[0]?.combinedManaValue, 4);
+    assert.equal(prompt.evidence.cards[0]?.manaValue, undefined);
   });
 });

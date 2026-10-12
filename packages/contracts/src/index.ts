@@ -219,7 +219,8 @@ export const evidenceSearchResponseSchema = z.object({
       parentNumber: z.string().nullable(),
       // CORE: a foundational rule (stack, priority, turn structure, state-based actions,
       // layers) included with every ruling regardless of the search.
-      includedBecause: z.enum(["MATCH", "REFERENCE", "PARENT", "CORE"]),
+      // REQUESTED: a rule the judge asked for after a first answer could not be verified.
+      includedBecause: z.enum(["MATCH", "REFERENCE", "PARENT", "CORE", "REQUESTED"]),
       truncated: z.boolean(),
     }),
   ),
