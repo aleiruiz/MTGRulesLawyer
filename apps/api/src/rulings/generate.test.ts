@@ -173,6 +173,27 @@ void describe("Ruling evidence verification", () => {
     assert.deepEqual(result.citations, []);
   });
 
+  void it("keeps core rules in the prompt in addition to the searched rules", () => {
+    const baseRule = evidence.rules[0];
+    assert.ok(baseRule);
+    const searched = Array.from({ length: 13 }, (_, index) => ({
+      ...baseRule,
+      id: `rule-${index}`,
+      number: `999.${index}`,
+    }));
+    const core = [
+      { ...baseRule, id: "core-stack", number: "405.5", includedBecause: "CORE" as const },
+      { ...baseRule, id: "core-sba", number: "704.3", includedBecause: "CORE" as const },
+    ];
+    const bounded = boundEvidenceForPrompt({ ...evidence, rules: [...searched, ...core] });
+    assert.equal(bounded.rules.filter((rule) => rule.includedBecause !== "CORE").length, 12);
+    assert.deepEqual(
+      bounded.rules.filter((rule) => rule.includedBecause === "CORE").map((rule) => rule.number),
+      ["405.5", "704.3"],
+    );
+    assert.match(RULING_SYSTEM_PROMPT, /foundational rules/i);
+  });
+
   void it("accepts a supplied rule cited by its number but not an unseen one", () => {
     const output = {
       outcome: "resolved" as const,

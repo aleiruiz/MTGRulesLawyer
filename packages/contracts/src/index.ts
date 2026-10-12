@@ -193,7 +193,9 @@ export const evidenceSearchResponseSchema = z.object({
       number: z.string(),
       text: z.string(),
       parentNumber: z.string().nullable(),
-      includedBecause: z.enum(["MATCH", "REFERENCE", "PARENT"]),
+      // CORE: a foundational rule (stack, priority, turn structure, state-based actions,
+      // layers) included with every ruling regardless of the search.
+      includedBecause: z.enum(["MATCH", "REFERENCE", "PARENT", "CORE"]),
       truncated: z.boolean(),
     }),
   ),
