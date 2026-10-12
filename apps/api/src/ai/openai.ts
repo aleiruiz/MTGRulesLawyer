@@ -5,10 +5,10 @@ export const OPENAI_PROMPT_VERSION = "rules-assistant-v1";
 export const OPENAI_DEFAULT_MODEL = "gpt-6-luna";
 /**
  * A ruling prompt is bounded by its parts: searched, core and requested rules and card text
- * (about 50,000 characters with ten cards), a 4,000-character question, five prior turns
+ * (about 58,000 characters with ten cards), a 4,000-character question, five prior turns
  * (about 6,000), the game state, up to 4,500 characters of verified notes, and every official
  * ruling of the confirmed cards, whole (the largest card has 32 rulings and about 8,500
- * characters; with ids and dates, ten such cards add about 105,000): about 171,000 in the
+ * characters; with ids and dates, ten such cards add about 105,000): about 179,000 in the
  * worst case before JSON escaping, which can add more for a question full of quotes or control
  * characters. Ruling generation checks this cap before reserving quota.
  */

@@ -146,14 +146,14 @@ void describe("Ruling evidence verification", () => {
     assert.ok(baseRule);
     const manyRules = {
       ...evidence,
-      rules: Array.from({ length: 13 }, (_, index) => ({
+      rules: Array.from({ length: 21 }, (_, index) => ({
         ...baseRule,
         id: `rule-${index}`,
         number: `999.${index}`,
       })),
     };
     const bounded = boundEvidenceForPrompt(manyRules);
-    assert.equal(bounded.rules.length, 12);
+    assert.equal(bounded.rules.length, 20);
     const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, manyRules)) as {
       evidence: { rules: Array<{ id: string }> };
     };
@@ -162,14 +162,14 @@ void describe("Ruling evidence verification", () => {
       prompt.evidence.rules.map(({ id }) => id),
       bounded.rules.map(({ number }) => number),
     );
-    // Rule 13 was never sent, so citing it by ID or number cannot verify.
+    // Rule 21 was never sent, so citing it by ID or number cannot verify.
     const result = verifyRulingOutput(
       {
         outcome: "resolved",
         summary: "Unseen evidence.",
         summarySupport: "SUPPORTED",
-        summaryCitationIds: ["rule-12"],
-        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["999.12"] }],
+        summaryCitationIds: ["rule-20"],
+        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["999.20"] }],
         assumptions: [],
         clarificationQuestions: [],
       },
@@ -331,7 +331,7 @@ void describe("Ruling evidence verification", () => {
   void it("keeps core rules in the prompt in addition to the searched rules", () => {
     const baseRule = evidence.rules[0];
     assert.ok(baseRule);
-    const searched = Array.from({ length: 13 }, (_, index) => ({
+    const searched = Array.from({ length: 21 }, (_, index) => ({
       ...baseRule,
       id: `rule-${index}`,
       number: `999.${index}`,
@@ -341,7 +341,7 @@ void describe("Ruling evidence verification", () => {
       { ...baseRule, id: "core-sba", number: "704.3", includedBecause: "CORE" as const },
     ];
     const bounded = boundEvidenceForPrompt({ ...evidence, rules: [...searched, ...core] });
-    assert.equal(bounded.rules.filter((rule) => rule.includedBecause !== "CORE").length, 12);
+    assert.equal(bounded.rules.filter((rule) => rule.includedBecause !== "CORE").length, 20);
     assert.deepEqual(
       bounded.rules.filter((rule) => rule.includedBecause === "CORE").map((rule) => rule.number),
       ["405.5", "704.3"],
@@ -612,7 +612,7 @@ void describe("Ruling evidence verification", () => {
   void it("keeps requested rules in the prompt next to a full set of searched rules", () => {
     const baseRule = evidence.rules[0];
     assert.ok(baseRule);
-    const searched = Array.from({ length: 13 }, (_, index) => ({
+    const searched = Array.from({ length: 21 }, (_, index) => ({
       ...baseRule,
       id: `rule-${index}`,
       number: `999.${index}`,
@@ -626,7 +626,7 @@ void describe("Ruling evidence verification", () => {
     });
     assert.equal(
       bounded.rules.filter(({ includedBecause }) => includedBecause === "MATCH").length,
-      12,
+      20,
     );
     assert.ok(bounded.rules.some(({ id }) => id === "requested"));
   });
