@@ -97,6 +97,8 @@ export const CORE_RULE_NUMBERS = [
   "613.4a",
   "613.4b",
   "613.4c",
+  // An effect that started applying keeps applying even if its ability is removed.
+  "613.6",
   "613.7",
   "613.7a",
   "613.8",

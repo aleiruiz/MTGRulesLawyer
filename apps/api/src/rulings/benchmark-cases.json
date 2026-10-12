@@ -428,7 +428,15 @@
     "level": "hard",
     "question": "My Grizzly Bears equipped with Embercleave attacks and is blocked by Llanowar Elves. How much damage does the defending player take?",
     "cards": ["Grizzly Bears", "Embercleave", "Llanowar Elves"],
-    "expected": "5. The Bears are a 3/3 with double strike and trample: in the first-strike step they assign 1 lethal damage to the Elves and 2 to the player; the Elves die, and in the regular step all 3 damage tramples over to the player because no creature is blocking it.",
+    "expected": "Up to 5, and 5 if you assign only lethal damage to the Elves. The Bears are a 3/3 with double strike and trample: in the first-strike step they must assign at least 1 (lethal) damage to the Elves and can assign the other 2 to the player; the Elves die, and in the regular step the Bears are still blocked but no creature is blocking them, so all 3 damage is assigned to the player.",
     "source": "CR 702.4b, 702.19b, 702.19d"
+  },
+  {
+    "id": "H15",
+    "level": "hard",
+    "question": "Opalescence entered the battlefield before Humility. What are Humility's power, toughness and abilities now?",
+    "cards": ["Humility", "Opalescence"],
+    "expected": "Humility is a 1/1 enchantment creature with no abilities: Opalescence makes it a creature (layer 4), Humility removes abilities (layer 6) but its effect keeps applying (613.6), and in layer 7b Opalescence's 4/4 applies first and Humility's 1/1, with the later timestamp, overrides it.",
+    "source": "CR 613.6; Humility / Opalescence official ruling"
   }
 ]
