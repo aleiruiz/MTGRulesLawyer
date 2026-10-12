@@ -40,3 +40,7 @@ The rehearsal creates a synthetic marker row, dumps the database, changes the ro
 ## Admin access
 
 Grant or remove the admin role only with a direct database change by the maintainer; the API reads the role from `AppUser` on every admin request. Every `/api/admin` request also requires a Supabase session at assurance level `aal2` (an authenticator-app code) whose latest sign-in or code check is no older than `ADMIN_AUTH_MAX_AGE_SECONDS` (default one hour, allowed range 60 seconds to one day; any other value stops the API at startup). Keep TOTP multi-factor authentication enabled in the Supabase project. The first time an admin opens the review queue, the app guides them through adding the account to an authenticator app; afterwards it asks for a new code whenever the last check is too old. Denials are logged as `admin.assurance.denied` with the reason only.
+
+## Production network settings
+
+Run the API with `NODE_ENV=production`. Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins of the hosted web app (for example `https://rules.example`, no path or trailing slash); leaving it empty in production blocks cross-origin browser calls, while the Android and iOS apps are unaffected because they send no `Origin` header. Set `TRUSTED_PROXY_IPS` only to the addresses or CIDR ranges of the reverse proxy in front of the API, so per-IP quotas use the real client address. Wildcards, hostnames, malformed entries and proxy ranges broader than /8 (IPv4) or /16 (IPv6) stop the API at startup instead of falling back to a permissive value.

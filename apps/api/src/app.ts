@@ -44,6 +44,7 @@ import {
   type AppUserResolver,
 } from "./auth/authorization.js";
 import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
+import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
 import {
   createSupabaseAccessTokenVerifier,
   type AccessTokenVerifier,
@@ -90,6 +91,8 @@ export interface BuildAppOptions {
   resolveAppUser?: AppUserResolver;
   adminAuthMaxAgeSeconds?: number;
   now?: () => number;
+  /** Exact browser origins allowed by CORS; defaults to CORS_ALLOWED_ORIGINS. */
+  corsAllowedOrigins?: string[];
   submitChallenge?: (
     input: ChallengeSubmissionRequest & { rulingId: string; userId: string },
   ) => Promise<ChallengeResponse>;
@@ -125,10 +128,10 @@ function createClientDisconnectController(request: FastifyRequest, reply: Fastif
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const trustedProxies = (process.env.TRUSTED_PROXY_IPS ?? "")
-    .split(",")
-    .map((address) => address.trim())
-    .filter(Boolean);
+  const trustedProxies = readTrustedProxies(process.env.TRUSTED_PROXY_IPS);
+  const corsAllowedOrigins =
+    options.corsAllowedOrigins ??
+    readCorsAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS, process.env.NODE_ENV === "production");
   const app = Fastify({
     logger: true,
     trustProxy: trustedProxies.length > 0 ? trustedProxies : false,
@@ -173,7 +176,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ...(options.now ? { now: options.now } : {}),
   });
 
-  void app.register(cors, { origin: true });
+  void app.register(cors, {
+    origin: corsAllowedOrigins.length > 0 ? corsAllowedOrigins : false,
+  });
   app.addHook("onResponse", (request, reply, done) => {
     const statusCode = reply.statusCode;
     const event = statusCode >= 500 ? "api.request.failed" : "api.request.completed";

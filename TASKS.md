@@ -2,7 +2,7 @@
 
 This is the implementation checklist for the [development plan](DEVELOPMENT_PLAN.md). Each checkbox is intended to fit in one reviewable pull request. IDs are stable so issues and PRs can refer to them. Dependencies are listed in parentheses; tasks in the same milestone can run independently when their dependencies are met.
 
-**MVP cut line:** Complete F01–F05, D01–D06, R01–R09, C01–C06, and L01–L07. The post-MVP list is optional. The first playable slice is F01–F05 → D02/D03/D05 → R01–R07; authentication and community review follow once rulings work end to end.
+**MVP cut line:** Complete F01–F05, D01–D06, R01–R09, C01–C06, and L01–L08. The post-MVP list is optional. The first playable slice is F01–F05 → D02/D03/D05 → R01–R07; authentication and community review follow once rulings work end to end.
 
 ## Foundation
 
@@ -50,6 +50,7 @@ This is the implementation checklist for the [development plan](DEVELOPMENT_PLAN
 - [x] **L04 — Final security and policy review** (C05, L02, L03). Check auth bypass, ID ownership, secrets, prompt injection, source attribution, provider terms, privacy/deletion flow, and API rate limits. **Done:** findings are fixed or tracked with explicit launch decisions.
 - [ ] **L05 — Prepare Android and iOS release builds** (L01, L04). Configure EAS profiles, app IDs, icons, deep links, production environment values, and release notes. **Done:** installable release-candidate builds work on physical Android and iOS devices.
 - [ ] **L07 — Require admin MFA and recent sign-in** (C02, L04). Deny every `/api/admin` request unless the Supabase session is at `aal2` and its latest sign-in or authenticator check is within the configured age, and guide admins through authenticator enrollment and step-up in the app. **Done:** admin requests without MFA or with a stale check are denied with a distinct error, and an admin can enroll and verify on Android and iOS.
+- [ ] **L08 — Restrict production CORS and proxy trust** (L04). Allow only configured HTTPS browser origins in production and reject invalid trusted-proxy entries at startup. **Done:** an unlisted origin receives no CORS permission, native clients still work, and a wildcard or malformed proxy setting stops the API from starting.
 - [ ] **L06 — Pilot and evaluate** (L02–L05). Run a small user pilot, review incorrect rulings and cost per answer, and adjust limits/clarification behavior. **Done:** the seed evaluation passes, no launch-blocking security issue remains, and the maintainer accepts the measured per-answer cost.
 
 ## Later, only if the MVP proves the need

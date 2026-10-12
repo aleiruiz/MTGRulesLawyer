@@ -89,7 +89,7 @@ Replace the example address with the computer’s LAN address. The device and co
 
 After a ruling is generated, use **Open public ruling** to view its read-only page. Web builds use their current origin for share links. Native builds can use `EXPO_PUBLIC_WEB_URL` to point links at the deployed web app; the local example points to the Expo web preview.
 
-For a hosted web build, set `EXPO_PUBLIC_API_URL` to the public HTTPS origin of the deployed API before exporting the app. The browser calls that origin to load anonymous rulings, so a blank value is only suitable for local development. Keep API CORS configured for the web app's origin.
+For a hosted web build, set `EXPO_PUBLIC_API_URL` to the public HTTPS origin of the deployed API before exporting the app. The browser calls that origin to load anonymous rulings, so a blank value is only suitable for local development. Set the API's `CORS_ALLOWED_ORIGINS` to that web app's exact HTTPS origin; with `NODE_ENV=production` and no list, browsers cannot call the API from any other site.
 
 Check the API directly at `http://localhost:3000/health`. `POST /api/questions/interpret` accepts a JSON body such as `{"question":"Can I respond to a spell in Magic?"}` and returns an in-scope decision, scenario facts, highlighted mention spans, and exact Oracle card choices. Calling it requires the server-side OpenAI and AI quota settings from `.env`; the API and mobile app still start with the example placeholders. Stop the database with `docker compose down`; `docker compose down -v` also removes its local data.
 
