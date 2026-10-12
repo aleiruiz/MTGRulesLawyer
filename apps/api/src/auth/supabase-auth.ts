@@ -32,7 +32,8 @@ export function createSupabaseAccessTokenVerifier(options: {
     } catch {
       throw new AuthVerificationUnavailableError();
     }
-    if (response.status === 401 || response.status === 403) return null;
+    // 404: the token is valid but its user was deleted, so it no longer identifies anyone.
+    if (response.status === 401 || response.status === 403 || response.status === 404) return null;
     if (!response.ok) throw new AuthVerificationUnavailableError();
 
     let user: unknown;

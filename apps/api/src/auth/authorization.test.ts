@@ -67,6 +67,12 @@ void describe("Supabase access token verification", () => {
     });
     assert.equal(await invalid("forged.token"), null);
     assert.equal(await invalid("expired.token"), null);
+    const deletedUser = createSupabaseAccessTokenVerifier({
+      url: "https://project.supabase.co",
+      publishableKey: "public-placeholder",
+      fetch: () => Promise.resolve(new Response(null, { status: 404 })),
+    });
+    assert.equal(await deletedUser("token-of-deleted-user"), null);
 
     const unavailable = createSupabaseAccessTokenVerifier({
       url: "https://project.supabase.co",
