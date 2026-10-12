@@ -10,6 +10,7 @@ import {
 } from "@expo-google-fonts/cormorant-garamond";
 import { AuthProvider, useAuth } from "../src/auth/AuthProvider";
 import LoadingScreen from "../src/ui/LoadingScreen";
+import { FontsReadyContext } from "../src/ui/fonts-ready";
 import { colors, fonts } from "../src/theme";
 
 // Keeps the loading screen up long enough to read instead of flashing for a frame.
@@ -44,27 +45,29 @@ function AppStack() {
         accessibilityElementsHidden={showSplash}
         importantForAccessibility={showSplash ? "no-hide-descendants" : "auto"}
       >
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.backgroundDeep },
-            headerTintColor: colors.goldBright,
-            headerTitleStyle: fontsLoaded ? { fontFamily: fonts.display } : undefined,
-            headerShadowVisible: false,
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        >
-          <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
-          <Stack.Screen name="sign-in" options={{ title: "Account" }} />
-          <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
-          <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
-          <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
-          <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
-          <Stack.Screen name="chat" options={{ title: "The judge" }} />
-          <Stack.Screen
-            name="auth/callback"
-            options={{ title: "Sign in", headerBackVisible: false }}
-          />
-        </Stack>
+        <FontsReadyContext.Provider value={fontsLoaded}>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.backgroundDeep },
+              headerTintColor: colors.goldBright,
+              headerTitleStyle: fontsLoaded ? { fontFamily: fonts.display } : undefined,
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: colors.background },
+            }}
+          >
+            <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
+            <Stack.Screen name="sign-in" options={{ title: "Account" }} />
+            <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
+            <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
+            <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
+            <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
+            <Stack.Screen name="chat" options={{ title: "The judge" }} />
+            <Stack.Screen
+              name="auth/callback"
+              options={{ title: "Sign in", headerBackVisible: false }}
+            />
+          </Stack>
+        </FontsReadyContext.Provider>
       </View>
       {showSplash ? (
         <View style={StyleSheet.absoluteFill}>

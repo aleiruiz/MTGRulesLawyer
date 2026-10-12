@@ -20,6 +20,11 @@ import { router } from "expo-router";
 import { saveDraft } from "../chat/draft-store";
 import RecentConversations from "../chat/RecentConversations";
 import ConfirmedCardTile from "./ConfirmedCardTile";
+import {
+  QUESTION_CONNECTION_ERROR,
+  QuestionRequestError,
+  questionErrorMessage,
+} from "./question-error-message";
 import { apiUrl } from "../api-url";
 import {
   cardLookupResponseSchema,
@@ -161,7 +166,8 @@ export default function QuestionConfirmationScreen() {
         body: JSON.stringify({ question: submittedQuestion }),
         signal: abortController.signal,
       });
-      const body: unknown = await response.json();
+      // A proxy or crash can answer with a non-JSON page; treat it like any other failure.
+      const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
         const errorBody = typeof body === "object" && body !== null ? body : {};
         const errorCode =
@@ -170,12 +176,7 @@ export default function QuestionConfirmationScreen() {
           "retryAfterSeconds" in errorBody && typeof errorBody.retryAfterSeconds === "number"
             ? errorBody.retryAfterSeconds
             : undefined;
-        const wait = retryAfter === undefined ? "" : ` Try again in ${retryAfter}s.`;
-        throw new Error(
-          errorCode
-            ? `${errorCode.replaceAll("_", " ")}.${wait}`
-            : `Question request failed (${response.status}).`,
-        );
+        throw new QuestionRequestError(questionErrorMessage(errorCode, retryAfter));
       }
       const result = questionInterpretResponseSchema.parse(body);
       if (requestId !== interpretationRequestId.current) return;
@@ -193,7 +194,7 @@ export default function QuestionConfirmationScreen() {
     } catch (error) {
       if (requestId === interpretationRequestId.current && !abortController.signal.aborted) {
         setRequestError(
-          error instanceof Error ? error.message : "Unable to interpret the question.",
+          error instanceof QuestionRequestError ? error.message : QUESTION_CONNECTION_ERROR,
         );
       }
     } finally {
