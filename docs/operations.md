@@ -36,3 +36,7 @@ pnpm db:rehearse-restore
 ```
 
 The rehearsal creates a synthetic marker row, dumps the database, changes the row, restores the dump, verifies the original value, and removes the marker and temporary backup. CI runs the same rehearsal against its disposable PostgreSQL service.
+
+## Admin access
+
+Grant or remove the admin role only with a direct database change by the maintainer; the API reads the role from `AppUser` on every admin request. Every `/api/admin` request also requires a Supabase session at assurance level `aal2` (an authenticator-app code) whose latest sign-in or code check is no older than `ADMIN_AUTH_MAX_AGE_SECONDS` (default one hour, allowed range 60 seconds to one day). Keep TOTP multi-factor authentication enabled in the Supabase project. The first time an admin opens the review queue, the app guides them through adding the account to an authenticator app; afterwards it asks for a new code whenever the last check is too old. Denials are logged as `admin.assurance.denied` with the reason only.

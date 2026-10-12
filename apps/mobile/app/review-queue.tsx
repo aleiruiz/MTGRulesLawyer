@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,7 @@ import {
   type ReviewDecisionRequest,
   type ReviewQueueResponse,
 } from "@mtg-rules/contracts";
+import { adminAccessMessage, readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
 import { apiUrl } from "../src/api-url";
 
@@ -24,6 +25,7 @@ export default function ReviewQueueScreen() {
   const [queue, setQueue] = useState<ReviewQueueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
   const [corrections, setCorrections] = useState<
@@ -55,12 +57,16 @@ export default function ReviewQueueScreen() {
     setLoading(true);
     setQueue(null);
     setMessage("");
+    setNeedsVerification(false);
     try {
       const response = await fetch(`${apiUrl}/api/admin/challenges`, {
         headers: { authorization: `Bearer ${session.access_token}` },
       });
-      if (response.status === 403)
-        throw new Error("Admin access is required to review challenges.");
+      const denial = await readAdminAccessDenial(response);
+      if (denial) {
+        setNeedsVerification(denial !== "not_admin");
+        throw new Error(adminAccessMessage(denial));
+      }
       if (!response.ok) throw new Error("The review queue is temporarily unavailable.");
       setQueue(reviewQueueResponseSchema.parse(await response.json()));
     } catch (error) {
@@ -95,8 +101,11 @@ export default function ReviewQueueScreen() {
           body: JSON.stringify({ reason }),
         },
       );
-      if (response.status === 403)
-        throw new Error("Admin access is required to review challenges.");
+      const denial = await readAdminAccessDenial(response);
+      if (denial) {
+        setNeedsVerification(denial !== "not_admin");
+        throw new Error(adminAccessMessage(denial));
+      }
       if (response.status === 409)
         throw new Error("This challenge changed while you were reviewing it. Refresh the queue.");
       if (!response.ok) throw new Error("The information request could not be saved.");
@@ -162,8 +171,11 @@ export default function ReviewQueueScreen() {
           body: JSON.stringify(payload),
         },
       );
-      if (response.status === 403)
-        throw new Error("Admin access is required to review challenges.");
+      const denial = await readAdminAccessDenial(response);
+      if (denial) {
+        setNeedsVerification(denial !== "not_admin");
+        throw new Error(adminAccessMessage(denial));
+      }
       if (response.status === 409)
         throw new Error("This challenge was already decided. Refresh the queue.");
       if (response.status === 400)
@@ -196,6 +208,15 @@ export default function ReviewQueueScreen() {
           <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.message}>
             {message}
           </Text>
+        ) : null}
+        {needsVerification ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/admin-verify")}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Verify with authenticator app</Text>
+          </Pressable>
         ) : null}
         {queue?.challenges.length === 0 ? <Text>No challenges are waiting for review.</Text> : null}
         {queue?.challenges.map((item) => (

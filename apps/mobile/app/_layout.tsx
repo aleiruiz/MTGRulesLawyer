@@ -9,6 +9,7 @@ export default function RootLayout() {
         <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
         <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
         <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
+        <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
         <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
         <Stack.Screen
           name="auth/callback"

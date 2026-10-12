@@ -273,7 +273,11 @@ const reviewQueueFixture: ReviewQueueResponse = {
 };
 const reviewApp = buildApp({
   verifyAccessToken: (token) =>
-    Promise.resolve(token === "admin-token" || token === "user-token" ? { subject: token } : null),
+    Promise.resolve(
+      token === "admin-token" || token === "user-token"
+        ? { subject: token, assuranceLevel: "aal2", authenticatedAt: Math.floor(Date.now() / 1000) }
+        : null,
+    ),
   resolveAppUser: (subject) =>
     Promise.resolve({ id: subject, role: subject === "admin-token" ? "ADMIN" : "USER" }),
   getReviewQueue: () => Promise.resolve(reviewQueueFixture),

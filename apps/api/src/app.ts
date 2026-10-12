@@ -43,6 +43,7 @@ import {
   requireAuthenticatedUser,
   type AppUserResolver,
 } from "./auth/authorization.js";
+import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
 import {
   createSupabaseAccessTokenVerifier,
   type AccessTokenVerifier,
@@ -87,6 +88,8 @@ export interface BuildAppOptions {
   checkDatabase?: () => Promise<void>;
   verifyAccessToken?: AccessTokenVerifier;
   resolveAppUser?: AppUserResolver;
+  adminAuthMaxAgeSeconds?: number;
+  now?: () => number;
   submitChallenge?: (
     input: ChallengeSubmissionRequest & { rulingId: string; userId: string },
   ) => Promise<ChallengeResponse>;
@@ -163,7 +166,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const requestChallengeInformation = options.requestMoreInformation ?? requestMoreInformation;
   const decideReview = options.decideChallenge ?? decideChallenge;
 
-  registerAuthentication(app, verifyAccessToken, resolveAppUser);
+  registerAuthentication(app, verifyAccessToken, resolveAppUser, {
+    adminAuthMaxAgeSeconds:
+      options.adminAuthMaxAgeSeconds ??
+      readAdminAuthMaxAgeSeconds(process.env.ADMIN_AUTH_MAX_AGE_SECONDS),
+    ...(options.now ? { now: options.now } : {}),
+  });
 
   void app.register(cors, { origin: true });
   app.addHook("onResponse", (request, reply, done) => {
