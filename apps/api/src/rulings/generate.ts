@@ -497,7 +497,10 @@ export async function generateRuling(
 // The cache's single-flight transaction allows 130 seconds (cache.ts).
 const RULING_TRANSACTION_BUDGET_MS = 125_000;
 const RESEARCH_TIME_MARGIN_MS = 5_000;
-const WEB_LINK = /https?:\/\/|\bwww\.|\]\(|\b[a-z0-9-]+\.(?:com|org|net|io|gg|de|es|dk|wtf)\b/i;
+const WEB_LINK = /https?:\/\/|\bwww\.|\]\(/i;
+// Bare domains ("judges.example.xyz"): lowercase name, dot, lowercase ending, as rules text
+// and card names never write them (sentences have a space after a period).
+const BARE_DOMAIN = /\b[a-z0-9-]{2,}\.[a-z]{2,10}\b/;
 
 /** True when any player-facing text in the answer carries a link or web address. */
 export function containsWebLinks(answer: RulingGenerationResponse): boolean {
@@ -507,7 +510,7 @@ export function containsWebLinks(answer: RulingGenerationResponse): boolean {
     ...answer.assumptions,
     ...answer.clarificationQuestions,
   ];
-  return texts.some((text) => WEB_LINK.test(text));
+  return texts.some((text) => WEB_LINK.test(text) || BARE_DOMAIN.test(text));
 }
 
 /**

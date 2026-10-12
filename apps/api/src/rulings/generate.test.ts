@@ -192,6 +192,7 @@ void describe("Ruling evidence verification", () => {
       "Yes, per www.example.com.",
       "Yes ([judges](https://x.y)).",
       "Yes, as magicjudges.org explains.",
+      "Yes, see judges.example.xyz for details.",
     ]) {
       assert.equal(chooseResearchedAnswer(uncertainFirst, { ...settled, summary }), uncertainFirst);
     }
