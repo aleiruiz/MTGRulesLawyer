@@ -218,7 +218,18 @@ export async function generateRuling(
   signal?: AbortSignal,
   priorTurns: PriorTurn[] = [],
 ): Promise<RulingGenerationResponse> {
-  const evidence = await assembleConfirmedEvidence(request);
+  // A follow-up like "They are controlled by my opponent." names nothing to search for on its
+  // own, so rule retrieval also reads the earlier questions. The prompt keeps them separate.
+  const evidence = await assembleConfirmedEvidence(
+    priorTurns.length > 0
+      ? {
+          ...request,
+          question: [request.question, ...priorTurns.map((turn) => turn.question)]
+            .join(" ")
+            .slice(0, 4_000),
+        }
+      : request,
+  );
   const missingFacts = request.gameState?.missingFacts ?? [];
   if (missingFacts.length > 0) return createClarificationResponse(evidence, missingFacts);
 
