@@ -55,6 +55,13 @@ export default function SignInScreen() {
         );
         return;
       }
+      if (response.status === 401) {
+        // The sign-in is no longer valid, for example because a previous attempt already
+        // removed it; clear this device's session so the player can sign in again if needed.
+        await supabase.auth.signOut({ scope: "local" });
+        setMessage("Your sign-in is no longer valid. If your account still exists, sign in again.");
+        return;
+      }
       if (!response.ok) {
         setMessage("Account deletion is unavailable right now. Nothing was deleted.");
         return;

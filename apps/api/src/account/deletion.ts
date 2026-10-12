@@ -120,12 +120,18 @@ export function createAccountDeleter(options: {
   deleteAppUserData: (appUserId: string) => Promise<{ supabaseUserId: string } | null>;
   deleteAppUserDataBySupabaseUserId: (supabaseUserId: string) => Promise<void>;
   deleteAuthIdentity: AuthIdentityDeleter | null;
+  onCleanupError?: () => void;
 }): (appUserId: string) => Promise<void> {
   return async (appUserId) => {
     if (!options.deleteAuthIdentity) throw new AccountDeletionUnavailableError();
     const deleted = await options.deleteAppUserData(appUserId);
     if (!deleted) return;
     await options.deleteAuthIdentity(deleted.supabaseUserId);
-    await options.deleteAppUserDataBySupabaseUserId(deleted.supabaseUserId);
+    try {
+      await options.deleteAppUserDataBySupabaseUserId(deleted.supabaseUserId);
+    } catch {
+      // The account is already deleted; a failed best-effort cleanup must not report otherwise.
+      options.onCleanupError?.();
+    }
   };
 }

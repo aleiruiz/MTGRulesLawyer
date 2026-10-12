@@ -184,6 +184,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       deleteAppUserData: (appUserId) => deleteAppUserData(appUserId),
       deleteAppUserDataBySupabaseUserId: (supabaseUserId) =>
         deleteAppUserDataBySupabaseUserId(supabaseUserId),
+      onCleanupError: () =>
+        app.log.warn(
+          { event: "account.cleanup_failed" },
+          "A record recreated during account deletion could not be removed",
+        ),
       deleteAuthIdentity: hasSupabaseSecretKey(process.env.SUPABASE_SECRET_KEY)
         ? createSupabaseAuthIdentityDeleter({
             url: process.env.SUPABASE_URL ?? "https://your-project.supabase.co",
