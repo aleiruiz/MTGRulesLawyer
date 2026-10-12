@@ -127,7 +127,7 @@ export default function ChatScreen({
         if (!mounted.current) return;
         fail(
           key,
-          controller.signal.aborted ? new Error("Stopped.") : error,
+          controller.signal.aborted ? new QuestionRequestError("Stopped.") : error,
           "The judge could not answer.",
         );
       }
@@ -177,7 +177,7 @@ export default function ChatScreen({
         if (!mounted.current) return;
         fail(
           key,
-          controller.signal.aborted ? new Error("Stopped.") : error,
+          controller.signal.aborted ? new QuestionRequestError("Stopped.") : error,
           "The judge could not read that.",
         );
       }
