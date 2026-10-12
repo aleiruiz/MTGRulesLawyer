@@ -139,13 +139,13 @@ export async function assembleEvidence(
       WHERE r."snapshotId" = ${snapshot.id}::uuid
     ),
     question_terms AS (
-      SELECT term.lexeme
+      SELECT term.lexeme, term.positions[1] AS position
       FROM unnest(to_tsvector('english', ${request.question})) AS term
       ORDER BY term.positions[1]
       LIMIT ${MAX_QUERY_TERMS}
     ),
     term_frequency AS (
-      SELECT question_terms.lexeme,
+      SELECT question_terms.lexeme, question_terms.position,
         (SELECT count(*) FROM snapshot_rules
           WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery) AS rules
       FROM question_terms
@@ -168,7 +168,9 @@ export async function assembleEvidence(
       SELECT term_frequency.lexeme
       FROM term_frequency
       WHERE term_frequency.rules BETWEEN 1 AND ${MAX_KEYWORD_TERM_RULES}
-      ORDER BY term_frequency.rules ASC
+      -- Earliest first: interpreted search terms lead the query, ahead of card names that only
+      -- appear in a few rules as examples.
+      ORDER BY term_frequency.position ASC
       LIMIT ${MAX_KEYWORD_TERMS}
     ),
     keyword_hits AS (
