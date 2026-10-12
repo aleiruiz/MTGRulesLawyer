@@ -9,6 +9,11 @@ import {
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
 import { apiUrl } from "../api-url";
+import {
+  QUESTION_CONNECTION_ERROR,
+  QuestionRequestError,
+  questionErrorMessage,
+} from "../questions/question-error-message";
 import type { ChatCard } from "./turns";
 
 /** Game facts the interpretation step extracted, sent along with the ruling request. */
@@ -36,16 +41,24 @@ const errorMessages: Record<string, string> = {
 async function requestJson(
   path: string,
   init: RequestInit & { accessToken?: string },
+  fallback = "The judge could not answer right now. Try again in a moment.",
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...rest,
-    headers: {
-      ...(rest.body ? { "Content-Type": "application/json" } : {}),
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-      ...(headers as Record<string, string> | undefined),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...rest,
+      headers: {
+        ...(rest.body ? { "Content-Type": "application/json" } : {}),
+        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        ...(headers as Record<string, string> | undefined),
+      },
+    });
+  } catch (error) {
+    // Let cancellation propagate as-is; anything else is a connection problem.
+    if (rest.signal?.aborted) throw error;
+    throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
+  }
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -58,13 +71,12 @@ async function requestJson(
       body !== null &&
       "retryAfterSeconds" in body &&
       typeof body.retryAfterSeconds === "number"
-        ? ` Try again in ${body.retryAfterSeconds}s.`
-        : "";
-    throw new Error(
-      (code && errorMessages[code]) ??
-        (code
-          ? `${code.replaceAll("_", " ").toLowerCase()}.${retryAfter}`
-          : `Request failed (${response.status}).`),
+        ? body.retryAfterSeconds
+        : undefined;
+    // No JSON body means a proxy or gateway answered, not the API.
+    if (body === null) throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
+    throw new QuestionRequestError(
+      (code && errorMessages[code]) ?? questionErrorMessage(code, retryAfter, fallback),
     );
   }
   return body;
@@ -117,7 +129,11 @@ export async function askJudge(
 
 export async function fetchConversations(accessToken: string): Promise<ConversationListResponse> {
   return conversationListResponseSchema.parse(
-    await requestJson("/api/me/conversations", { method: "GET", accessToken }),
+    await requestJson(
+      "/api/me/conversations",
+      { method: "GET", accessToken },
+      "Could not load your recent chats.",
+    ),
   );
 }
 
@@ -126,10 +142,11 @@ export async function fetchConversation(
   conversationId: string,
 ): Promise<ConversationDetailResponse> {
   return conversationDetailResponseSchema.parse(
-    await requestJson(`/api/me/conversations/${encodeURIComponent(conversationId)}`, {
-      method: "GET",
-      accessToken,
-    }),
+    await requestJson(
+      `/api/me/conversations/${encodeURIComponent(conversationId)}`,
+      { method: "GET", accessToken },
+      "Could not open this chat.",
+    ),
   );
 }
 
@@ -137,8 +154,9 @@ export async function removeConversation(
   accessToken: string,
   conversationId: string,
 ): Promise<void> {
-  await requestJson(`/api/me/conversations/${encodeURIComponent(conversationId)}`, {
-    method: "DELETE",
-    accessToken,
-  });
+  await requestJson(
+    `/api/me/conversations/${encodeURIComponent(conversationId)}`,
+    { method: "DELETE", accessToken },
+    "Could not delete this chat. Try again in a moment.",
+  );
 }
