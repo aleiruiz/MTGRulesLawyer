@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { boundEvidenceForPrompt } from "../rulings/generate.js";
+import { boundEvidenceForPrompt, MAX_PROMPT_CORE_RULES } from "../rulings/generate.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   addRequestedRules,
@@ -50,6 +50,8 @@ void describe("core rules", () => {
       );
     }
     assert.equal(new Set(CORE_RULE_NUMBERS).size, CORE_RULE_NUMBERS.length);
+    // The prompt keeps at most this many core rules; more would be dropped silently.
+    assert.ok(CORE_RULE_NUMBERS.length <= MAX_PROMPT_CORE_RULES);
     for (const number of CORE_RULE_NUMBERS) assert.equal(number, number.toLowerCase());
   });
 
