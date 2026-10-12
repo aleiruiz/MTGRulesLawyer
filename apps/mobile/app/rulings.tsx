@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, Link } from "expo-router";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { persistedRulingResponseSchema, type PersistedRulingResponse } from "@mtg-rules/contracts";
 import { apiUrl } from "../src/api-url";
 import ChallengeForm from "../src/challenges/ChallengeForm";
+import { colors, fonts } from "../src/theme";
 
 const rulingIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -148,21 +150,26 @@ export default function PublicRulingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f4f1e8" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   container: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 16 },
-  brand: { color: "#5d3f1c", fontSize: 15, fontWeight: "700" },
-  notice: { color: "#5b5a55", fontSize: 13 },
-  title: { color: "#17212b", fontSize: 30, fontWeight: "800" },
-  error: { color: "#9c2f25", fontSize: 16 },
-  card: { backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 14 },
-  outcome: { color: "#386641", fontSize: 14, fontWeight: "800", textTransform: "uppercase" },
-  question: { color: "#17212b", fontSize: 20, fontWeight: "700" },
-  summary: { color: "#17212b", fontSize: 18, lineHeight: 27 },
-  meta: { color: "#5b5a55", fontSize: 13 },
-  section: { borderTopWidth: 1, borderTopColor: "#e6e1d6", paddingTop: 14, gap: 10 },
-  sectionTitle: { color: "#17212b", fontSize: 17, fontWeight: "700" },
-  body: { color: "#303b45", fontSize: 15, lineHeight: 23 },
-  citation: { backgroundColor: "#f7f6f2", borderRadius: 10, padding: 12, gap: 8 },
-  citationTitle: { color: "#17212b", fontWeight: "700" },
-  link: { color: "#145da0", fontSize: 15, textDecorationLine: "underline" },
+  brand: { color: colors.warning, fontSize: 15, fontWeight: "700" },
+  notice: { color: colors.textMuted, fontSize: 13 },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 30 },
+  error: { color: colors.danger, fontSize: 16 },
+  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, gap: 14 },
+  outcome: {
+    color: colors.goldBright,
+    fontSize: 14,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  question: { color: colors.text, fontSize: 20, fontWeight: "700" },
+  summary: { color: colors.text, fontSize: 18, lineHeight: 27 },
+  meta: { color: colors.textMuted, fontSize: 13 },
+  section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, gap: 10 },
+  sectionTitle: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 17 },
+  body: { color: colors.text, fontSize: 15, lineHeight: 23 },
+  citation: { backgroundColor: colors.background, borderRadius: 10, padding: 12, gap: 8 },
+  citationTitle: { color: colors.text, fontWeight: "700" },
+  link: { color: colors.goldBright, fontSize: 15, textDecorationLine: "underline" },
 });

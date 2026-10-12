@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { myChallengesResponseSchema, type MyChallengesResponse } from "@mtg-rules/contracts";
 import { useAuth } from "../src/auth/AuthProvider";
 import { apiUrl } from "../src/api-url";
+import { colors, fonts } from "../src/theme";
 
 export default function MyChallengesScreen() {
   const { session } = useAuth();
@@ -122,23 +124,23 @@ export default function MyChallengesScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f4f1e8" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   page: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 14 },
-  title: { color: "#17212b", fontSize: 28, fontWeight: "800" },
-  card: { gap: 8, padding: 16, borderRadius: 12, backgroundColor: "#fff" },
-  status: { color: "#386641", fontWeight: "800", textTransform: "capitalize" },
-  question: { color: "#17212b", fontSize: 18, fontWeight: "700" },
-  infoRequest: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: "#fff4d6" },
-  infoTitle: { color: "#6b4b00", fontWeight: "700" },
-  date: { color: "#5b5a55", fontSize: 13 },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  card: { gap: 8, padding: 16, borderRadius: 12, backgroundColor: colors.surface },
+  status: { color: colors.goldBright, fontWeight: "800", textTransform: "capitalize" },
+  question: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  infoRequest: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: colors.warningSurface },
+  infoTitle: { color: colors.warning, fontWeight: "700" },
+  date: { color: colors.textMuted, fontSize: 13 },
   refresh: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
   },
-  refreshText: { color: "#fff", fontWeight: "700" },
-  error: { color: "#9c2f25" },
-  link: { color: "#145da0", textDecorationLine: "underline" },
+  refreshText: { color: colors.ink, fontWeight: "700" },
+  error: { color: colors.danger },
+  link: { color: colors.goldBright, textDecorationLine: "underline" },
 });

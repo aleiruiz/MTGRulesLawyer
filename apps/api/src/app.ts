@@ -28,6 +28,10 @@ import {
   reviewDecisionResponseSchema,
   type ReviewDecisionRequest,
   type ReviewDecisionResponse,
+  conversationDetailResponseSchema,
+  conversationListResponseSchema,
+  type ConversationDetailResponse,
+  type ConversationListResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
 import { lookupCardsByName } from "./cards/lookup.js";
@@ -36,6 +40,19 @@ import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/
 import { getSourceStatus } from "./sources/status.js";
 import { generateRuling } from "./rulings/generate.js";
 import { getRuling, saveRuling } from "./rulings/persistence.js";
+import {
+  loadPriorTurns,
+  type PriorTurn,
+  type PriorTurnLoader,
+  type PriorTurnScope,
+} from "./conversations/prior-turns.js";
+import type { RulingOwner } from "./conversations/attach.js";
+import {
+  deleteConversation,
+  getConversation,
+  listConversations,
+  ownsConversation,
+} from "./conversations/service.js";
 import { prisma } from "./db/client.js";
 import {
   createAuthenticationPreHandler,
@@ -52,7 +69,8 @@ import {
   deleteAppUserDataBySupabaseUserId,
   hasSupabaseSecretKey,
 } from "./account/deletion.js";
-import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
+import { evaluateAdminAssurance, readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
+import { createAttemptLimiter } from "./http/attempt-limiter.js";
 import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
 import {
   createSupabaseAccessTokenVerifier,
@@ -74,12 +92,16 @@ import {
   ReviewChallengeNotFoundError,
 } from "./reviews/service.js";
 
+// Each attempt can reach the Supabase admin API; a person needs at most a few retries.
+const ACCOUNT_DELETION_ATTEMPTS_PER_HOUR = 3;
+
 export interface BuildAppOptions {
   lookupCardsByName?: (name: string) => Promise<CardLookupResponse>;
   interpretQuestion?: (
     question: string,
     clientIp: string,
     signal?: AbortSignal,
+    priorTurns?: PriorTurn[],
   ) => Promise<QuestionInterpretResponse>;
   assembleQuestionEvidence?: (
     request: ConfirmedQuestionEvidenceRequest,
@@ -88,11 +110,21 @@ export interface BuildAppOptions {
     request: ConfirmedQuestionEvidenceRequest,
     clientIp: string,
     signal?: AbortSignal,
+    priorTurns?: PriorTurn[],
   ) => Promise<RulingGenerationResponse>;
   saveRuling?: (
     request: ConfirmedQuestionEvidenceRequest,
     answer: RulingGenerationResponse,
+    owner?: RulingOwner,
   ) => Promise<PersistedRulingResponse>;
+  loadPriorTurns?: PriorTurnLoader;
+  listConversations?: (userId: string) => Promise<ConversationListResponse>;
+  getConversation?: (
+    userId: string,
+    conversationId: string,
+  ) => Promise<ConversationDetailResponse | null>;
+  deleteConversation?: (userId: string, conversationId: string) => Promise<boolean>;
+  ownsConversation?: (userId: string, conversationId: string) => Promise<boolean>;
   getRuling?: (rulingId: string, version?: number) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
   checkDatabase?: () => Promise<void>;
@@ -150,7 +182,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const interpret = options.interpretQuestion ?? interpretQuestion;
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
   const createRuling = options.generateRuling ?? generateRuling;
-  const persistRuling = options.saveRuling ?? saveRuling;
+  const persistRuling =
+    options.saveRuling ??
+    ((
+      request: ConfirmedQuestionEvidenceRequest,
+      answer: RulingGenerationResponse,
+      owner?: RulingOwner,
+    ) => saveRuling(request, answer, prisma, owner));
+  const readPriorTurns =
+    options.loadPriorTurns ??
+    ((ids: string[], scope?: PriorTurnScope) => loadPriorTurns(ids, prisma, scope));
+  const readConversations =
+    options.listConversations ?? ((userId: string) => listConversations(userId));
+  const readConversation =
+    options.getConversation ?? ((userId: string, id: string) => getConversation(userId, id));
+  const removeConversation =
+    options.deleteConversation ?? ((userId: string, id: string) => deleteConversation(userId, id));
+  const checkConversationOwner =
+    options.ownsConversation ?? ((userId: string, id: string) => ownsConversation(userId, id));
   const readRuling =
     options.getRuling ?? ((rulingId, version) => getRuling(rulingId, prisma, version));
   const readSourceStatus = options.getSourceStatus ?? getSourceStatus;
@@ -197,11 +246,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         : null,
     });
 
+  const adminAuthMaxAgeSeconds =
+    options.adminAuthMaxAgeSeconds ??
+    readAdminAuthMaxAgeSeconds(process.env.ADMIN_AUTH_MAX_AGE_SECONDS);
+  const now = options.now ?? Date.now;
   registerAuthentication(app, verifyAccessToken, resolveAppUser, {
-    adminAuthMaxAgeSeconds:
-      options.adminAuthMaxAgeSeconds ??
-      readAdminAuthMaxAgeSeconds(process.env.ADMIN_AUTH_MAX_AGE_SECONDS),
-    ...(options.now ? { now: options.now } : {}),
+    adminAuthMaxAgeSeconds,
+    now,
+  });
+  const accountDeletionLimiter = createAttemptLimiter({
+    maxAttempts: ACCOUNT_DELETION_ATTEMPTS_PER_HOUR,
+    windowMs: 60 * 60 * 1_000,
+    now,
   });
 
   void app.register(cors, {
@@ -271,6 +327,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.delete("/api/me", { preHandler: authenticate }, async (request, reply) => {
     const user = requireAuthenticatedUser(request, reply);
     if (!user) return reply;
+    if (user.role === "ADMIN") {
+      // Deleting an admin account removes reviewer attribution, so it needs the same step-up
+      // check as any other admin action. It runs first: it calls nothing external, so a denied
+      // attempt should not use up the deletion limit.
+      const assurance = evaluateAdminAssurance(request.authSession, now(), adminAuthMaxAgeSeconds);
+      if (assurance !== "allowed") {
+        return reply.code(403).send({
+          error:
+            assurance === "mfa_required" ? "ADMIN_MFA_REQUIRED" : "ADMIN_REAUTHENTICATION_REQUIRED",
+        });
+      }
+    }
+    // Keyed by the Supabase user: after a failed identity deletion the app record is recreated
+    // with a new ID, which must not reset the limit.
+    const retryAfterSeconds = accountDeletionLimiter.attempt(request.authSubject ?? user.id);
+    if (retryAfterSeconds !== null) {
+      reply.header("Retry-After", String(retryAfterSeconds));
+      return reply.code(429).send({ error: "ACCOUNT_DELETION_RATE_LIMITED", retryAfterSeconds });
+    }
     try {
       await deleteAccount(user.id);
       request.log.info({ event: "account.deleted" }, "Account deleted");
@@ -305,6 +380,62 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(503).send({ error: "CHALLENGES_UNAVAILABLE" });
     }
   });
+  app.get("/api/me/conversations", { preHandler: authenticate }, async (request, reply) => {
+    const user = requireAuthenticatedUser(request, reply);
+    if (!user) return reply;
+    try {
+      return reply.send(conversationListResponseSchema.parse(await readConversations(user.id)));
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Conversation list failed",
+      );
+      return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+    }
+  });
+  app.get<{ Params: { conversationId: string } }>(
+    "/api/me/conversations/:conversationId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.conversationId))
+        return reply.code(400).send({ error: "INVALID_CONVERSATION_ID" });
+      try {
+        const conversation = await readConversation(user.id, request.params.conversationId);
+        // Another user's conversation looks the same as a missing one.
+        if (!conversation) return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+        return reply.send(conversationDetailResponseSchema.parse(conversation));
+      } catch (error) {
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Conversation read failed",
+        );
+        return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+      }
+    },
+  );
+  app.delete<{ Params: { conversationId: string } }>(
+    "/api/me/conversations/:conversationId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = requireAuthenticatedUser(request, reply);
+      if (!user) return reply;
+      if (!isUuid(request.params.conversationId))
+        return reply.code(400).send({ error: "INVALID_CONVERSATION_ID" });
+      try {
+        const deleted = await removeConversation(user.id, request.params.conversationId);
+        if (!deleted) return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+        return reply.code(204).send();
+      } catch (error) {
+        request.log.error(
+          { errorName: error instanceof Error ? error.name : "UnknownError" },
+          "Conversation delete failed",
+        );
+        return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+      }
+    },
+  );
   app.get("/api/admin/challenges", async (request, reply) => {
     if (request.appUser?.role !== "ADMIN") return reply.code(403).send({ error: "ADMIN_REQUIRED" });
     try {
@@ -415,7 +546,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await interpret(parsed.data.question, request.ip, disconnect.signal);
+      const priorTurns = await readPriorTurns(parsed.data.priorRulingIds);
+      const result = await interpret(
+        parsed.data.question,
+        request.ip,
+        disconnect.signal,
+        priorTurns,
+      );
       return reply.send(questionInterpretResponseSchema.parse(result));
     } catch (error) {
       if (disconnect.signal.aborted) return reply;
@@ -459,11 +596,43 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.success) {
       return reply.code(400).send({ error: "INVALID_RULING_REQUEST" });
     }
+    // Signing in is optional here; a signed-in ruling is saved to the user's conversation history.
+    if (request.headers.authorization !== undefined || parsed.data.conversationId) {
+      await authenticate(request, reply);
+      if (reply.sent) return reply;
+    }
+    const owner: RulingOwner | undefined = request.appUser
+      ? {
+          userId: request.appUser.id,
+          ...(parsed.data.conversationId ? { conversationId: parsed.data.conversationId } : {}),
+        }
+      : undefined;
+    try {
+      // Check before generating so a bad conversation ID does not spend a model call.
+      if (
+        owner?.conversationId &&
+        !(await checkConversationOwner(owner.userId, owner.conversationId))
+      )
+        return reply.code(404).send({ error: "CONVERSATION_NOT_FOUND" });
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Conversation lookup failed",
+      );
+      return reply.code(503).send({ error: "CONVERSATIONS_UNAVAILABLE" });
+    }
     const disconnect = createClientDisconnectController(request, reply);
     try {
-      const result = await createRuling(parsed.data, request.ip, disconnect.signal);
+      // In a saved conversation, context may only come from that conversation's own turns.
+      const priorTurns = await readPriorTurns(
+        parsed.data.priorRulingIds,
+        owner?.conversationId
+          ? { userId: owner.userId, conversationId: owner.conversationId }
+          : undefined,
+      );
+      const result = await createRuling(parsed.data, request.ip, disconnect.signal, priorTurns);
       return reply.send(
-        persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result)),
+        persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result, owner)),
       );
     } catch (error) {
       if (disconnect.signal.aborted) return reply;

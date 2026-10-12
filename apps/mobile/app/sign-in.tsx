@@ -1,19 +1,16 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View } from "react-native";
+import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Link, router } from "expo-router";
 import { apiUrl } from "../src/api-url";
+import { readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
 import { SOCIAL_PROVIDERS } from "../src/auth/oauth";
 import type { SocialProvider } from "../src/auth/oauth";
 import { isSupabaseConfigured, supabase } from "../src/auth/supabase";
+import AdminReviewLink from "../src/reviews/AdminReviewLink";
+import { colors, fonts } from "../src/theme";
 
 const providerLabels: Record<SocialProvider, string> = {
   google: "Continue with Google",
@@ -62,6 +59,16 @@ export default function SignInScreen() {
         setMessage("Your sign-in is no longer valid. If your account still exists, sign in again.");
         return;
       }
+      if (response.status === 429) {
+        setMessage("Too many deletion attempts. Wait an hour and try again. Nothing was deleted.");
+        return;
+      }
+      const denial = await readAdminAccessDenial(response);
+      if (denial === "mfa_required" || denial === "reauthentication_required") {
+        setMessage("Admin accounts need a fresh authenticator code before they can be deleted.");
+        router.push("/admin-verify");
+        return;
+      }
       if (!response.ok) {
         setMessage("Account deletion is unavailable right now. Nothing was deleted.");
         return;
@@ -106,16 +113,23 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.page}>
-        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.title}>{session ? "Your account" : "Sign in"}</Text>
         <Text style={styles.description}>
-          Sign in to use account features. Public rules questions remain available without an
-          account.
+          {session
+            ? "Track the rulings you challenged and manage your session."
+            : "Sign in to use account features. Public rules questions remain available without an account."}
         </Text>
         {session ? (
           <>
             <Text accessibilityRole="text" style={styles.signedIn}>
               You are signed in.
             </Text>
+            <Link href="/challenges" asChild>
+              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Track my challenges</Text>
+              </Pressable>
+            </Link>
+            <AdminReviewLink />
             <Pressable
               accessibilityRole="button"
               onPress={() => void beginSignOut()}
@@ -135,7 +149,7 @@ export default function SignInScreen() {
               ]}
             >
               {deleting ? (
-                <ActivityIndicator color="#7c2932" />
+                <ActivityIndicator color={colors.danger} />
               ) : (
                 <Text style={styles.deleteButtonText}>Delete account</Text>
               )}
@@ -161,7 +175,7 @@ export default function SignInScreen() {
                 ]}
               >
                 {pendingProvider === provider ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator color={colors.ink} />
                 ) : (
                   <Text style={styles.buttonText}>{providerLabels[provider]}</Text>
                 )}
@@ -180,32 +194,47 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f4f6f1" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   page: { flex: 1, justifyContent: "center", padding: 24, gap: 14 },
-  title: { color: "#18312f", fontSize: 28, fontWeight: "800" },
-  description: { color: "#49615c", fontSize: 16, lineHeight: 23, marginBottom: 8 },
-  setup: { padding: 12, borderRadius: 8, backgroundColor: "#fff2d6", color: "#674b0b" },
-  signedIn: { color: "#1f5d50", fontWeight: "700" },
+  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  description: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginBottom: 8 },
+  setup: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: colors.warningSurface,
+    color: colors.warning,
+  },
+  signedIn: { color: colors.goldBright, fontWeight: "700" },
   button: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
     paddingHorizontal: 16,
   },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  secondaryButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+  },
+  secondaryButtonText: { color: colors.goldBright, fontSize: 16, fontWeight: "700" },
   deleteButton: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#7c2932",
+    borderColor: colors.danger,
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  deleteButtonText: { color: "#7c2932", fontSize: 16, fontWeight: "700" },
+  deleteButtonText: { color: colors.danger, fontSize: 16, fontWeight: "700" },
   disabled: { opacity: 0.48 },
   pressed: { opacity: 0.75 },
-  message: { color: "#7c2932", fontWeight: "600" },
+  message: { color: colors.danger, fontWeight: "600" },
 });

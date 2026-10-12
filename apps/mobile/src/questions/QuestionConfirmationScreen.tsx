@@ -1,33 +1,33 @@
+import { colors, fonts } from "../theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
-  Linking,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from "react-native";
+import Text from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import logo from "../../assets/logo.png";
+import AccountButton from "../ui/AccountButton";
+import GrimoireBackdrop from "../ui/GrimoireBackdrop";
+import ManaLoader from "../ui/ManaLoader";
+import { router } from "expo-router";
+import { saveDraft } from "../chat/draft-store";
+import RecentConversations from "../chat/RecentConversations";
 import ConfirmedCardTile from "./ConfirmedCardTile";
-import ChallengeForm from "../challenges/ChallengeForm";
 import { apiUrl } from "../api-url";
-import { getPublicRulingUrl } from "../rulings/public-ruling-url";
 import {
   cardLookupResponseSchema,
-  confirmedQuestionEvidenceRequestSchema,
-  evidenceSearchResponseSchema,
   MAX_CONFIRMED_CARDS,
   questionInterpretRequestSchema,
   questionInterpretResponseSchema,
-  persistedRulingResponseSchema,
   type CardLookupResponse,
-  type EvidenceSearchResponse,
   type QuestionInterpretResponse,
-  type PersistedRulingResponse,
 } from "@mtg-rules/contracts";
 
 type Card = CardLookupResponse["cards"][number];
@@ -67,10 +67,7 @@ function highlightedQuestion(question: string, mentions: Mention[], ignored: Set
 export default function QuestionConfirmationScreen() {
   const interpretationRequestId = useRef(0);
   const searchRequestId = useRef(0);
-  const evidenceRequestId = useRef(0);
-  const rulingRequestId = useRef(0);
   const interpretationAbortController = useRef<AbortController | null>(null);
-  const rulingAbortController = useRef<AbortController | null>(null);
   const [question, setQuestion] = useState("");
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -85,38 +82,16 @@ export default function QuestionConfirmationScreen() {
   const [searchResults, setSearchResults] = useState<Card[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [isRetrieving, setIsRetrieving] = useState(false);
-  const [retrievalError, setRetrievalError] = useState("");
-  const [evidence, setEvidence] = useState<EvidenceSearchResponse | null>(null);
-  const [isGeneratingRuling, setIsGeneratingRuling] = useState(false);
-  const [rulingError, setRulingError] = useState("");
-  const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
 
   useEffect(
     () => () => {
       interpretationAbortController.current?.abort();
-      rulingAbortController.current?.abort();
     },
     [],
   );
 
-  function invalidateConfirmation() {
-    evidenceRequestId.current += 1;
-    rulingRequestId.current += 1;
-    rulingAbortController.current?.abort();
-    rulingAbortController.current = null;
-    setConfirmed(false);
-    setIsRetrieving(false);
-    setRetrievalError("");
-    setEvidence(null);
-    setIsGeneratingRuling(false);
-    setRulingError("");
-    setRuling(null);
-  }
-
-  function createEvidenceRequest() {
-    return confirmedQuestionEvidenceRequestSchema.parse({
+  function askTheJudge() {
+    const draftId = saveDraft({
       question,
       gameState: {
         events: interpretation?.events ?? [],
@@ -124,12 +99,14 @@ export default function QuestionConfirmationScreen() {
         missingFacts: interpretation?.missingFacts ?? [],
         searchTerms: interpretation?.searchTerms ?? [],
       },
-      confirmedCards: displayCards.map(({ card }) => ({
+      cards: displayCards.map(({ card }) => ({
         oracleId: card.oracleId,
+        name: card.name,
         faceIndex: faceIndexes[card.oracleId] ?? card.matchedFace.faceIndex,
         quantity: counts[card.oracleId] ?? 1,
       })),
     });
+    router.push({ pathname: "/chat", params: { draft: draftId } });
   }
 
   const ignoredSet = useMemo(() => new Set(ignoredMentions), [ignoredMentions]);
@@ -175,7 +152,6 @@ export default function QuestionConfirmationScreen() {
     setFaceIndexes({});
     setSearchMode(null);
     setSearchResults([]);
-    invalidateConfirmation();
     try {
       const submittedQuestion = questionInterpretRequestSchema.parse({ question }).question;
       setQuestion(submittedQuestion);
@@ -232,7 +208,6 @@ export default function QuestionConfirmationScreen() {
     setSearchText(initialText);
     setSearchResults([]);
     setSearchError("");
-    invalidateConfirmation();
   }
 
   async function searchCards() {
@@ -273,7 +248,6 @@ export default function QuestionConfirmationScreen() {
     }
     searchRequestId.current += 1;
     setIsSearching(false);
-    invalidateConfirmation();
     if (searchMode.type === "add") {
       setManualCards((current) =>
         current.some((existing) => existing.oracleId === card.oracleId)
@@ -315,7 +289,6 @@ export default function QuestionConfirmationScreen() {
   }
 
   function removeCard(entry: DisplayCard) {
-    invalidateConfirmation();
     setSelectedByMention((current) => {
       const next = { ...current };
       for (const index of entry.mentionIndexes) delete next[index];
@@ -326,7 +299,6 @@ export default function QuestionConfirmationScreen() {
   }
 
   function adjustCount(oracleId: string, delta: number) {
-    invalidateConfirmation();
     setCounts((current) => ({
       ...current,
       [oracleId]: Math.max(1, (current[oracleId] ?? 1) + delta),
@@ -334,7 +306,6 @@ export default function QuestionConfirmationScreen() {
   }
 
   function cycleFace(card: Card) {
-    invalidateConfirmation();
     setFaceIndexes((current) => ({
       ...current,
       [card.oracleId]:
@@ -346,108 +317,30 @@ export default function QuestionConfirmationScreen() {
     }));
   }
 
-  async function confirmCards() {
-    const requestId = ++evidenceRequestId.current;
-    searchRequestId.current += 1;
-    setIsSearching(false);
-    setSearchMode(null);
-    setIsRetrieving(true);
-    setRetrievalError("");
-    setEvidence(null);
-    setRuling(null);
-    try {
-      const request = createEvidenceRequest();
-      const response = await fetch(`${apiUrl}/api/questions/evidence`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const code =
-          typeof body === "object" &&
-          body !== null &&
-          "error" in body &&
-          typeof body.error === "string"
-            ? body.error.replaceAll("_", " ")
-            : "Evidence retrieval failed";
-        throw new Error(`${code}. Check the API connection and confirmed card choices.`);
-      }
-      const result = evidenceSearchResponseSchema.parse(body);
-      if (requestId !== evidenceRequestId.current) return;
-      setEvidence(result);
-      setConfirmed(true);
-    } catch (error) {
-      if (requestId === evidenceRequestId.current) {
-        setRetrievalError(error instanceof Error ? error.message : "Unable to retrieve evidence.");
-      }
-    } finally {
-      if (requestId === evidenceRequestId.current) setIsRetrieving(false);
-    }
-  }
-
-  async function generateVerifiedRuling() {
-    const requestId = ++rulingRequestId.current;
-    rulingAbortController.current?.abort();
-    const abortController = new AbortController();
-    rulingAbortController.current = abortController;
-    setIsGeneratingRuling(true);
-    setRulingError("");
-    setRuling(null);
-    try {
-      const response = await fetch(`${apiUrl}/api/questions/ruling`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createEvidenceRequest()),
-        signal: abortController.signal,
-      });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const code =
-          typeof body === "object" &&
-          body !== null &&
-          "error" in body &&
-          typeof body.error === "string"
-            ? body.error.replaceAll("_", " ")
-            : "Ruling generation failed";
-        throw new Error(`${code}. Check the API connection and try again.`);
-      }
-      const result = persistedRulingResponseSchema.parse(body);
-      if (requestId === rulingRequestId.current) setRuling(result);
-    } catch (error) {
-      if (requestId === rulingRequestId.current && !abortController.signal.aborted) {
-        setRulingError(error instanceof Error ? error.message : "Unable to generate a ruling.");
-      }
-    } finally {
-      if (requestId === rulingRequestId.current) {
-        rulingAbortController.current = null;
-        setIsGeneratingRuling(false);
-      }
-    }
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
+      <GrimoireBackdrop />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>MTG Rules Lawyer</Text>
+        <View style={styles.header}>
+          <View style={styles.brand}>
+            <Image accessible={false} source={logo} style={styles.logo} />
+            <Text accessibilityRole="header" style={styles.title}>
+              Rules Lawyer
+            </Text>
+          </View>
+          <AccountButton />
+        </View>
         <Text style={styles.subtitle}>Unofficial Magic rules research assistant</Text>
-        <Link href="/sign-in" asChild>
-          <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Sign in for account features</Text>
-          </Pressable>
-        </Link>
-        <Link href="/challenges" style={styles.link}>
-          Track my challenges
-        </Link>
+        <View style={styles.divider} />
         <Text style={styles.sectionTitle}>Describe the game situation</Text>
         <TextInput
+          placeholderTextColor={colors.inkMuted}
           accessibilityLabel="Magic rules question"
           accessibilityHint="Enter up to 4000 characters about a Magic game interaction."
           editable={!isInterpreting}
           multiline
           maxLength={4_000}
           onChangeText={(value) => {
-            invalidateConfirmation();
             setQuestion(value);
             setInterpretation(null);
             setSelectedByMention({});
@@ -474,7 +367,7 @@ export default function QuestionConfirmationScreen() {
           ]}
         >
           {isInterpreting ? (
-            <ActivityIndicator color="#ffffff" />
+            <ManaLoader accessibilityLabel="Reading the question" size={11} />
           ) : (
             <Text style={styles.primaryButtonText}>Find cards and game facts</Text>
           )}
@@ -484,6 +377,7 @@ export default function QuestionConfirmationScreen() {
             {requestError}
           </Text>
         ) : null}
+        {!interpretation ? <RecentConversations /> : null}
 
         {interpretation ? (
           <View style={styles.results}>
@@ -536,7 +430,6 @@ export default function QuestionConfirmationScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Select ${candidate.name} for ${mention.text}`}
                           onPress={() => {
-                            invalidateConfirmation();
                             setSelectedByMention((current) => ({
                               ...current,
                               [mentionIndex]: candidate.oracleId,
@@ -549,7 +442,7 @@ export default function QuestionConfirmationScreen() {
                       ))}
                       {mention.candidates.length === 0 ? (
                         <Text style={styles.helperText}>
-                          No exact match was found in the active Oracle data.
+                          No matching card was found in the active Oracle data.
                         </Text>
                       ) : null}
                       <View style={styles.inlineButtons}>
@@ -570,7 +463,6 @@ export default function QuestionConfirmationScreen() {
                             setIgnoredMentions((current) => [
                               ...new Set([...current, mentionIndex]),
                             ]);
-                            invalidateConfirmation();
                           }}
                           style={styles.secondaryButton}
                         >
@@ -630,6 +522,7 @@ export default function QuestionConfirmationScreen() {
                     </Text>
                     <View style={styles.searchRow}>
                       <TextInput
+                        placeholderTextColor={colors.textSubtle}
                         accessibilityLabel="Card name"
                         onChangeText={(value) => {
                           searchRequestId.current += 1;
@@ -709,189 +602,23 @@ export default function QuestionConfirmationScreen() {
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Confirm selected Oracle card identities"
-                  accessibilityHint="Confirms the selected cards before a ruling can be requested."
-                  disabled={unresolvedMentionIndexes.length > 0 || isRetrieving}
-                  onPress={() => void confirmCards()}
-                  style={[
+                  accessibilityLabel="Ask the judge"
+                  accessibilityHint="Opens a chat with the judge about this question and these cards."
+                  disabled={unresolvedMentionIndexes.length > 0}
+                  onPress={askTheJudge}
+                  style={({ pressed }) => [
                     styles.primaryButton,
-                    (unresolvedMentionIndexes.length > 0 || isRetrieving) && styles.disabledButton,
+                    unresolvedMentionIndexes.length > 0 && styles.disabledButton,
+                    pressed && styles.pressedButton,
                   ]}
                 >
-                  {isRetrieving ? (
-                    <ActivityIndicator color="#fff" accessibilityLabel="Retrieving evidence" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Confirm card identities</Text>
-                  )}
+                  <Text style={styles.primaryButtonText}>Ask the judge</Text>
                 </Pressable>
-                {retrievalError ? (
-                  <Text accessibilityRole="alert" style={styles.errorText}>
-                    {retrievalError}
-                  </Text>
-                ) : null}
                 {unresolvedMentionIndexes.length > 0 ? (
                   <Text style={styles.helperText}>
                     Choose, find, or remove each of the {unresolvedMentionIndexes.length} unresolved
                     card mention{unresolvedMentionIndexes.length === 1 ? "" : "s"} to continue.
                   </Text>
-                ) : null}
-                {confirmed ? (
-                  <View accessibilityLiveRegion="polite" style={styles.confirmedBox}>
-                    <Text style={styles.cardTitle}>Card identities confirmed</Text>
-                    <Text>
-                      Confirmed Oracle IDs:{" "}
-                      {displayCards.length
-                        ? displayCards.map(({ card }) => card.oracleId).join(", ")
-                        : "No cards"}
-                    </Text>
-                    <Text style={styles.helperText}>
-                      Evidence is pinned to the active rules and card snapshot.
-                    </Text>
-                    {evidence ? (
-                      <View accessibilityLabel="Retrieved evidence packet">
-                        <Text selectable>
-                          Snapshot: {evidence.snapshot.version} · {evidence.snapshot.id}
-                        </Text>
-                        <Text style={styles.cardTitle}>Sources</Text>
-                        {evidence.sources.map((source) => (
-                          <Text key={source.id} selectable>
-                            {source.kind} · {source.id}
-                          </Text>
-                        ))}
-                        <Text style={styles.cardTitle}>Relevant rules</Text>
-                        {evidence.rules.map((rule) => (
-                          <Text key={rule.id} numberOfLines={3}>
-                            {rule.number}: {rule.text}
-                          </Text>
-                        ))}
-                        {evidence.truncated ? (
-                          <Text style={styles.helperText}>Evidence was bounded and truncated.</Text>
-                        ) : null}
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Generate a verified rules ruling"
-                          disabled={isGeneratingRuling}
-                          onPress={() => void generateVerifiedRuling()}
-                          style={[
-                            styles.primaryButton,
-                            isGeneratingRuling && styles.disabledButton,
-                          ]}
-                        >
-                          {isGeneratingRuling ? (
-                            <ActivityIndicator
-                              color="#fff"
-                              accessibilityLabel="Generating ruling"
-                            />
-                          ) : (
-                            <Text style={styles.primaryButtonText}>Generate verified ruling</Text>
-                          )}
-                        </Pressable>
-                        {rulingError ? (
-                          <Text accessibilityRole="alert" style={styles.errorText}>
-                            {rulingError}
-                          </Text>
-                        ) : null}
-                        {ruling ? (
-                          <View accessibilityLiveRegion="polite" style={styles.factsBox}>
-                            <Text style={styles.cardTitle}>
-                              Ruling: {ruling.ruling.outcome.replaceAll("_", " ")}
-                            </Text>
-                            <Text>{ruling.ruling.summary}</Text>
-                            <Text selectable>Ruling ID: {ruling.rulingId}</Text>
-                            <ChallengeForm rulingId={ruling.rulingId} />
-                            <Pressable
-                              accessibilityRole="link"
-                              onPress={() =>
-                                void Linking.openURL(getPublicRulingUrl(ruling.rulingId))
-                              }
-                            >
-                              <Text style={styles.link}>Open public ruling</Text>
-                            </Pressable>
-                            <Text>
-                              Snapshot: {ruling.ruling.snapshot.version} ·{" "}
-                              {ruling.ruling.snapshot.activatedAt
-                                ? new Date(ruling.ruling.snapshot.activatedAt).toLocaleDateString()
-                                : "activation date unavailable"}
-                            </Text>
-                            {displayCards.length > 0 ? (
-                              <View
-                                accessibilityLabel="Cards in this ruling"
-                                style={styles.cardRow}
-                              >
-                                {displayCards.map(({ card }) => (
-                                  <Text key={card.oracleId}>
-                                    {card.name} · ×{counts[card.oracleId] ?? 1}
-                                  </Text>
-                                ))}
-                              </View>
-                            ) : null}
-                            {ruling.ruling.assumptions.map((item) => (
-                              <Text key={item}>Assumption: {item}</Text>
-                            ))}
-                            {ruling.ruling.summaryCitationIds.length > 0 ? (
-                              <Text style={styles.helperText}>
-                                Summary evidence:{" "}
-                                {ruling.ruling.summaryCitationIds
-                                  .map((id) => {
-                                    const citationIndex = ruling.ruling.citations.findIndex(
-                                      (citation) => citation.id === id,
-                                    );
-                                    return `[${citationIndex + 1}] ${ruling.ruling.citations[citationIndex]?.label ?? id}`;
-                                  })
-                                  .join(", ")}
-                              </Text>
-                            ) : null}
-                            {ruling.ruling.reasoningSteps.map((step, index) => (
-                              <View key={`${index}-${step.text}`}>
-                                <Text>
-                                  {index + 1}. {step.text}
-                                </Text>
-                                <Text style={styles.helperText}>
-                                  Evidence:{" "}
-                                  {step.citationIds
-                                    .map((id) => {
-                                      const citationIndex = ruling.ruling.citations.findIndex(
-                                        (citation) => citation.id === id,
-                                      );
-                                      return `[${citationIndex + 1}] ${ruling.ruling.citations[citationIndex]?.label ?? id}`;
-                                    })
-                                    .join(", ")}
-                                </Text>
-                              </View>
-                            ))}
-                            {ruling.ruling.clarificationQuestions.map((item) => (
-                              <Text key={item} style={styles.missingText}>
-                                {item}
-                              </Text>
-                            ))}
-                            {ruling.ruling.citations.map((citation, index) => (
-                              <Text key={citation.id} selectable>
-                                [{index + 1}] {citation.kind} {citation.label} · Source{" "}
-                                {citation.sourceId}
-                                {"\n"}
-                                {citation.sourceUrl}
-                                {"\n"}
-                                {citation.excerpt}
-                              </Text>
-                            ))}
-                            <Pressable
-                              accessibilityRole="button"
-                              disabled={isGeneratingRuling}
-                              onPress={() => void generateVerifiedRuling()}
-                              style={[
-                                styles.secondaryButton,
-                                isGeneratingRuling && styles.disabledButton,
-                              ]}
-                            >
-                              <Text style={styles.secondaryButtonText}>
-                                Rerun ruling with current question and cards
-                              </Text>
-                            </Pressable>
-                          </View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </View>
                 ) : null}
               </>
             ) : null}
@@ -903,7 +630,7 @@ export default function QuestionConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f6f3ec" },
+  safeArea: { flex: 1, backgroundColor: colors.background },
   page: {
     width: "100%",
     maxWidth: 760,
@@ -912,96 +639,125 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 48,
   },
-  title: { color: "#18312f", fontSize: 28, fontWeight: "800" },
-  subtitle: { color: "#49615c", fontSize: 15 },
-  sectionTitle: { marginTop: 12, color: "#18312f", fontSize: 20, fontWeight: "700" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  brand: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  logo: { width: 40, height: 40 },
+  title: { flexShrink: 1, color: colors.goldBright, fontFamily: fonts.displayHeavy, fontSize: 28 },
+  subtitle: { marginTop: -4, color: colors.textMuted, fontFamily: fonts.serif, fontSize: 18 },
+  divider: { height: 1, marginVertical: 4, backgroundColor: colors.gold, opacity: 0.55 },
+  sectionTitle: {
+    marginTop: 12,
+    color: colors.gold,
+    fontFamily: fonts.display,
+    fontSize: 14,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
   questionInput: {
     minHeight: 120,
-    borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderWidth: 2,
+    borderColor: colors.gold,
     borderRadius: 12,
     padding: 14,
-    backgroundColor: "#fff",
+    backgroundColor: colors.parchment,
+    color: colors.ink,
     fontSize: 16,
   },
-  helperText: { color: "#596d67", fontSize: 13 },
-  link: { color: "#145da0", fontSize: 15, textDecorationLine: "underline" },
+  helperText: { color: colors.textMuted, fontSize: 13 },
+  link: { color: colors.goldBright, fontSize: 15, textDecorationLine: "underline" },
   primaryButton: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
     borderRadius: 10,
-    backgroundColor: "#1f5d50",
+    backgroundColor: colors.gold,
   },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "700", textAlign: "center" },
+  primaryButtonText: {
+    color: colors.ink,
+    fontFamily: fonts.display,
+    fontSize: 16,
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#31695d",
+    borderColor: colors.gold,
     borderRadius: 9,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  secondaryButtonText: { color: "#174b40", fontSize: 14, fontWeight: "700", textAlign: "center" },
+  secondaryButtonText: {
+    color: colors.goldBright,
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   pressedButton: { opacity: 0.75 },
   disabledButton: { opacity: 0.45 },
-  errorText: { color: "#9d2634", fontWeight: "600" },
+  errorText: { color: colors.danger, fontWeight: "600" },
   results: { gap: 12 },
   scopeBox: { padding: 14, borderRadius: 10, gap: 5 },
-  scopeIn: { backgroundColor: "#e1efe7" },
-  scopeOut: { backgroundColor: "#f7e9df" },
-  scopeTitle: { color: "#18312f", fontSize: 17, fontWeight: "700" },
+  scopeIn: { backgroundColor: colors.successSurface },
+  scopeOut: { backgroundColor: colors.dangerSurface },
+  scopeTitle: { color: colors.text, fontSize: 17, fontWeight: "700" },
   questionPreview: {
     padding: 14,
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     fontSize: 16,
     lineHeight: 25,
   },
-  highlight: { borderRadius: 4, backgroundColor: "#ffe49a", color: "#402f00", fontWeight: "800" },
-  factsBox: { gap: 7, padding: 14, borderRadius: 10, backgroundColor: "#e9ecef" },
-  missingText: { color: "#804700", fontWeight: "600" },
+  highlight: {
+    borderRadius: 4,
+    backgroundColor: colors.goldBright,
+    color: colors.ink,
+    fontWeight: "800",
+  },
+  factsBox: { gap: 7, padding: 14, borderRadius: 10, backgroundColor: colors.surfaceRaised },
+  missingText: { color: colors.warning, fontWeight: "600" },
   mentionBox: {
     gap: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#d0b064",
+    borderColor: colors.gold,
     borderRadius: 10,
-    backgroundColor: "#fffaf0",
+    backgroundColor: colors.surfaceRaised,
   },
   cardRow: { gap: 12, paddingVertical: 4, paddingRight: 10 },
-  cardTitle: { color: "#18312f", fontSize: 16, fontWeight: "700" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
   inlineButtons: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   choiceButton: {
     minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#a5b4ab",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  choiceText: { color: "#18312f", fontWeight: "600" },
+  choiceText: { color: colors.text, fontWeight: "600" },
   searchPanel: {
     gap: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#abbab0",
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: "#eef3ee",
+    backgroundColor: colors.surfaceRaised,
   },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchInput: {
+    color: colors.text,
     flex: 1,
     minHeight: 46,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#9caaa2",
+    borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  confirmedBox: { gap: 8, padding: 14, borderRadius: 10, backgroundColor: "#e1efe7" },
+  confirmedBox: { gap: 8, padding: 14, borderRadius: 10, backgroundColor: colors.successSurface },
 });

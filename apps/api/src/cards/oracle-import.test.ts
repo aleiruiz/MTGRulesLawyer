@@ -71,6 +71,44 @@ void describe("Oracle Cards bulk parser", () => {
     assert.equal(records[1]?.faces[0]?.imageUri, "https://cards.scryfall.io/normal/single.jpg");
   });
 
+  void it("skips art-series records that share a game card's name", async () => {
+    const artSeries = {
+      oracle_id: "oracle-art-series",
+      name: "Single Card // Single Card",
+      layout: "art_series",
+      type_line: "Card // Card",
+      card_faces: [
+        { name: "Single Card", type_line: "Card" },
+        { name: "Single Card", type_line: "Card" },
+      ],
+    };
+    const gameCard = { oracle_id: "oracle-single", name: "Single Card", layout: "normal" };
+    const jsonArray = await withBulkFile(JSON.stringify([artSeries, gameCard]), async (path) => {
+      const cards = [];
+      for await (const card of readOracleCards(path)) cards.push(card);
+      return cards;
+    });
+    assert.deepEqual(
+      jsonArray.map((card) => card.oracleId),
+      ["oracle-single"],
+    );
+
+    const directory = await mkdtemp(join(tmpdir(), "mtg-oracle-art-series-"));
+    const filePath = join(directory, "bulk.jsonl.gz");
+    try {
+      const lines = `${JSON.stringify(artSeries)}\n${JSON.stringify(gameCard)}\n`;
+      await writeFile(filePath, gzipSync(Buffer.from(lines, "utf8")));
+      const cards = [];
+      for await (const card of readOracleCards(filePath)) cards.push(card);
+      assert.deepEqual(
+        cards.map((card) => card.oracleId),
+        ["oracle-single"],
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   void it("does not label split card parts as physical front and back faces", () => {
     const card = normalizeOracleCard({
       oracle_id: "oracle-split",

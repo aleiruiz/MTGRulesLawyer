@@ -17,6 +17,8 @@ declare module "fastify" {
   interface FastifyRequest {
     appUser: AuthenticatedAppUser | null;
     authSession: SessionAssurance | null;
+    /** Verified Supabase user ID; stable even when the app record is deleted and recreated. */
+    authSubject: string | null;
   }
 }
 
@@ -36,6 +38,7 @@ export function registerAuthentication(
 ): void {
   app.decorateRequest("appUser", null);
   app.decorateRequest("authSession", null);
+  app.decorateRequest("authSubject", null);
   const authenticate = createAuthenticationPreHandler(verifier, resolveUser);
   const maxAgeSeconds = options.adminAuthMaxAgeSeconds ?? DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS;
   const now = options.now ?? Date.now;
@@ -82,6 +85,7 @@ export function createAuthenticationPreHandler(
         assuranceLevel: identity.assuranceLevel ?? null,
         authenticatedAt: identity.authenticatedAt ?? null,
       };
+      request.authSubject = identity.subject;
       request.appUser = await resolveUser(identity.subject);
     } catch (error) {
       if (error instanceof AuthVerificationUnavailableError) {
