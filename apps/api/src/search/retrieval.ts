@@ -148,19 +148,19 @@ export async function assembleEvidence(
           WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery) AS rules
       FROM question_terms
     ),
+    rare_terms AS (
+      SELECT quote_literal(term_frequency.lexeme)::tsquery AS term
+      FROM term_frequency
+      WHERE term_frequency.rules > 0
+        AND term_frequency.rules <= GREATEST(
+          (SELECT count(*) FROM snapshot_rules) * ${MAX_TERM_RULE_SHARE},
+          ${MIN_COMMON_TERM_RULES}
+        )
+      ORDER BY term_frequency.rules ASC
+      LIMIT ${MAX_RANKING_TERMS}
+    ),
     query AS (
-      SELECT string_agg(quote_literal(rare.lexeme), ' | ')::tsquery AS terms
-      FROM (
-        SELECT term_frequency.lexeme
-        FROM term_frequency
-        WHERE term_frequency.rules > 0
-          AND term_frequency.rules <= GREATEST(
-            (SELECT count(*) FROM snapshot_rules) * ${MAX_TERM_RULE_SHARE},
-            ${MIN_COMMON_TERM_RULES}
-          )
-        ORDER BY term_frequency.rules ASC
-        LIMIT ${MAX_RANKING_TERMS}
-      ) AS rare
+      SELECT string_agg(rare_terms.term::text, ' | ')::tsquery AS terms FROM rare_terms
     ),
     keyword_headings AS (
       -- Keyword abilities (702.x) are headed by a rule whose whole text is the keyword
@@ -196,19 +196,25 @@ export async function assembleEvidence(
       WHERE defining.position <= ${KEYWORD_RULES_PER_HEADING}
     ),
     ranked_hits AS (
+      -- A rule sharing more of the question's distinct terms comes first; cover density only
+      -- breaks ties, so one term repeated in a long rule cannot outrank broader overlap.
       SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
+        (SELECT count(*) FROM rare_terms WHERE snapshot_rules.document @@ rare_terms.term)
+          AS shared,
         ts_rank_cd(snapshot_rules.document, query.terms, 1) AS rank
       FROM snapshot_rules, query
       WHERE snapshot_rules.document @@ query.terms
     )
     SELECT hits."id", hits."number"
     FROM (
-      SELECT "id", "number", "sortOrder", 0 AS tier, 0::real AS rank FROM keyword_hits
+      SELECT "id", "number", "sortOrder", 0 AS tier, 0::bigint AS shared, 0::real AS rank
+      FROM keyword_hits
       UNION ALL
-      SELECT "id", "number", "sortOrder", 1 AS tier, rank FROM ranked_hits
+      SELECT "id", "number", "sortOrder", 1 AS tier, shared, rank FROM ranked_hits
     ) AS hits
     GROUP BY hits."id", hits."number"
-    ORDER BY min(hits.tier) ASC, max(hits.rank) DESC, min(hits."sortOrder") ASC
+    ORDER BY min(hits.tier) ASC, max(hits.shared) DESC, max(hits.rank) DESC,
+      min(hits."sortOrder") ASC
     LIMIT ${MAX_MATCHING_RULES + 1}
   `);
   if (fullTextHits.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
@@ -239,6 +245,9 @@ export async function assembleEvidence(
       },
     })) as RuleHit[];
     const reasons = new Map(batch.map(({ id, reason }) => [id, reason]));
+    // findMany does not keep the order of `ids`; restore it so higher-priority rules come first.
+    const position = new Map(ids.map((id, index) => [id, index]));
+    rows.sort((left, right) => (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0));
     for (const rule of rows) {
       if (rule.referencesOut.length > MAX_REFERENCES_PER_RULE) ruleBudget.truncated = true;
       if (included.size >= MAX_EXPANDED_RULES) break;

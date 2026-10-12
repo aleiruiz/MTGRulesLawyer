@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { EvidenceSearchResponse } from "@mtg-rules/contracts";
 import { estimateAiTokenCostMicros } from "../ai/usage.js";
 import {
+  boundEvidenceForPrompt,
   buildModelPrompt,
   createClarificationResponse,
   RULING_SYSTEM_PROMPT,
@@ -132,6 +133,44 @@ void describe("Ruling evidence verification", () => {
         }),
       /non-negative integer/,
     );
+  });
+
+  void it("verifies citations only against the evidence the prompt actually showed", () => {
+    const baseRule = evidence.rules[0];
+    assert.ok(baseRule);
+    const manyRules = {
+      ...evidence,
+      rules: Array.from({ length: 13 }, (_, index) => ({
+        ...baseRule,
+        id: `rule-${index}`,
+        number: `999.${index}`,
+      })),
+    };
+    const bounded = boundEvidenceForPrompt(manyRules);
+    assert.equal(bounded.rules.length, 12);
+    const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, manyRules)) as {
+      evidence: { rules: Array<{ id: string }> };
+    };
+    assert.deepEqual(
+      prompt.evidence.rules.map(({ id }) => id),
+      bounded.rules.map(({ id }) => id),
+    );
+    // Rule 13 was never sent, so citing it cannot verify.
+    const result = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "Unseen evidence.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["rule-12"],
+        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["rule-12"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      bounded,
+      "test-model",
+    );
+    assert.equal(result.outcome, "uncertain");
+    assert.deepEqual(result.citations, []);
   });
 
   void it("attaches citations only from the supplied snapshot and source records", () => {
