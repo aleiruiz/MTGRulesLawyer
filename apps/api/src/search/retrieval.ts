@@ -18,6 +18,10 @@ const MAX_RANKING_TERMS = 16;
 const MAX_TERM_RULE_SHARE = 0.08;
 // ...except in small rule sets (fixtures, partial imports), where every term is "common".
 const MIN_COMMON_TERM_RULES = 25;
+const MAX_KEYWORD_TERMS = 2;
+const KEYWORD_RULES_PER_TERM = 2;
+const MIN_DEFINITION_CHARACTERS = 40;
+const MAX_KEYWORD_TERM_RULES = 12;
 const MAX_EXPANDED_RULES = 24;
 const MAX_REFERENCES_PER_RULE = 12;
 const MAX_CARDS_PER_NAME = 3;
@@ -124,9 +128,13 @@ export async function assembleEvidence(
   // the first MAX_QUERY_TERMS distinct terms of the question, keep the rarest ones that are not
   // in most rules ("creature", "player"), and rank rules that contain any of them, discounting
   // long rules. Bounding the terms keeps a 4,000-character question as fast as a short one.
+  // The very rarest terms are usually keywords ("hexproof", "trample"); the first rules that use
+  // them, which define them, are always kept, since rules sharing several commoner terms would
+  // otherwise outrank the definition.
   const fullTextHits = await client.$queryRaw<Array<{ id: string; number: string }>>(Prisma.sql`
-    WITH snapshot_rules AS (
-      SELECT r."id", r."number", r."sortOrder", to_tsvector('english', r."text") AS document
+    WITH snapshot_rules AS NOT MATERIALIZED (
+      SELECT r."id", r."number", r."sortOrder", length(r."text") AS "textLength",
+        to_tsvector('english', r."text") AS document
       FROM "Rule" AS r
       WHERE r."snapshotId" = ${snapshot.id}::uuid
     ),
@@ -155,12 +163,43 @@ export async function assembleEvidence(
         ORDER BY term_frequency.rules ASC
         LIMIT ${MAX_RANKING_TERMS}
       ) AS rare
+    ),
+    keyword_terms AS (
+      SELECT term_frequency.lexeme
+      FROM term_frequency
+      WHERE term_frequency.rules BETWEEN 1 AND ${MAX_KEYWORD_TERM_RULES}
+      ORDER BY term_frequency.rules ASC
+      LIMIT ${MAX_KEYWORD_TERMS}
+    ),
+    keyword_hits AS (
+      SELECT "id", "number", "sortOrder"
+      FROM (
+        SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
+          row_number() OVER (
+            PARTITION BY keyword_terms.lexeme ORDER BY snapshot_rules."sortOrder"
+          ) AS position
+        FROM keyword_terms
+        JOIN snapshot_rules
+          ON snapshot_rules.document @@ quote_literal(keyword_terms.lexeme)::tsquery
+        -- Skip bare headings like "702.11. Hexproof"; the definition follows them.
+        WHERE snapshot_rules."textLength" > ${MIN_DEFINITION_CHARACTERS}
+      ) AS defining
+      WHERE defining.position <= ${KEYWORD_RULES_PER_TERM}
+    ),
+    ranked_hits AS (
+      SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
+        ts_rank_cd(snapshot_rules.document, query.terms, 1) AS rank
+      FROM snapshot_rules, query
+      WHERE snapshot_rules.document @@ query.terms
     )
-    SELECT snapshot_rules."id", snapshot_rules."number"
-    FROM snapshot_rules, query
-    WHERE snapshot_rules.document @@ query.terms
-    ORDER BY ts_rank_cd(snapshot_rules.document, query.terms, 1) DESC,
-      snapshot_rules."sortOrder" ASC
+    SELECT hits."id", hits."number"
+    FROM (
+      SELECT "id", "number", "sortOrder", 0 AS tier, 0::real AS rank FROM keyword_hits
+      UNION ALL
+      SELECT "id", "number", "sortOrder", 1 AS tier, rank FROM ranked_hits
+    ) AS hits
+    GROUP BY hits."id", hits."number"
+    ORDER BY min(hits.tier) ASC, max(hits.rank) DESC, min(hits."sortOrder") ASC
     LIMIT ${MAX_MATCHING_RULES + 1}
   `);
   if (fullTextHits.length > MAX_MATCHING_RULES) ruleBudget.truncated = true;
