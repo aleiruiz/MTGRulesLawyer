@@ -141,6 +141,16 @@ export type ConfirmedQuestionEvidenceRequest = z.input<
   typeof confirmedQuestionEvidenceRequestSchema
 >;
 
+/** Printed characteristics of a card face, from Oracle data; optional for older packets. */
+const cardFaceCharacteristics = {
+  manaCost: z.string().optional(),
+  typeLine: z.string().optional(),
+  power: z.string().nullable().optional(),
+  toughness: z.string().nullable().optional(),
+  loyalty: z.string().nullable().optional(),
+  defense: z.string().nullable().optional(),
+};
+
 export const evidenceSearchResponseSchema = z.object({
   snapshot: z.object({
     id: z.string(),
@@ -164,6 +174,7 @@ export const evidenceSearchResponseSchema = z.object({
         oracleId: z.string(),
         name: z.string(),
         layout: z.string(),
+        manaValue: z.number().nullable().optional(),
         selectedFaceIndex: z.number().int().nonnegative(),
         quantity: z.number().int().min(1).max(99),
         matchedFace: z.object({
@@ -173,6 +184,7 @@ export const evidenceSearchResponseSchema = z.object({
           name: z.string(),
           oracleText: z.string(),
           truncated: z.boolean(),
+          ...cardFaceCharacteristics,
         }),
         faces: z.array(
           z.object({
@@ -182,6 +194,7 @@ export const evidenceSearchResponseSchema = z.object({
             name: z.string(),
             oracleText: z.string(),
             truncated: z.boolean(),
+            ...cardFaceCharacteristics,
           }),
         ),
       }),

@@ -343,6 +343,7 @@ async function copyCards(
         layout: card.layout,
         typeLine: card.typeLine,
         oracleText: card.oracleText,
+        manaValue: card.manaValue,
       })),
     });
     await transaction.cardFace.createMany({
@@ -358,6 +359,8 @@ async function copyCards(
           oracleText: face.oracleText,
           power: face.power,
           toughness: face.toughness,
+          loyalty: face.loyalty,
+          defense: face.defense,
           imageUri: face.imageUri,
         })),
       ),

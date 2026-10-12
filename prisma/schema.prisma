@@ -180,6 +180,8 @@ model Card {
   layout        String
   typeLine      String         @default("")
   oracleText    String         @default("") @db.Text
+  /// Mana value (converted mana cost) from the Oracle data.
+  manaValue     Float?
   snapshot      DataSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   faces         CardFace[]
   questionCards QuestionCard[]
@@ -200,6 +202,8 @@ model CardFace {
   oracleText    String           @default("") @db.Text
   power         String?
   toughness     String?
+  loyalty       String?
+  defense       String?
   imageUri      String?
   card          Card             @relation(fields: [cardId], references: [id], onDelete: Cascade)
   questionCards QuestionCard[]
