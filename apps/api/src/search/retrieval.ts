@@ -18,7 +18,7 @@ const MAX_RANKING_TERMS = 16;
 const MAX_TERM_RULE_SHARE = 0.08;
 // ...except in small rule sets (fixtures, partial imports), where every term is "common".
 const MIN_COMMON_TERM_RULES = 25;
-const MAX_KEYWORDS = 2;
+const MAX_KEYWORDS = 3;
 const KEYWORD_RULES_PER_HEADING = 2;
 const MAX_KEYWORD_HEADING_CHARACTERS = 40;
 const MAX_EXPANDED_RULES = 24;
@@ -163,15 +163,16 @@ export async function assembleEvidence(
       ) AS rare
     ),
     keyword_headings AS (
-      -- Keyword actions and abilities (701.x, 702.x) are headed by a rule whose whole text is
-      -- the keyword ("702.2. Deathtouch", "702.19. Trample"). A heading counts when every word
-      -- of it appears in the question; card names have no such heading.
+      -- Keyword abilities (702.x) are headed by a rule whose whole text is the keyword
+      -- ("702.2. Deathtouch", "702.19. Trample"). A heading counts when every word of it appears in
+      -- the question. Keyword actions (701.x: cast, destroy...) are everyday words, so they are left
+      -- to the ranked search; card names have no heading at all.
       SELECT snapshot_rules."id",
         (SELECT min(question_terms.position) FROM question_terms
           WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery)
           AS position
       FROM snapshot_rules
-      WHERE (snapshot_rules."number" LIKE '701.%' OR snapshot_rules."number" LIKE '702.%')
+      WHERE snapshot_rules."number" ~ '^702[.][0-9]+$'
         AND snapshot_rules."textLength" <= ${MAX_KEYWORD_HEADING_CHARACTERS}
         AND length(snapshot_rules.document) > 0
         AND NOT EXISTS (
