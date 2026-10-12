@@ -30,7 +30,7 @@ import {
   type ReviewDecisionResponse,
 } from "@mtg-rules/contracts";
 import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
-import { lookupCardsByExactFaceName } from "./cards/lookup.js";
+import { lookupCardsByName } from "./cards/lookup.js";
 import { interpretQuestion } from "./questions/interpret.js";
 import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/retrieval.js";
 import { getSourceStatus } from "./sources/status.js";
@@ -75,7 +75,7 @@ import {
 } from "./reviews/service.js";
 
 export interface BuildAppOptions {
-  lookupCardsByExactFaceName?: (name: string) => Promise<CardLookupResponse>;
+  lookupCardsByName?: (name: string) => Promise<CardLookupResponse>;
   interpretQuestion?: (
     question: string,
     clientIp: string,
@@ -146,7 +146,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     logger: true,
     trustProxy: trustedProxies.length > 0 ? trustedProxies : false,
   });
-  const lookupCards = options.lookupCardsByExactFaceName ?? lookupCardsByExactFaceName;
+  const lookupCards = options.lookupCardsByName ?? lookupCardsByName;
   const interpret = options.interpretQuestion ?? interpretQuestion;
   const assembleEvidence = options.assembleQuestionEvidence ?? assembleConfirmedEvidence;
   const createRuling = options.generateRuling ?? generateRuling;

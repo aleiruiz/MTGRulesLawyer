@@ -250,7 +250,7 @@ export default function QuestionConfirmationScreen() {
       if (requestId !== searchRequestId.current) return;
       setSearchResults(cards);
       if (cards.length === 0) {
-        setSearchError("No exact card face match. Try the printed face name.");
+        setSearchError("No card found with that name. Check the spelling or try part of the name.");
       }
     } catch (error) {
       if (requestId === searchRequestId.current) {
@@ -630,7 +630,7 @@ export default function QuestionConfirmationScreen() {
                     </Text>
                     <View style={styles.searchRow}>
                       <TextInput
-                        accessibilityLabel="Exact card face name"
+                        accessibilityLabel="Card name"
                         onChangeText={(value) => {
                           searchRequestId.current += 1;
                           setIsSearching(false);
@@ -639,14 +639,14 @@ export default function QuestionConfirmationScreen() {
                           setSearchText(value);
                         }}
                         onSubmitEditing={() => void searchCards()}
-                        placeholder="Exact card face name"
+                        placeholder="Card name (partial or misspelled is fine)"
                         returnKeyType="search"
                         style={styles.searchInput}
                         value={searchText}
                       />
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Search exact card name"
+                        accessibilityLabel="Search cards by name"
                         disabled={isSearching || !searchText.trim()}
                         onPress={() => void searchCards()}
                         style={[
