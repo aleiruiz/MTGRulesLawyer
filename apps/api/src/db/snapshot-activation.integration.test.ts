@@ -299,9 +299,34 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         downloadUrl: "https://data.scryfall.io/oracle-cards.jsonl.gz",
         declaredSize: null,
       };
+      const rulingsMetadata: OracleBulkMetadata = {
+        updatedAt: new Date("2026-10-12T00:00:00.000Z"),
+        sourceUrl: "https://api.scryfall.com/bulk-data/rulings",
+        downloadUrl: "https://data.scryfall.io/rulings.jsonl.gz",
+        declaredSize: null,
+      };
+      const fixtureOracleId = `d06-card-${randomUUID()}`;
+      const rulingsFileContents = gzipSync(
+        [
+          {
+            source: "wotc",
+            oracle_id: fixtureOracleId,
+            published_at: "2026-10-01",
+            comment: "An official ruling.",
+          },
+          {
+            source: "scryfall",
+            oracle_id: fixtureOracleId,
+            published_at: "2026-10-01",
+            comment: "A Scryfall note.",
+          },
+        ]
+          .map((ruling) => JSON.stringify(ruling))
+          .join("\n"),
+      );
       const oracleFileContents = gzipSync(
         `${JSON.stringify({
-          oracle_id: `d06-card-${randomUUID()}`,
+          oracle_id: fixtureOracleId,
           name: "D06 Refresh Fixture",
           layout: "normal",
           type_line: "Creature",
@@ -315,16 +340,19 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
             text: refreshRulesDocument(),
           }),
         fetchOracleMetadata: () => Promise.resolve(metadata),
+        fetchRulingsMetadata: () => Promise.resolve(rulingsMetadata),
         downloadOracleBulk: async (sourceMetadata: OracleBulkMetadata) => {
           downloadedOracleFiles += 1;
+          const contents =
+            sourceMetadata === rulingsMetadata ? rulingsFileContents : oracleFileContents;
           const directory = await mkdtemp(join(tmpdir(), "d06-oracle-fixture-"));
-          const filePath = join(directory, "oracle-cards.jsonl.gz");
-          await writeFile(filePath, oracleFileContents);
+          const filePath = join(directory, "bulk.jsonl.gz");
+          await writeFile(filePath, contents);
           return {
             metadata: sourceMetadata,
             filePath,
-            checksumSha256: createHash("sha256").update(oracleFileContents).digest("hex"),
-            byteLength: oracleFileContents.byteLength,
+            checksumSha256: createHash("sha256").update(contents).digest("hex"),
+            byteLength: contents.byteLength,
           };
         },
         removeDownloadedOracleBulk: async (download: { filePath: string }) => {
@@ -332,6 +360,7 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         },
         minimumRuleCount: 10,
         minimumOracleCardCount: 1,
+        minimumRulingCount: 1,
       };
       const firstRefresh = await refreshAllSources(
         prisma,
@@ -344,7 +373,19 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
       );
       const refreshedSnapshot = await prisma.dataSnapshot.findFirstOrThrow({
         where: { status: SnapshotStatus.ACTIVE },
+        include: { sources: true },
       });
+      assert.ok(refreshedSnapshot.sources.some(({ kind }) => kind === "OFFICIAL_RULINGS"));
+      assert.deepEqual(
+        (
+          await prisma.cardRuling.findMany({
+            where: { card: { snapshotId: refreshedSnapshot.id } },
+            select: { text: true },
+          })
+        ).map(({ text }) => text),
+        ["An official ruling."],
+        "only Wizards rulings are imported",
+      );
       const refreshSnapshots = await prisma.dataSnapshot.findMany({
         where: {
           version: {
@@ -365,7 +406,11 @@ void describe("snapshot activation integration", { skip: !enabled }, () => {
         secondRefresh.map(({ status }) => status),
         ["UNCHANGED", "UNCHANGED"],
       );
-      assert.equal(downloadedOracleFiles, 1, "unchanged Oracle metadata skips the bulk download");
+      assert.equal(
+        downloadedOracleFiles,
+        2,
+        "unchanged Scryfall metadata skips the bulk downloads",
+      );
       const failedRefresh = await refreshAllSources(
         prisma,
         {

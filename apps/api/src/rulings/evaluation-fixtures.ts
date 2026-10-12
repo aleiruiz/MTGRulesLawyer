@@ -122,7 +122,7 @@ export function makeRecordedModelOutput(
 }
 
 export function getCitationRuleNumbers(
-  verifiedCitations: Array<{ kind: "RULE" | "CARD_FACE"; label: string }>,
+  verifiedCitations: Array<{ kind: "RULE" | "CARD_FACE" | "CARD_RULING"; label: string }>,
 ): string[] {
   return verifiedCitations.filter((citation) => citation.kind === "RULE").map(({ label }) => label);
 }

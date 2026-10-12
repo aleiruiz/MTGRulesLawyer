@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { boundEvidenceForPrompt } from "../rulings/generate.js";
-import { CORE_RULE_NUMBERS, withCoreRules, withoutCardNames } from "./retrieval.js";
+import { CORE_RULE_NUMBERS, rankRulings, withCoreRules, withoutCardNames } from "./retrieval.js";
 
 void describe("confirmed-card query text", () => {
   void it("removes multi-word card names and their part before a comma", () => {
@@ -59,5 +59,22 @@ void describe("core rules", () => {
       truncated: false,
     });
     assert.ok(bounded.rules.some((item) => item.number === "613.7"));
+  });
+});
+
+void describe("official ruling ranking", () => {
+  void it("puts rulings naming another confirmed card first, then shared question words", () => {
+    const rulings = [
+      { position: 0, text: "This card's ability is a mana ability." },
+      { position: 1, text: "If Blood Moon is on the battlefield, this land is a Mountain." },
+      { position: 2, text: "Each land is a Swamp in addition to its other types." },
+      { position: 3, text: "It doesn't matter who controls it." },
+    ];
+    assert.deepEqual(
+      rankRulings(rulings, "Are all lands Swamps with these on the battlefield?", [
+        "Blood Moon",
+      ]).map(({ position }) => position),
+      [1, 2, 0, 3],
+    );
   });
 });

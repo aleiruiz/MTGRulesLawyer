@@ -49,6 +49,7 @@ enum RulingOutcome {
 enum CitationKind {
   RULE
   CARD
+  CARD_RULING
 }
 
 enum UserRole {
@@ -184,6 +185,7 @@ model Card {
   manaValue     Float?
   snapshot      DataSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   faces         CardFace[]
+  rulings       CardRuling[]
   questionCards QuestionCard[]
 
   @@unique([snapshotId, oracleId])
@@ -212,6 +214,19 @@ model CardFace {
   @@unique([cardId, faceIndex])
   @@unique([id, cardId])
   @@index([name])
+}
+
+/// An official ruling published by Wizards of the Coast for a card (from Scryfall's rulings data).
+model CardRuling {
+  id          String           @id @default(uuid()) @db.Uuid
+  cardId      String           @db.Uuid
+  position    Int
+  publishedAt DateTime         @db.Date
+  text        String           @db.Text
+  card        Card             @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  citations   RulingCitation[]
+
+  @@unique([cardId, position])
 }
 
 model Question {
@@ -303,6 +318,7 @@ model RulingCitation {
   kind             CitationKind
   ruleId           String?        @db.Uuid
   cardFaceId       String?        @db.Uuid
+  cardRulingId     String?        @db.Uuid
   label            String
   excerpt          String         @db.Text
   sourceUrl        String
@@ -311,9 +327,11 @@ model RulingCitation {
   sourceSnapshot   SourceSnapshot @relation(fields: [sourceSnapshotId], references: [id], onDelete: Restrict)
   rule             Rule?          @relation(fields: [ruleId], references: [id], onDelete: Restrict)
   cardFace         CardFace?      @relation(fields: [cardFaceId], references: [id], onDelete: Restrict)
+  cardRuling       CardRuling?    @relation(fields: [cardRulingId], references: [id], onDelete: Restrict)
 
   @@index([ruleId])
   @@index([cardFaceId])
+  @@index([cardRulingId])
   @@index([rulingVersionId])
   @@index([sourceSnapshotId])
 }

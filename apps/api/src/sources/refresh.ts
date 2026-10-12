@@ -4,12 +4,14 @@ import { SourceRefreshStatus, SnapshotStatus } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import {
   importOracleBulk,
+  MINIMUM_OFFICIAL_RULINGS,
   ORACLE_IMPORTER_REVISION,
   PrismaOracleSnapshotWriter,
 } from "../cards/oracle-import.js";
 import {
   downloadOracleBulk,
   fetchOracleBulkMetadata,
+  fetchRulingsBulkMetadata,
   removeDownloadedOracleBulk,
   type DownloadedOracleBulk,
   type OracleBulkMetadata,
@@ -24,19 +26,24 @@ export const ORACLE_METADATA_URL = "https://api.scryfall.com/bulk-data/oracle-ca
 export interface SourceRefreshDependencies {
   fetchRulesDocument: () => Promise<RulesSourceDocument>;
   fetchOracleMetadata: () => Promise<OracleBulkMetadata>;
+  fetchRulingsMetadata: () => Promise<OracleBulkMetadata>;
+  /** Downloads either Scryfall bulk file (Oracle cards or rulings). */
   downloadOracleBulk: (metadata: OracleBulkMetadata) => Promise<DownloadedOracleBulk>;
   removeDownloadedOracleBulk: (download: DownloadedOracleBulk) => Promise<void>;
   minimumRuleCount: number;
   minimumOracleCardCount: number;
+  minimumRulingCount: number;
 }
 
 const defaultDependencies: SourceRefreshDependencies = {
   fetchRulesDocument: fetchLatestRulesDocument,
   fetchOracleMetadata: fetchOracleBulkMetadata,
+  fetchRulingsMetadata: fetchRulingsBulkMetadata,
   downloadOracleBulk,
   removeDownloadedOracleBulk,
   minimumRuleCount: 1000,
   minimumOracleCardCount: 1000,
+  minimumRulingCount: MINIMUM_OFFICIAL_RULINGS,
 };
 
 interface RefreshOutcome {
@@ -111,7 +118,9 @@ async function refreshOracle(
 ): Promise<RefreshOutcome> {
   return runLoggedRefresh(client, "ORACLE_CARDS", ORACLE_METADATA_URL, runId, async () => {
     const active = await getActiveSource(client, "ORACLE_CARDS");
+    const activeRulings = await getActiveSource(client, "OFFICIAL_RULINGS");
     const metadata = await dependencies.fetchOracleMetadata();
+    const rulingsMetadata = await dependencies.fetchRulingsMetadata();
     const activeSnapshot = await client.dataSnapshot.findFirst({
       where: { status: SnapshotStatus.ACTIVE },
       select: { id: true, version: true, notes: true },
@@ -122,6 +131,7 @@ async function refreshOracle(
     if (
       active &&
       active.sourceVersion === metadata.updatedAt.toISOString() &&
+      activeRulings?.sourceVersion === rulingsMetadata.updatedAt.toISOString() &&
       normalizedRevision === String(ORACLE_IMPORTER_REVISION)
     ) {
       return {
@@ -134,13 +144,17 @@ async function refreshOracle(
     }
 
     let download: Awaited<ReturnType<typeof downloadOracleBulk>> | undefined;
+    let rulingsDownload: Awaited<ReturnType<typeof downloadOracleBulk>> | undefined;
     try {
       download = await dependencies.downloadOracleBulk(metadata);
+      rulingsDownload = await dependencies.downloadOracleBulk(rulingsMetadata);
       const result = await importOracleBulk(
         download,
         new PrismaOracleSnapshotWriter(client),
         new Date(),
         dependencies.minimumOracleCardCount,
+        rulingsDownload,
+        dependencies.minimumRulingCount,
       );
       return {
         sourceUrl: metadata.sourceUrl,
@@ -151,6 +165,7 @@ async function refreshOracle(
       };
     } finally {
       if (download) await dependencies.removeDownloadedOracleBulk(download);
+      if (rulingsDownload) await dependencies.removeDownloadedOracleBulk(rulingsDownload);
     }
   });
 }

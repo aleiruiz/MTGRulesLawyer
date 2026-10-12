@@ -197,6 +197,17 @@ export const evidenceSearchResponseSchema = z.object({
             ...cardFaceCharacteristics,
           }),
         ),
+        // Official Wizards rulings for this card that bear on the question, most relevant first.
+        rulings: z
+          .array(
+            z.object({
+              id: z.string(),
+              publishedAt: z.string().date(),
+              text: z.string(),
+              truncated: z.boolean(),
+            }),
+          )
+          .optional(),
       }),
     )
     .max(MAX_CONFIRMED_CARDS),
@@ -235,7 +246,7 @@ export const rulingGenerationResponseSchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        kind: z.enum(["RULE", "CARD_FACE"]),
+        kind: z.enum(["RULE", "CARD_FACE", "CARD_RULING"]),
         label: z.string(),
         excerpt: z.string().max(2_000),
         sourceId: z.string(),

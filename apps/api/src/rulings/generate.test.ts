@@ -318,6 +318,70 @@ void describe("Ruling evidence verification", () => {
     assert.equal(unseen.outcome, "uncertain");
   });
 
+  void it("cites official card rulings shown in the prompt as CARD_RULING evidence", () => {
+    const baseCard = evidence.cards[0];
+    assert.ok(baseCard);
+    const ruling = {
+      id: "ruling-id",
+      publishedAt: "2026-10-01",
+      text: "If this creature attacks alone, you still draw a card.",
+      truncated: false,
+    };
+    const withRulings: EvidenceSearchResponse = {
+      ...evidence,
+      sources: [
+        ...evidence.sources,
+        {
+          id: "rulings-source-id",
+          kind: "OFFICIAL_RULINGS",
+          sourceUrl: "https://api.scryfall.com/bulk-data/rulings",
+          sourceVersion: "rulings-2026-10",
+          sourcePublishedAt: null,
+          checksumSha256: "c".repeat(64),
+        },
+      ],
+      cards: [{ ...baseCard, rulings: [ruling] }],
+    };
+    const prompt = JSON.parse(buildModelPrompt({ question: "Alone?" }, withRulings)) as {
+      evidence: { cards: Array<{ rulings?: Array<{ id: string; text: string }> }> };
+    };
+    assert.deepEqual(prompt.evidence.cards[0]?.rulings, [
+      { id: "ruling-id", publishedAt: "2026-10-01", text: ruling.text },
+    ]);
+    const output = {
+      outcome: "resolved" as const,
+      summary: "You still draw a card.",
+      summarySupport: "SUPPORTED" as const,
+      summaryCitationIds: ["ruling-id"],
+      reasoningSteps: [
+        {
+          text: "The ruling covers attacking alone.",
+          support: "SUPPORTED" as const,
+          citationIds: ["ruling-id"],
+        },
+      ],
+      assumptions: [],
+      clarificationQuestions: [],
+    };
+    const result = verifyRulingOutput(output, boundEvidenceForPrompt(withRulings), "test-model");
+    assert.equal(result.outcome, "resolved");
+    assert.deepEqual(result.citations[0], {
+      id: "ruling-id",
+      kind: "CARD_RULING",
+      label: "Fixture Creature ruling (2026-10-01)",
+      excerpt: ruling.text,
+      sourceId: "rulings-source-id",
+      sourceUrl: "https://api.scryfall.com/bulk-data/rulings",
+    });
+    // Without the rulings source in the snapshot, a ruling cannot be cited.
+    const noSource = verifyRulingOutput(
+      output,
+      boundEvidenceForPrompt({ ...withRulings, sources: evidence.sources }),
+      "test-model",
+    );
+    assert.equal(noSource.outcome, "uncertain");
+  });
+
   void it("attaches citations only from the supplied snapshot and source records", () => {
     const result = verifyRulingOutput(
       {

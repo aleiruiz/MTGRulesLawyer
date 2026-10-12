@@ -9,6 +9,12 @@ import {
 import { prisma } from "../db/client.js";
 import { attachToConversation, type RulingOwner } from "../conversations/attach.js";
 
+const CITATION_KINDS = {
+  RULE: CitationKind.RULE,
+  CARD_FACE: CitationKind.CARD,
+  CARD_RULING: CitationKind.CARD_RULING,
+} as const;
+
 export async function saveRuling(
   request: ConfirmedQuestionEvidenceRequest,
   answer: RulingGenerationResponse,
@@ -78,10 +84,12 @@ export async function saveRuling(
             promptVersion: answer.promptVersion,
             citations: {
               create: answer.citations.map((citation) => ({
-                kind: citation.kind === "RULE" ? CitationKind.RULE : CitationKind.CARD,
+                kind: CITATION_KINDS[citation.kind],
                 ...(citation.kind === "RULE"
                   ? { ruleId: citation.id }
-                  : { cardFaceId: citation.id }),
+                  : citation.kind === "CARD_RULING"
+                    ? { cardRulingId: citation.id }
+                    : { cardFaceId: citation.id }),
                 label: citation.label,
                 excerpt: citation.excerpt,
                 sourceUrl: citation.sourceUrl,
@@ -136,8 +144,8 @@ export async function getRuling(
     return source
       ? [
           {
-            id: citation.kind === CitationKind.RULE ? citation.ruleId : citation.cardFaceId,
-            kind: citation.kind === CitationKind.RULE ? ("RULE" as const) : ("CARD_FACE" as const),
+            id: citation.ruleId ?? citation.cardFaceId ?? citation.cardRulingId,
+            kind: citation.kind === CitationKind.CARD ? ("CARD_FACE" as const) : citation.kind,
             label: citation.label,
             excerpt: citation.excerpt,
             sourceId: source.id,

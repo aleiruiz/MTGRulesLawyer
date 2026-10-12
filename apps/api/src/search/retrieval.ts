@@ -29,6 +29,10 @@ const MAX_CARD_EVIDENCE_CHARACTERS = 8_000;
 const MAX_RULE_EVIDENCE_CHARACTERS = 16_000;
 const MAX_RULE_TEXT_CHARACTERS = 6_000;
 const MAX_CARD_TEXT_CHARACTERS = 2_000;
+const MAX_RULINGS_PER_CARD = 8;
+const MAX_RULING_TEXT_CHARACTERS = 800;
+// Shared equally between the confirmed cards.
+const MAX_RULING_EVIDENCE_CHARACTERS = 8_000;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
 interface RuleHit {
@@ -69,6 +73,7 @@ export const CORE_RULE_NUMBERS = [
   "608.2g",
   "500.1",
   "506.1",
+  "302.6",
   "704.3",
   "704.5a",
   "704.5f",
@@ -372,7 +377,10 @@ export async function assembleConfirmedEvidence(
           snapshotId: snapshot.id,
           oracleId: { in: request.confirmedCards.map(({ oracleId }) => oracleId) },
         },
-        include: { faces: { orderBy: { faceIndex: "asc" } } },
+        include: {
+          faces: { orderBy: { faceIndex: "asc" } },
+          rulings: { orderBy: { position: "asc" } },
+        },
       })
     : [];
   const cardsByOracleId = new Map(confirmedCards.map((card) => [card.oracleId, card]));
@@ -426,7 +434,31 @@ export async function assembleConfirmedEvidence(
     })),
   );
   const cardBudget = { remaining: MAX_CARD_EVIDENCE_CHARACTERS, truncated: false };
+  const rulingShare = Math.floor(
+    MAX_RULING_EVIDENCE_CHARACTERS / Math.max(1, selectedCards.length),
+  );
+  let rulingsTruncated = false;
   const cards: EvidenceSearchResponse["cards"] = selectedCards.map(({ card, face, quantity }) => {
+    const otherNames = selectedCards
+      .filter((other) => other.card.id !== card.id)
+      .flatMap((other) => namesOf(other.card));
+    const rulingBudget = { remaining: rulingShare, truncated: false };
+    const rulings = rankRulings(card.rulings, request.question, otherNames, namesOf(card))
+      .slice(0, MAX_RULINGS_PER_CARD)
+      .flatMap((ruling) => {
+        const text = takeText(ruling.text, MAX_RULING_TEXT_CHARACTERS, rulingBudget);
+        return text.value
+          ? [
+              {
+                id: ruling.id,
+                publishedAt: ruling.publishedAt.toISOString().slice(0, 10),
+                text: text.value,
+                truncated: text.truncated,
+              },
+            ]
+          : [];
+      });
+    rulingsTruncated ||= rulingBudget.truncated;
     const faces = card.faces.map((cardFace) => {
       const faceText = takeText(cardFace.oracleText, MAX_CARD_TEXT_CHARACTERS, cardBudget);
       return {
@@ -451,6 +483,7 @@ export async function assembleConfirmedEvidence(
       quantity,
       matchedFace,
       faces,
+      ...(rulings.length > 0 ? { rulings } : {}),
     };
   });
 
@@ -458,8 +491,94 @@ export async function assembleConfirmedEvidence(
     ...packet,
     cards,
     rules,
-    truncated: packet.truncated || cardBudget.truncated,
+    truncated: packet.truncated || cardBudget.truncated || rulingsTruncated,
   });
+}
+
+const RULING_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "because",
+  "before",
+  "card",
+  "cards",
+  "cast",
+  "does",
+  "doesn't",
+  "each",
+  "from",
+  "have",
+  "into",
+  "it's",
+  "just",
+  "more",
+  "only",
+  "other",
+  "same",
+  "still",
+  "than",
+  "that",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "will",
+  "with",
+  "would",
+  "your",
+]);
+
+/**
+ * A card's official rulings ordered by how much they bear on the question: rulings that name
+ * another confirmed card first, then by how many of the question's words they share. Ties keep
+ * the published order.
+ */
+export function rankRulings<T extends { text: string; position: number }>(
+  rulings: T[],
+  question: string,
+  otherCardNames: string[],
+  ownNames: string[] = [],
+): T[] {
+  // The card's own name is in most of its rulings, so it says nothing about relevance.
+  const ownWords = new Set(
+    ownNames
+      .join(" ")
+      .toLowerCase()
+      .match(/[a-z][a-z'-]{3,}/g) ?? [],
+  );
+  const words = new Set(
+    (question.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [])
+      .filter((word) => !RULING_STOP_WORDS.has(word) && !ownWords.has(word))
+      // Plain stems, so "lands" matches "land" and "copying" matches "copy".
+      .map((word) =>
+        word.length > 6 && word.endsWith("ing")
+          ? word.slice(0, -3)
+          : word.length > 4
+            ? word.replace(/s$/, "")
+            : word,
+      ),
+  );
+  const names = otherCardNames.map((name) => name.toLowerCase()).filter((name) => name.length > 2);
+  const score = (text: string) => {
+    const lower = text.toLowerCase();
+    const named = names.some((name) => lower.includes(name)) ? 100 : 0;
+    const shared = [...words].filter((word) => lower.includes(word)).length;
+    return named + shared;
+  };
+  return rulings
+    .map((ruling) => ({ ruling, score: score(ruling.text) }))
+    .sort((a, b) => b.score - a.score || a.ruling.position - b.ruling.position)
+    .map(({ ruling }) => ruling);
 }
 
 /**

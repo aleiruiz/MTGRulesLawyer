@@ -220,6 +220,7 @@ export async function decideChallenge(
                 kind: true,
                 ruleId: true,
                 cardFaceId: true,
+                cardRulingId: true,
                 label: true,
                 excerpt: true,
                 sourceUrl: true,
@@ -278,7 +279,7 @@ export async function decideChallenge(
         _max: { version: true },
       });
       const evidenceIds = challenge.rulingVersion.citations
-        .map((citation) => citation.ruleId ?? citation.cardFaceId)
+        .map((citation) => citation.ruleId ?? citation.cardFaceId ?? citation.cardRulingId)
         .filter((id): id is string => id !== null);
       const corrected = await tx.rulingVersion.create({
         data: {
@@ -302,6 +303,7 @@ export async function decideChallenge(
               kind: citation.kind,
               ruleId: citation.ruleId,
               cardFaceId: citation.cardFaceId,
+              cardRulingId: citation.cardRulingId,
               label: citation.label,
               excerpt: citation.excerpt,
               sourceUrl: citation.sourceUrl,
