@@ -14,6 +14,7 @@ export const QUESTION_CONNECTION_ERROR =
 export function questionErrorMessage(
   errorCode: string | undefined,
   retryAfterSeconds?: number,
+  fallback = "The rules assistant could not read this question right now. Try again in a moment.",
 ): string {
   const wait =
     retryAfterSeconds === undefined ? "" : ` Try again in ${formatWait(retryAfterSeconds)}.`;
@@ -27,12 +28,13 @@ export function questionErrorMessage(
     case "AI_EMERGENCY_STOP":
       return `The rules assistant is busy or paused right now.${wait || " Try again later."}`;
     default:
-      return "The rules assistant could not read this question right now. Try again in a moment.";
+      return fallback;
   }
 }
 
 function formatWait(seconds: number): string {
-  if (seconds < 90) return `${Math.max(1, Math.round(seconds))} seconds`;
+  if (seconds <= 1) return "a moment";
+  if (seconds < 90) return `${Math.round(seconds)} seconds`;
   if (seconds < 90 * 60) return `${Math.round(seconds / 60)} minutes`;
   return `${Math.round(seconds / 3600)} hours`;
 }

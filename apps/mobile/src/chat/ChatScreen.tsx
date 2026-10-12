@@ -25,6 +25,7 @@ import {
   interpretFollowUp,
   type ChatGameState,
 } from "./api";
+import { QuestionRequestError } from "../questions/question-error-message";
 import { discardDraft, getDraft } from "./draft-store";
 import JudgeMessage, { outcomeLabel } from "./JudgeMessage";
 import { contextRulingIds, mergeCards, resolveMentions, toChatCard, type ChatCard } from "./turns";
@@ -103,7 +104,8 @@ export default function ChatScreen({
 
   const fail = useCallback(
     (key: string, error: unknown, fallback: string) => {
-      const note = error instanceof Error ? error.message : fallback;
+      // Only messages written for players are shown; parser or runtime errors use the fallback.
+      const note = error instanceof QuestionRequestError ? error.message : fallback;
       updateTurn(key, { status: "failed", note });
       announce(note);
     },
@@ -236,7 +238,9 @@ export default function ChatScreen({
       })
       .catch((error: unknown) => {
         if (mounted.current)
-          setLoadError(error instanceof Error ? error.message : "Could not open this chat.");
+          setLoadError(
+            error instanceof QuestionRequestError ? error.message : "Could not open this chat.",
+          );
       })
       .finally(() => {
         if (mounted.current) setLoadingConversation(false);

@@ -9,6 +9,11 @@ import {
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
 import { apiUrl } from "../api-url";
+import {
+  QUESTION_CONNECTION_ERROR,
+  QuestionRequestError,
+  questionErrorMessage,
+} from "../questions/question-error-message";
 import type { ChatCard } from "./turns";
 
 /** Game facts the interpretation step extracted, sent along with the ruling request. */
@@ -38,14 +43,21 @@ async function requestJson(
   init: RequestInit & { accessToken?: string },
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...rest,
-    headers: {
-      ...(rest.body ? { "Content-Type": "application/json" } : {}),
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-      ...(headers as Record<string, string> | undefined),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, {
+      ...rest,
+      headers: {
+        ...(rest.body ? { "Content-Type": "application/json" } : {}),
+        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        ...(headers as Record<string, string> | undefined),
+      },
+    });
+  } catch (error) {
+    // Let cancellation propagate as-is; anything else is a connection problem.
+    if (rest.signal?.aborted) throw error;
+    throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
+  }
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -58,13 +70,15 @@ async function requestJson(
       body !== null &&
       "retryAfterSeconds" in body &&
       typeof body.retryAfterSeconds === "number"
-        ? ` Try again in ${body.retryAfterSeconds}s.`
-        : "";
-    throw new Error(
+        ? body.retryAfterSeconds
+        : undefined;
+    throw new QuestionRequestError(
       (code && errorMessages[code]) ??
-        (code
-          ? `${code.replaceAll("_", " ").toLowerCase()}.${retryAfter}`
-          : `Request failed (${response.status}).`),
+        questionErrorMessage(
+          code,
+          retryAfter,
+          "The judge could not answer right now. Try again in a moment.",
+        ),
     );
   }
   return body;

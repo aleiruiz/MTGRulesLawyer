@@ -25,5 +25,16 @@ void describe("question error messages", () => {
       questionErrorMessage("AI_IP_BURST_LIMIT"),
       "Too many questions in a short time. Wait a moment and try again.",
     );
+    assert.equal(
+      questionErrorMessage("AI_CONCURRENCY_LIMIT", 1),
+      "The rules assistant is busy or paused right now. Try again in a moment.",
+    );
+  });
+
+  void it("uses the caller's fallback for unknown codes", () => {
+    assert.equal(
+      questionErrorMessage("RULING_GENERATION_UNAVAILABLE", undefined, "The judge is unavailable."),
+      "The judge is unavailable.",
+    );
   });
 });
