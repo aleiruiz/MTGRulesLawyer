@@ -18,10 +18,9 @@ const MAX_RANKING_TERMS = 16;
 const MAX_TERM_RULE_SHARE = 0.08;
 // ...except in small rule sets (fixtures, partial imports), where every term is "common".
 const MIN_COMMON_TERM_RULES = 25;
-const MAX_KEYWORD_TERMS = 2;
-const KEYWORD_RULES_PER_TERM = 2;
-const MIN_DEFINITION_CHARACTERS = 40;
-const MAX_KEYWORD_TERM_RULES = 12;
+const MAX_KEYWORDS = 2;
+const KEYWORD_RULES_PER_HEADING = 2;
+const MAX_KEYWORD_HEADING_CHARACTERS = 40;
 const MAX_EXPANDED_RULES = 24;
 const MAX_REFERENCES_PER_RULE = 12;
 const MAX_CARDS_PER_NAME = 3;
@@ -128,12 +127,11 @@ export async function assembleEvidence(
   // the first MAX_QUERY_TERMS distinct terms of the question, keep the rarest ones that are not
   // in most rules ("creature", "player"), and rank rules that contain any of them, discounting
   // long rules. Bounding the terms keeps a 4,000-character question as fast as a short one.
-  // The very rarest terms are usually keywords ("hexproof", "trample"); the first rules that use
-  // them, which define them, are always kept, since rules sharing several commoner terms would
-  // otherwise outrank the definition.
+  // Keywords the question names ("hexproof", "trample") always bring the rules that define
+  // them, since rules sharing several commoner terms would otherwise outrank the definition.
   const fullTextHits = await client.$queryRaw<Array<{ id: string; number: string }>>(Prisma.sql`
     WITH snapshot_rules AS NOT MATERIALIZED (
-      SELECT r."id", r."number", r."sortOrder", length(r."text") AS "textLength",
+      SELECT r."id", r."number", r."sortOrder", r."parentId", length(r."text") AS "textLength",
         to_tsvector('english', r."text") AS document
       FROM "Rule" AS r
       WHERE r."snapshotId" = ${snapshot.id}::uuid
@@ -164,29 +162,37 @@ export async function assembleEvidence(
         LIMIT ${MAX_RANKING_TERMS}
       ) AS rare
     ),
-    keyword_terms AS (
-      SELECT term_frequency.lexeme
-      FROM term_frequency
-      WHERE term_frequency.rules BETWEEN 1 AND ${MAX_KEYWORD_TERM_RULES}
-      -- Earliest first: interpreted search terms lead the query, ahead of card names that only
-      -- appear in a few rules as examples.
-      ORDER BY term_frequency.position ASC
-      LIMIT ${MAX_KEYWORD_TERMS}
+    keyword_headings AS (
+      -- Keyword actions and abilities (701.x, 702.x) are headed by a rule whose whole text is
+      -- the keyword ("702.2. Deathtouch", "702.19. Trample"). A heading counts when every word
+      -- of it appears in the question; card names have no such heading.
+      SELECT snapshot_rules."id",
+        (SELECT min(question_terms.position) FROM question_terms
+          WHERE snapshot_rules.document @@ quote_literal(question_terms.lexeme)::tsquery)
+          AS position
+      FROM snapshot_rules
+      WHERE (snapshot_rules."number" LIKE '701.%' OR snapshot_rules."number" LIKE '702.%')
+        AND snapshot_rules."textLength" <= ${MAX_KEYWORD_HEADING_CHARACTERS}
+        AND length(snapshot_rules.document) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM unnest(snapshot_rules.document) AS heading_term
+          WHERE heading_term.lexeme NOT IN (SELECT question_terms.lexeme FROM question_terms)
+        )
+      ORDER BY position ASC
+      LIMIT ${MAX_KEYWORDS}
     ),
     keyword_hits AS (
+      -- The first rules under each heading define the keyword.
       SELECT "id", "number", "sortOrder"
       FROM (
         SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
           row_number() OVER (
-            PARTITION BY keyword_terms.lexeme ORDER BY snapshot_rules."sortOrder"
+            PARTITION BY snapshot_rules."parentId" ORDER BY snapshot_rules."sortOrder"
           ) AS position
-        FROM keyword_terms
-        JOIN snapshot_rules
-          ON snapshot_rules.document @@ quote_literal(keyword_terms.lexeme)::tsquery
-        -- Skip bare headings like "702.11. Hexproof"; the definition follows them.
-        WHERE snapshot_rules."textLength" > ${MIN_DEFINITION_CHARACTERS}
+        FROM keyword_headings
+        JOIN snapshot_rules ON snapshot_rules."parentId" = keyword_headings."id"
       ) AS defining
-      WHERE defining.position <= ${KEYWORD_RULES_PER_TERM}
+      WHERE defining.position <= ${KEYWORD_RULES_PER_HEADING}
     ),
     ranked_hits AS (
       SELECT snapshot_rules."id", snapshot_rules."number", snapshot_rules."sortOrder",
