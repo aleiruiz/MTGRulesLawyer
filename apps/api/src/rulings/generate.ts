@@ -282,16 +282,15 @@ export function citeRulesById(
     return idByAlias.get(normalizeRuleNumber(id)) ?? id;
   };
   // Models sometimes pack several references into one ("704.3],[704.5g"); split them.
-  const toIds = (ids: string[]) =>
-    [
-      ...new Set(
-        ids
-          .flatMap((id) => id.split(/\]\s*,\s*\[|\s*,\s*/))
-          .map((id) => id.replace(/^[\s[\]"]+|[\s[\]"]+$/g, ""))
-          .filter(Boolean)
-          .map(toId),
-      ),
-    ].slice(0, MAX_CITATIONS_PER_CLAIM);
+  const toIds = (ids: string[]) => [
+    ...new Set(
+      ids
+        .flatMap((id) => id.split(/\]\s*,\s*\[|\s*,\s*/))
+        .map((id) => id.replace(/^[\s[\]"]+|[\s[\]"]+$/g, ""))
+        .filter(Boolean)
+        .map(toId),
+    ),
+  ];
   return {
     ...output,
     neededRuleNumbers: output.neededRuleNumbers ?? [],
@@ -360,9 +359,9 @@ export function verifyRulingOutput(
     output.summarySupport === "UNSUPPORTED" ||
     output.reasoningSteps.some((step) => step.support === "UNSUPPORTED") ||
     ((output.outcome === "resolved" || output.outcome === "conditional") &&
-      (output.summaryCitationIds.length === 0 ||
-        output.reasoningSteps.length === 0 ||
-        output.reasoningSteps.some((step) => step.citationIds.length === 0)));
+      (output.summaryCitationIds.length === 0 || output.reasoningSteps.length === 0)) ||
+    // A step whose only references were empty fragments has nothing to verify it.
+    output.reasoningSteps.some((step) => step.citationIds.length === 0);
   const missingClarification =
     output.outcome === "needs_information" && output.clarificationQuestions.length === 0;
   const invalidReference = referencedIds.some((id) => {
@@ -404,8 +403,12 @@ export function verifyRulingOutput(
   return rulingGenerationResponseSchema.parse({
     outcome: output.outcome,
     summary: output.summary,
-    reasoningSteps: output.reasoningSteps,
-    summaryCitationIds: output.summaryCitationIds,
+    // Every reference was verified above; split references can exceed the contract's limit.
+    reasoningSteps: output.reasoningSteps.map((step) => ({
+      ...step,
+      citationIds: step.citationIds.slice(0, MAX_CITATIONS_PER_CLAIM),
+    })),
+    summaryCitationIds: output.summaryCitationIds.slice(0, MAX_CITATIONS_PER_CLAIM),
     assumptions: output.assumptions,
     clarificationQuestions: output.clarificationQuestions,
     citations,

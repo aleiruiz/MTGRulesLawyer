@@ -807,6 +807,23 @@ void describe("Ruling evidence verification", () => {
     );
     assert.equal(many.outcome, "resolved");
     assert.equal(many.summaryCitationIds.length, 8);
+    // An unseen reference past the eighth is still checked, not dropped.
+    const hidden = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "Many rules.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["100.1"],
+        reasoningSteps: [
+          { text: "Step.", support: "SUPPORTED", citationIds: [...packed.slice(0, 4), "999.9z"] },
+        ],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      boundEvidenceForPrompt(manyRules),
+      "test-model",
+    );
+    assert.equal(hidden.outcome, "uncertain");
     const empty = verifyRulingOutput(
       {
         outcome: "resolved",
