@@ -43,7 +43,7 @@ const app = buildApp({
         },
       ],
     }),
-  lookupCardsByExactFaceName: (name): Promise<CardLookupResponse> =>
+  lookupCardsByName: (name): Promise<CardLookupResponse> =>
     Promise.resolve(
       name.toLowerCase() === "awakened skyclave"
         ? {

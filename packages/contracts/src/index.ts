@@ -13,6 +13,8 @@ export const cardLookupResponseSchema = z.object({
       oracleId: z.string(),
       name: z.string(),
       layout: z.string(),
+      /** "approximate" when the name was a near match (typo, partial name); never auto-select it. */
+      matchKind: z.enum(["exact", "approximate"]).optional(),
       matchedFace: z.object({
         faceIndex: z.number().int().nonnegative(),
         role: z.enum(["FRONT", "BACK", "OTHER"]),

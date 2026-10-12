@@ -183,7 +183,10 @@ export default function QuestionConfirmationScreen() {
       setSelectedByMention(
         Object.fromEntries(
           result.cardMentions.flatMap((mention, index) =>
-            mention.candidates.length === 1 ? [[index, mention.candidates[0]?.oracleId ?? ""]] : [],
+            // A near match (typo, partial name) is a guess; the player confirms it.
+            mention.candidates.length === 1 && mention.candidates[0]?.matchKind !== "approximate"
+              ? [[index, mention.candidates[0]?.oracleId ?? ""]]
+              : [],
           ),
         ),
       );
@@ -225,7 +228,7 @@ export default function QuestionConfirmationScreen() {
       if (requestId !== searchRequestId.current) return;
       setSearchResults(cards);
       if (cards.length === 0) {
-        setSearchError("No exact card face match. Try the printed face name.");
+        setSearchError("No card found with that name. Check the spelling or try part of the name.");
       }
     } catch (error) {
       if (requestId === searchRequestId.current) {
@@ -423,7 +426,11 @@ export default function QuestionConfirmationScreen() {
                   if (selectedByMention[mentionIndex] || ignoredSet.has(mentionIndex)) return null;
                   return (
                     <View key={`${mention.start}-${mention.end}`} style={styles.mentionBox}>
-                      <Text style={styles.cardTitle}>Choose a match for “{mention.text}”</Text>
+                      <Text style={styles.cardTitle}>
+                        {mention.candidates[0]?.matchKind === "approximate"
+                          ? `Did you mean one of these for “${mention.text}”?`
+                          : `Choose a match for “${mention.text}”`}
+                      </Text>
                       {mention.candidates.map((candidate) => (
                         <Pressable
                           key={candidate.oracleId}
@@ -442,7 +449,7 @@ export default function QuestionConfirmationScreen() {
                       ))}
                       {mention.candidates.length === 0 ? (
                         <Text style={styles.helperText}>
-                          No exact match was found in the active Oracle data.
+                          No matching card was found in the active Oracle data.
                         </Text>
                       ) : null}
                       <View style={styles.inlineButtons}>
@@ -523,7 +530,7 @@ export default function QuestionConfirmationScreen() {
                     <View style={styles.searchRow}>
                       <TextInput
                         placeholderTextColor={colors.textSubtle}
-                        accessibilityLabel="Exact card face name"
+                        accessibilityLabel="Card name"
                         onChangeText={(value) => {
                           searchRequestId.current += 1;
                           setIsSearching(false);
@@ -532,14 +539,14 @@ export default function QuestionConfirmationScreen() {
                           setSearchText(value);
                         }}
                         onSubmitEditing={() => void searchCards()}
-                        placeholder="Exact card face name"
+                        placeholder="Card name (partial or misspelled is fine)"
                         returnKeyType="search"
                         style={styles.searchInput}
                         value={searchText}
                       />
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Search exact card name"
+                        accessibilityLabel="Search cards by name"
                         disabled={isSearching || !searchText.trim()}
                         onPress={() => void searchCards()}
                         style={[

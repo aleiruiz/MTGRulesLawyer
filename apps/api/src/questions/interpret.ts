@@ -3,7 +3,7 @@ import {
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
 import { z } from "zod";
-import { lookupCardsByExactFaceName } from "../cards/lookup.js";
+import { lookupCardsByName } from "../cards/lookup.js";
 import type { PriorTurn } from "../conversations/prior-turns.js";
 import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
 import {
@@ -45,9 +45,7 @@ List entities, events in order, known facts stated by the user, decisive missing
 export async function resolveQuestionInterpretation(
   question: string,
   modelOutput: ModelQuestionInterpretation,
-  lookup: (
-    name: string,
-  ) => ReturnType<typeof lookupCardsByExactFaceName> = lookupCardsByExactFaceName,
+  lookup: (name: string) => ReturnType<typeof lookupCardsByName> = lookupCardsByName,
 ): Promise<QuestionInterpretResponse> {
   const interpretation = modelInterpretationSchema.parse(modelOutput);
   if (!interpretation.inScope) {
@@ -89,7 +87,7 @@ export async function resolveQuestionInterpretation(
 
   const candidatesByName = new Map<
     string,
-    Awaited<ReturnType<typeof lookupCardsByExactFaceName>>["cards"]
+    Awaited<ReturnType<typeof lookupCardsByName>>["cards"]
   >();
   for (const mention of mentions) {
     const key = mention.text.toLocaleLowerCase("en-US");

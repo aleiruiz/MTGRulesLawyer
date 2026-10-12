@@ -59,15 +59,19 @@ export function resolveMentions(
 ): MentionResolution {
   const resolution: MentionResolution = { resolved: [], ambiguous: [], unmatched: [] };
   for (const mention of mentions) {
-    const known = mention.candidates.find((candidate) =>
-      knownCards.some((card) => card.oracleId === candidate.oracleId),
+    // Only an exact name settles to a card already in the chat; a near match still asks.
+    const known = mention.candidates.find(
+      (candidate) =>
+        candidate.matchKind !== "approximate" &&
+        knownCards.some((card) => card.oracleId === candidate.oracleId),
     );
     const [only, ...others] = mention.candidates;
     if (known) continue;
     if (!only) {
       if (!refersToKnownCard(mention.text, knownCards)) resolution.unmatched.push(mention.text);
-    } else if (others.length === 0) resolution.resolved.push(toChatCard(only));
-    else resolution.ambiguous.push(mention);
+    } else if (others.length === 0 && only.matchKind !== "approximate") {
+      resolution.resolved.push(toChatCard(only));
+    } else resolution.ambiguous.push(mention);
   }
   return resolution;
 }

@@ -54,6 +54,15 @@ void describe("chat follow-up cards", () => {
     assert.deepEqual(resolution.unmatched, ["Nonsense"]);
   });
 
+  void it("asks the player to confirm a lone near match instead of using it", () => {
+    const guess = { ...candidate("leech", "Mana Leech"), matchKind: "approximate" as const };
+    const resolution = resolveMentions([
+      { text: "Mana Leek", start: 0, end: 9, candidates: [guess] },
+    ]);
+    assert.deepEqual(resolution.resolved, []);
+    assert.equal(resolution.ambiguous[0]?.text, "Mana Leek");
+  });
+
   void it("settles mentions of cards already in the chat without asking", () => {
     const known = [{ oracleId: "bolt", name: "Lightning Bolt", faceIndex: 0, quantity: 1 }];
     const resolution = resolveMentions(
