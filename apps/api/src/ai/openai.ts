@@ -187,7 +187,7 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       }
       // A ruling prompt is bounded by its parts: evidence (searched and core rules, card text;
       // about 23,000 characters with ten cards), a 4,000-character question, five prior turns
-      // and the game state, about 34,000 in the worst case. The cap sits above that so a
+      // the game state and up to 4,500 characters of verified notes, about 38,500 in the worst case. The cap sits above that so a
       // legitimate request never fails here after its quota was reserved.
       if (!request.userPrompt.trim() || request.userPrompt.length > 40_000) {
         throw new Error("User prompt must contain 1 to 40000 characters.");

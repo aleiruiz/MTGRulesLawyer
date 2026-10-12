@@ -199,6 +199,18 @@ void describe("Ruling evidence verification", () => {
     assert.equal(containsWebLinks({ ...settled, summary: "Rule 702.61a applies." }), false);
   });
 
+  void it("adds verified notes to the prompt only when there are some", () => {
+    const request = { question: "Do both spells resolve?", confirmedCards: [] };
+    const without = JSON.parse(buildModelPrompt(request, evidence)) as Record<string, unknown>;
+    assert.equal("verifiedNotes" in without, false);
+    const notes = [{ conclusion: "Yes.", reasoning: ["One at a time."], ruleNumbers: ["405.5"] }];
+    const withNotes = JSON.parse(buildModelPrompt(request, evidence, [], notes)) as {
+      verifiedNotes: typeof notes;
+    };
+    assert.deepEqual(withNotes.verifiedNotes, notes);
+    assert.match(RULING_SYSTEM_PROMPT, /verifiedNotes[\s\S]*not evidence/);
+  });
+
   void it("turns web research on by default and off only with an explicit false", () => {
     assert.equal(readWebResearchEnabled({}), true);
     assert.equal(readWebResearchEnabled({ AI_WEB_RESEARCH: "true" }), true);
