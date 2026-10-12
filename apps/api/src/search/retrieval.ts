@@ -88,8 +88,27 @@ export const CORE_RULE_NUMBERS = [
   "506.1",
   // A creature that leaves the battlefield is removed from combat (no longer blocking).
   "506.4",
-  // How a blocked creature assigns combat damage, including with no blockers left.
+  // Combat damage, preloaded like the stack: blocked status lasts (509.1h); how attackers and
+  // blockers assign damage, including with no blockers left (510.1a-d); damage is dealt at
+  // once, then priority (510.2-510.3); first and double strike's extra step (510.4); trample
+  // and deathtouch assignment (702.19b, 702.19d, 702.2c).
+  "509.1h",
+  "510.1a",
+  "510.1b",
   "510.1c",
+  "510.1d",
+  "510.2",
+  "510.3",
+  "510.4",
+  // The everyday combat keywords, whichever cards are involved: deathtouch, double strike,
+  // first strike, indestructible and trample.
+  "702.2b",
+  "702.2c",
+  "702.4b",
+  "702.7b",
+  "702.12b",
+  "702.19b",
+  "702.19d",
   "302.6",
   // Loops: a mandatory loop is a draw, an optional one is shortcut to a chosen number.
   "104.4b",
