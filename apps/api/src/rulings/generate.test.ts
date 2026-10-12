@@ -776,4 +776,50 @@ void describe("Ruling evidence verification", () => {
     assert.deepEqual(answer.summaryCitationIds, ["rule-id", "face-id"]);
     assert.deepEqual(answer.reasoningSteps[0]?.citationIds, ["rule-id", "face-id"]);
   });
+
+  void it("keeps split citations within the contract and rejects steps left without one", () => {
+    const baseRule = evidence.rules[0];
+    assert.ok(baseRule);
+    const manyRules = {
+      ...evidence,
+      rules: Array.from({ length: 10 }, (_, index) => ({
+        ...baseRule,
+        id: `rule-${index}`,
+        number: `100.${index}`,
+      })),
+    };
+    const packed = Array.from(
+      { length: 5 },
+      (_, index) => `100.${index * 2}, 100.${index * 2 + 1}`,
+    );
+    const many = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "Many rules.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: packed,
+        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: packed }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      boundEvidenceForPrompt(manyRules),
+      "test-model",
+    );
+    assert.equal(many.outcome, "resolved");
+    assert.equal(many.summaryCitationIds.length, 8);
+    const empty = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "Attackers are declared.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["508.1"],
+        reasoningSteps: [{ text: "Declare.", support: "SUPPORTED", citationIds: ["[]"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      boundEvidenceForPrompt(evidence),
+      "test-model",
+    );
+    assert.equal(empty.outcome, "uncertain");
+  });
 });

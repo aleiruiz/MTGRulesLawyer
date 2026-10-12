@@ -233,6 +233,8 @@ export function buildModelPrompt(
   });
 }
 
+// The response contract allows at most this many citations per summary or step.
+const MAX_CITATIONS_PER_CLAIM = 8;
 const cardAlias = (cardIndex: number) => `card${cardIndex + 1}`;
 /** "Rule 704.5J." and "704.5j" name the same rule (also used for card aliases). */
 export const normalizeRuleNumber = (value: string) =>
@@ -280,15 +282,16 @@ export function citeRulesById(
     return idByAlias.get(normalizeRuleNumber(id)) ?? id;
   };
   // Models sometimes pack several references into one ("704.3],[704.5g"); split them.
-  const toIds = (ids: string[]) => [
-    ...new Set(
-      ids
-        .flatMap((id) => id.split(/\]\s*,\s*\[|\s*,\s*/))
-        .map((id) => id.replace(/^[\s[\]"]+|[\s[\]"]+$/g, ""))
-        .filter(Boolean)
-        .map(toId),
-    ),
-  ];
+  const toIds = (ids: string[]) =>
+    [
+      ...new Set(
+        ids
+          .flatMap((id) => id.split(/\]\s*,\s*\[|\s*,\s*/))
+          .map((id) => id.replace(/^[\s[\]"]+|[\s[\]"]+$/g, ""))
+          .filter(Boolean)
+          .map(toId),
+      ),
+    ].slice(0, MAX_CITATIONS_PER_CLAIM);
   return {
     ...output,
     neededRuleNumbers: output.neededRuleNumbers ?? [],
@@ -357,7 +360,9 @@ export function verifyRulingOutput(
     output.summarySupport === "UNSUPPORTED" ||
     output.reasoningSteps.some((step) => step.support === "UNSUPPORTED") ||
     ((output.outcome === "resolved" || output.outcome === "conditional") &&
-      (output.summaryCitationIds.length === 0 || output.reasoningSteps.length === 0));
+      (output.summaryCitationIds.length === 0 ||
+        output.reasoningSteps.length === 0 ||
+        output.reasoningSteps.some((step) => step.citationIds.length === 0)));
   const missingClarification =
     output.outcome === "needs_information" && output.clarificationQuestions.length === 0;
   const invalidReference = referencedIds.some((id) => {
