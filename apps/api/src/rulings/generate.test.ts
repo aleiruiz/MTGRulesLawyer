@@ -238,6 +238,9 @@ void describe("Ruling evidence verification", () => {
       "test-model",
     );
     assert.equal(answer.outcome, "resolved");
+    // The answer carries real IDs, never aliases.
+    assert.deepEqual(answer.summaryCitationIds, [vanillaFace.id]);
+    assert.deepEqual(answer.reasoningSteps[0]?.citationIds, [vanillaFace.id]);
     assert.equal(answer.citations[0]?.id, vanillaFace.id);
     assert.equal(answer.citations[0]?.excerpt, "Creature — Bear 2/2");
   });
@@ -251,6 +254,27 @@ void describe("Ruling evidence verification", () => {
       cards: [{ ...baseCard, matchedFace: cutFace, faces: [cutFace] }],
     });
     assert.equal(bounded.cards[0]?.faces.length, 0);
+    const prompt = JSON.parse(
+      buildModelPrompt(
+        { question: "Q?" },
+        { ...evidence, cards: [{ ...baseCard, matchedFace: cutFace, faces: [cutFace] }] },
+      ),
+    ) as { evidence: { cards: Array<{ face: Record<string, unknown> }> } };
+    assert.equal("id" in (prompt.evidence.cards[0]?.face ?? {}), false);
+    const cited = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "It has no abilities.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["card1"],
+        reasoningSteps: [{ text: "No text.", support: "SUPPORTED", citationIds: ["card1"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      bounded,
+      "test-model",
+    );
+    assert.equal(cited.outcome, "uncertain");
   });
 
   void it("shows mana value only for one-face cards", () => {

@@ -189,7 +189,8 @@ export function buildModelPrompt(
           ? {}
           : { manaValue: card.manaValue }),
         face: {
-          id: cardAlias(cardIndex),
+          // A face whose text was cut away cannot be cited, so it gets no id.
+          ...(card.faces.length > 0 ? { id: cardAlias(cardIndex) } : {}),
           name: card.matchedFace.name,
           manaCost: card.matchedFace.manaCost,
           typeLine: card.matchedFace.typeLine,
@@ -235,7 +236,10 @@ export function citeRulesById(output: ModelRuling, evidence: EvidenceSearchRespo
   const idByAlias = new Map<string, string>([
     ...evidence.rules.map((rule) => [rule.number.toLowerCase(), rule.id] as const),
     ...evidence.cards.flatMap((card, cardIndex) => [
-      ...card.faces.map((face) => [cardAlias(cardIndex), face.id] as const),
+      // Only the selected face, and only when it is citable (still in the bounded packet).
+      ...card.faces
+        .filter((face) => face.id === card.matchedFace.id)
+        .map((face) => [cardAlias(cardIndex), face.id] as const),
       ...(card.rulings ?? []).map(
         (ruling, rulingIndex) => [rulingAlias(cardIndex, rulingIndex), ruling.id] as const,
       ),
