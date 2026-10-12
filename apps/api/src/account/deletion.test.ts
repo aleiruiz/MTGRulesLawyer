@@ -152,3 +152,64 @@ void describe("DELETE /api/me", () => {
     failure = null;
   });
 });
+
+const hardeningNow = Date.UTC(2026, 9, 12, 12);
+const hardeningSessions: Record<string, { assuranceLevel: string; authenticatedAt: number }> = {
+  "player-token": { assuranceLevel: "aal1", authenticatedAt: hardeningNow / 1000 },
+  "aal1-admin-token": { assuranceLevel: "aal1", authenticatedAt: hardeningNow / 1000 },
+  "fresh-admin-token": { assuranceLevel: "aal2", authenticatedAt: hardeningNow / 1000 - 60 },
+};
+const hardeningDeleted: string[] = [];
+const hardeningApp = buildApp({
+  corsAllowedOrigins: [],
+  adminAuthMaxAgeSeconds: 3_600,
+  now: () => hardeningNow,
+  verifyAccessToken: (token) => {
+    const session = hardeningSessions[token];
+    return Promise.resolve(session ? { subject: token, ...session } : null);
+  },
+  resolveAppUser: (subject) =>
+    Promise.resolve({ id: subject, role: subject.includes("admin") ? "ADMIN" : "USER" }),
+  deleteAccount: (id) => {
+    hardeningDeleted.push(id);
+    return Promise.resolve();
+  },
+});
+
+void describe("DELETE /api/me hardening", () => {
+  void after(async () => hardeningApp.close());
+
+  void it("requires a fresh second factor before deleting an admin account", async () => {
+    const stale = await hardeningApp.inject({
+      method: "DELETE",
+      url: "/api/me",
+      headers: { authorization: "Bearer aal1-admin-token" },
+    });
+    assert.equal(stale.statusCode, 403);
+    assert.deepEqual(stale.json(), { error: "ADMIN_MFA_REQUIRED" });
+    assert.deepEqual(hardeningDeleted, []);
+
+    const fresh = await hardeningApp.inject({
+      method: "DELETE",
+      url: "/api/me",
+      headers: { authorization: "Bearer fresh-admin-token" },
+    });
+    assert.equal(fresh.statusCode, 204);
+    assert.deepEqual(hardeningDeleted, ["fresh-admin-token"]);
+  });
+
+  void it("limits each account to three deletion attempts per hour", async () => {
+    const headers = { authorization: "Bearer player-token" };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await hardeningApp.inject({ method: "DELETE", url: "/api/me", headers });
+      assert.equal(response.statusCode, 204);
+    }
+    const limited = await hardeningApp.inject({ method: "DELETE", url: "/api/me", headers });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.headers["retry-after"], "3600");
+    assert.deepEqual(limited.json(), {
+      error: "ACCOUNT_DELETION_RATE_LIMITED",
+      retryAfterSeconds: 3_600,
+    });
+  });
+});

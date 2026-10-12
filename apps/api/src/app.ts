@@ -52,7 +52,11 @@ import {
   deleteAppUserDataBySupabaseUserId,
   hasSupabaseSecretKey,
 } from "./account/deletion.js";
-import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
+import { evaluateAdminAssurance, readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
+import { createAttemptLimiter } from "./http/attempt-limiter.js";
+
+// Each attempt can reach the Supabase admin API; a person needs at most a few retries.
+const ACCOUNT_DELETION_ATTEMPTS_PER_HOUR = 3;
 import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
 import {
   createSupabaseAccessTokenVerifier,
@@ -197,11 +201,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         : null,
     });
 
+  const adminAuthMaxAgeSeconds =
+    options.adminAuthMaxAgeSeconds ??
+    readAdminAuthMaxAgeSeconds(process.env.ADMIN_AUTH_MAX_AGE_SECONDS);
+  const now = options.now ?? Date.now;
   registerAuthentication(app, verifyAccessToken, resolveAppUser, {
-    adminAuthMaxAgeSeconds:
-      options.adminAuthMaxAgeSeconds ??
-      readAdminAuthMaxAgeSeconds(process.env.ADMIN_AUTH_MAX_AGE_SECONDS),
-    ...(options.now ? { now: options.now } : {}),
+    adminAuthMaxAgeSeconds,
+    now,
+  });
+  const accountDeletionLimiter = createAttemptLimiter({
+    maxAttempts: ACCOUNT_DELETION_ATTEMPTS_PER_HOUR,
+    windowMs: 60 * 60 * 1_000,
+    now,
   });
 
   void app.register(cors, {
@@ -271,6 +282,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.delete("/api/me", { preHandler: authenticate }, async (request, reply) => {
     const user = requireAuthenticatedUser(request, reply);
     if (!user) return reply;
+    const retryAfterSeconds = accountDeletionLimiter.attempt(user.id);
+    if (retryAfterSeconds !== null) {
+      reply.header("Retry-After", String(retryAfterSeconds));
+      return reply.code(429).send({ error: "ACCOUNT_DELETION_RATE_LIMITED", retryAfterSeconds });
+    }
+    if (user.role === "ADMIN") {
+      // Deleting an admin account removes reviewer attribution, so it needs the same step-up
+      // check as any other admin action.
+      const assurance = evaluateAdminAssurance(request.authSession, now(), adminAuthMaxAgeSeconds);
+      if (assurance !== "allowed") {
+        return reply.code(403).send({
+          error:
+            assurance === "mfa_required" ? "ADMIN_MFA_REQUIRED" : "ADMIN_REAUTHENTICATION_REQUIRED",
+        });
+      }
+    }
     try {
       await deleteAccount(user.id);
       request.log.info({ event: "account.deleted" }, "Account deleted");
