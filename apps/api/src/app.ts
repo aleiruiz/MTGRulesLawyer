@@ -49,6 +49,7 @@ import {
   createAccountDeleter,
   createSupabaseAuthIdentityDeleter,
   deleteAppUserData,
+  deleteAppUserDataBySupabaseUserId,
   hasSupabaseSecretKey,
 } from "./account/deletion.js";
 import { readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
@@ -181,6 +182,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     options.deleteAccount ??
     createAccountDeleter({
       deleteAppUserData: (appUserId) => deleteAppUserData(appUserId),
+      deleteAppUserDataBySupabaseUserId: (supabaseUserId) =>
+        deleteAppUserDataBySupabaseUserId(supabaseUserId),
       deleteAuthIdentity: hasSupabaseSecretKey(process.env.SUPABASE_SECRET_KEY)
         ? createSupabaseAuthIdentityDeleter({
             url: process.env.SUPABASE_URL ?? "https://your-project.supabase.co",

@@ -66,6 +66,8 @@ void describe("account deletion integration", { skip: !enabled }, () => {
           fromStatus: "OPEN",
           toStatus: "REJECTED",
           reason: "The original ruling was correct.",
+          includeInEvaluation: true,
+          evaluationFixture: { question: "Sanitized fixture" },
         },
       });
       await prisma.usageWindow.create({
@@ -90,6 +92,9 @@ void describe("account deletion integration", { skip: !enabled }, () => {
       assert.equal(kept.proposedOutcome, null);
       assert.equal(kept.evaluationConsent, false);
       assert.equal(kept.status, "REJECTED");
+      const withdrawn = await prisma.reviewEvent.findUniqueOrThrow({ where: { id: event.id } });
+      assert.equal(withdrawn.includeInEvaluation, false);
+      assert.equal(withdrawn.evaluationFixture, null);
 
       assert.deepEqual(await deleteAppUserData(admin.id, prisma), {
         supabaseUserId: admin.supabaseUserId,

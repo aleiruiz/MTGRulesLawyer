@@ -70,9 +70,16 @@ void describe("Supabase access token verification", () => {
     const deletedUser = createSupabaseAccessTokenVerifier({
       url: "https://project.supabase.co",
       publishableKey: "public-placeholder",
-      fetch: () => Promise.resolve(new Response(null, { status: 404 })),
+      fetch: () =>
+        Promise.resolve(Response.json({ error_code: "user_not_found" }, { status: 404 })),
     });
     assert.equal(await deletedUser("token-of-deleted-user"), null);
+    const wrongPath = createSupabaseAccessTokenVerifier({
+      url: "https://project.supabase.co",
+      publishableKey: "public-placeholder",
+      fetch: () => Promise.resolve(new Response("Not Found", { status: 404 })),
+    });
+    await assert.rejects(wrongPath("token"), AuthVerificationUnavailableError);
 
     const unavailable = createSupabaseAccessTokenVerifier({
       url: "https://project.supabase.co",

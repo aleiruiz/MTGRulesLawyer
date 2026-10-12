@@ -41,6 +41,7 @@ void describe("Supabase identity deletion", () => {
     assert.equal(hasSupabaseSecretKey(undefined), false);
     assert.equal(hasSupabaseSecretKey(" "), false);
     assert.equal(hasSupabaseSecretKey("replace-me"), false);
+    assert.equal(hasSupabaseSecretKey("sb_publishable_example"), false);
     assert.equal(hasSupabaseSecretKey("sb_secret_example"), true);
   });
 });
@@ -53,18 +54,23 @@ void describe("account deleter", () => {
         dataDeleted = true;
         return Promise.resolve({ supabaseUserId: "auth-user-id" });
       },
+      deleteAppUserDataBySupabaseUserId: () => Promise.resolve(),
       deleteAuthIdentity: null,
     });
     await assert.rejects(deleteAccount("app-user-id"), AccountDeletionUnavailableError);
     assert.equal(dataDeleted, false);
   });
 
-  void it("deletes app data before the sign-in identity", async () => {
+  void it("deletes app data, then the sign-in identity, then any record recreated meanwhile", async () => {
     const steps: string[] = [];
     const deleteAccount = createAccountDeleter({
       deleteAppUserData: (id) => {
         steps.push(`data:${id}`);
         return Promise.resolve({ supabaseUserId: "auth-user-id" });
+      },
+      deleteAppUserDataBySupabaseUserId: (id) => {
+        steps.push(`cleanup:${id}`);
+        return Promise.resolve();
       },
       deleteAuthIdentity: (id) => {
         steps.push(`identity:${id}`);
@@ -72,7 +78,7 @@ void describe("account deleter", () => {
       },
     });
     await deleteAccount("app-user-id");
-    assert.deepEqual(steps, ["data:app-user-id", "identity:auth-user-id"]);
+    assert.deepEqual(steps, ["data:app-user-id", "identity:auth-user-id", "cleanup:auth-user-id"]);
   });
 });
 

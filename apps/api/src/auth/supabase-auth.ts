@@ -32,8 +32,9 @@ export function createSupabaseAccessTokenVerifier(options: {
     } catch {
       throw new AuthVerificationUnavailableError();
     }
-    // 404: the token is valid but its user was deleted, so it no longer identifies anyone.
-    if (response.status === 401 || response.status === 403 || response.status === 404) return null;
+    if (response.status === 401 || response.status === 403) return null;
+    // A deleted user's token no longer identifies anyone; any other 404 is a misconfiguration.
+    if (response.status === 404 && (await isUserNotFound(response))) return null;
     if (!response.ok) throw new AuthVerificationUnavailableError();
 
     let user: unknown;
@@ -78,6 +79,17 @@ function latestAuthenticationTimestamp(amr: unknown): number | null {
     latest = latest === null ? entry.timestamp : Math.max(latest, entry.timestamp);
   }
   return latest;
+}
+
+async function isUserNotFound(response: Response): Promise<boolean> {
+  try {
+    const body: unknown = await response.json();
+    return (
+      isRecord(body) && (body.error_code === "user_not_found" || body.code === "user_not_found")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
