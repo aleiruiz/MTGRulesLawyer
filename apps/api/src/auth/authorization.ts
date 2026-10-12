@@ -1,5 +1,10 @@
 import type { UserRole } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS,
+  evaluateAdminAssurance,
+  type SessionAssurance,
+} from "./admin-assurance.js";
 import type { AccessTokenVerifier } from "./supabase-auth.js";
 import { AuthVerificationUnavailableError } from "./supabase-auth.js";
 
@@ -11,18 +16,29 @@ export interface AuthenticatedAppUser {
 declare module "fastify" {
   interface FastifyRequest {
     appUser: AuthenticatedAppUser | null;
+    authSession: SessionAssurance | null;
   }
 }
 
 export type AppUserResolver = (subject: string) => Promise<AuthenticatedAppUser>;
 
+export interface AdminAssuranceOptions {
+  /** Maximum age of the latest sign-in or second-factor check for admin operations. */
+  adminAuthMaxAgeSeconds?: number;
+  now?: () => number;
+}
+
 export function registerAuthentication(
   app: FastifyInstance,
   verifier: AccessTokenVerifier,
   resolveUser: AppUserResolver,
+  options: AdminAssuranceOptions = {},
 ): void {
   app.decorateRequest("appUser", null);
+  app.decorateRequest("authSession", null);
   const authenticate = createAuthenticationPreHandler(verifier, resolveUser);
+  const maxAgeSeconds = options.adminAuthMaxAgeSeconds ?? DEFAULT_ADMIN_AUTH_MAX_AGE_SECONDS;
+  const now = options.now ?? Date.now;
   app.addHook("preHandler", async (request, reply) => {
     const path = request.url.split("?", 1)[0] ?? request.url;
     if (isNamespacePath(path, "/api/auth")) return authenticate(request, reply);
@@ -30,6 +46,16 @@ export function registerAuthentication(
     await authenticate(request, reply);
     if (reply.sent) return;
     if (request.appUser?.role !== "ADMIN") return reply.code(403).send({ error: "ADMIN_REQUIRED" });
+    const assurance = evaluateAdminAssurance(request.authSession, now(), maxAgeSeconds);
+    if (assurance === "allowed") return;
+    request.log.warn(
+      { event: "admin.assurance.denied", reason: assurance },
+      "Admin request needs a stronger or more recent sign-in",
+    );
+    return reply.code(403).send({
+      error:
+        assurance === "mfa_required" ? "ADMIN_MFA_REQUIRED" : "ADMIN_REAUTHENTICATION_REQUIRED",
+    });
   });
 }
 
@@ -50,6 +76,10 @@ export function createAuthenticationPreHandler(
         reply.code(401).send({ error: "INVALID_ACCESS_TOKEN" });
         return;
       }
+      request.authSession = {
+        assuranceLevel: identity.assuranceLevel ?? null,
+        authenticatedAt: identity.authenticatedAt ?? null,
+      };
       request.appUser = await resolveUser(identity.subject);
     } catch (error) {
       if (error instanceof AuthVerificationUnavailableError) {

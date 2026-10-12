@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import type { UserRole } from "@prisma/client";
 import { buildApp } from "../app.js";
+import { readAdminAuthMaxAgeSeconds } from "./admin-assurance.js";
 import { createAuthenticationPreHandler, requireResourceOwner } from "./authorization.js";
 import {
   AuthVerificationUnavailableError,
@@ -25,11 +26,37 @@ void describe("Supabase access token verification", () => {
         );
       },
     });
-    assert.deepEqual(await verify("signed.token.value"), { subject: "auth-user-id" });
+    const noClaims = { subject: "auth-user-id", assuranceLevel: null, authenticatedAt: null };
+    assert.deepEqual(await verify("signed.token.value"), noClaims);
     assert.equal(requestUrl, "https://project.supabase.co/auth/v1/user");
     assert.equal(authorization, "Bearer signed.token.value");
     activeProvider = "apple";
-    assert.deepEqual(await verify("another-signed.token.value"), { subject: "auth-user-id" });
+    assert.deepEqual(await verify("another-signed.token.value"), noClaims);
+  });
+
+  void it("reads assurance level and latest authentication time from the verified token", async () => {
+    const verify = createSupabaseAccessTokenVerifier({
+      url: "https://project.supabase.co",
+      publishableKey: "public-placeholder",
+      fetch: () => Promise.resolve(Response.json({ id: "auth-user-id" })),
+    });
+    const token = fakeAccessToken({
+      sub: "auth-user-id",
+      aal: "aal2",
+      amr: [
+        { method: "oauth", timestamp: 1_700_000_000 },
+        { method: "totp", timestamp: 1_700_000_600 },
+      ],
+    });
+    assert.deepEqual(await verify(token), {
+      subject: "auth-user-id",
+      assuranceLevel: "aal2",
+      authenticatedAt: 1_700_000_600,
+    });
+    assert.equal(
+      await verify(fakeAccessToken({ sub: "someone-else", aal: "aal2", amr: [] })),
+      null,
+    );
   });
 
   void it("rejects invalid tokens and fails closed when Supabase is unavailable", async () => {
@@ -50,14 +77,41 @@ void describe("Supabase access token verification", () => {
   });
 });
 
+void describe("admin sign-in age setting", () => {
+  void it("defaults to one hour and ignores invalid values", () => {
+    assert.equal(readAdminAuthMaxAgeSeconds(undefined), 3_600);
+    assert.equal(readAdminAuthMaxAgeSeconds("900"), 900);
+    assert.equal(readAdminAuthMaxAgeSeconds("0"), 3_600);
+    assert.equal(readAdminAuthMaxAgeSeconds("not-a-number"), 3_600);
+    assert.equal(readAdminAuthMaxAgeSeconds("604800"), 3_600);
+  });
+});
+
+function fakeAccessToken(claims: Record<string, unknown>): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none" })}.${encode(claims)}.signature`;
+}
+
+const nowMs = Date.UTC(2026, 9, 11, 12);
+const nowSeconds = nowMs / 1000;
+const adminSessions: Record<string, { assuranceLevel: string; authenticatedAt: number }> = {
+  "valid-admin": { assuranceLevel: "aal2", authenticatedAt: nowSeconds - 60 },
+  "aal1-admin": { assuranceLevel: "aal1", authenticatedAt: nowSeconds - 60 },
+  "stale-admin": { assuranceLevel: "aal2", authenticatedAt: nowSeconds - 3_601 },
+};
 const authApp = buildApp({
-  verifyAccessToken: (token) =>
-    Promise.resolve(token === "valid-user" || token === "valid-admin" ? { subject: token } : null),
+  verifyAccessToken: (token) => {
+    const adminSession = adminSessions[token];
+    if (adminSession) return Promise.resolve({ subject: token, ...adminSession });
+    return Promise.resolve(token === "valid-user" ? { subject: token } : null);
+  },
   resolveAppUser: (subject) =>
     Promise.resolve({
       id: subject,
-      role: subject === "valid-admin" && adminRole ? "ADMIN" : "USER",
+      role: subject.endsWith("-admin") && adminRole ? "ADMIN" : "USER",
     } satisfies { id: string; role: UserRole }),
+  adminAuthMaxAgeSeconds: 3_600,
+  now: () => nowMs,
 });
 let adminRole = true;
 authApp.get("/api/admin/test", () => ({ allowed: true }));
@@ -112,6 +166,32 @@ void describe("API authorization", () => {
       (await authApp.inject({ method: "GET", url: "/api/admin", headers })).statusCode,
       403,
     );
+    adminRole = true;
+  });
+
+  void it("requires a second factor and a recent sign-in for admin requests", async () => {
+    const withoutMfa = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/test",
+      headers: { authorization: "Bearer aal1-admin" },
+    });
+    assert.equal(withoutMfa.statusCode, 403);
+    assert.deepEqual(withoutMfa.json(), { error: "ADMIN_MFA_REQUIRED" });
+
+    const stale = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/test",
+      headers: { authorization: "Bearer stale-admin" },
+    });
+    assert.equal(stale.statusCode, 403);
+    assert.deepEqual(stale.json(), { error: "ADMIN_REAUTHENTICATION_REQUIRED" });
+
+    const nonAdmin = await authApp.inject({
+      method: "GET",
+      url: "/api/admin/test",
+      headers: { authorization: "Bearer valid-user" },
+    });
+    assert.deepEqual(nonAdmin.json(), { error: "ADMIN_REQUIRED" });
   });
 
   void it("protects the exact auth namespace root", async () => {
