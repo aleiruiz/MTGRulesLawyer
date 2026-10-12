@@ -31,6 +31,10 @@ export default function AdminVerifyScreen() {
 
   useEffect(() => {
     let active = true;
+    // Never keep another account's setup key on screen while this account's factors load.
+    setFactorId(null);
+    setEnrollment(null);
+    setCode("");
     if (!userId) {
       setLoading(false);
       return () => {
