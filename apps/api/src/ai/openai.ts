@@ -63,6 +63,17 @@ export function readOpenAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCo
   };
 }
 
+/**
+ * Reading the question and finding its cards is extraction, not judging, so it runs at its own
+ * effort (low unless OPENAI_INTERPRET_REASONING_EFFORT says otherwise) while rulings follow
+ * OPENAI_REASONING_EFFORT. A higher effort there only made the card step slower.
+ */
+export function readInterpretReasoningEffort(
+  env: NodeJS.ProcessEnv = process.env,
+): OpenAiConfig["reasoningEffort"] {
+  return effortSchema.parse(env.OPENAI_INTERPRET_REASONING_EFFORT ?? "low");
+}
+
 export interface GenerateStructuredOutputOptions<TSchema extends z.ZodType> {
   schema: TSchema;
   schemaName: string;
