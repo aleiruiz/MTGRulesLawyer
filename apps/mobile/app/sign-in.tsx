@@ -12,6 +12,7 @@ import { isSupabaseConfigured, supabase } from "../src/auth/supabase";
 import RecentRulings, { useRecentConversations } from "../src/home/RecentRulings";
 import AdminReviewLink, { useIsAdmin } from "../src/reviews/AdminReviewLink";
 import GlassesLogo from "../src/ui/GlassesLogo";
+import LegalLinks from "../src/legal/LegalLinks";
 import Loader from "../src/ui/Loader";
 import Text from "../src/ui/Text";
 import { colors, eyebrow, fonts } from "../src/theme";
@@ -273,18 +274,7 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        <View style={styles.legalLinks}>
-          {(["privacy", "terms"] as const).map((page) => (
-            <Pressable
-              key={page}
-              accessibilityRole="link"
-              onPress={() => router.push(`/${page}`)}
-              style={({ pressed }) => [styles.legalLink, pressed && styles.pressed]}
-            >
-              <Text style={styles.legalLinkText}>{t.titles[page]}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <LegalLinks />
         <Text style={styles.notice}>{t.account.notice}</Text>
       </ScrollView>
     </SafeAreaView>
@@ -369,9 +359,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.75 },
   message: { color: colors.textSoft, fontFamily: fonts.bodyMedium },
   notice: { color: colors.textSubtle, fontSize: 11.5, lineHeight: 16 },
-  legalLinks: { flexDirection: "row", gap: 20 },
-  legalLink: { minHeight: 44, justifyContent: "center" },
-  legalLinkText: { color: colors.textMuted, fontSize: 13, textDecorationLine: "underline" },
   languages: { flexDirection: "row", gap: 8 },
   languageChip: {
     minHeight: 44,
