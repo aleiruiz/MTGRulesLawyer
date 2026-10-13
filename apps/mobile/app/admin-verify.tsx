@@ -150,7 +150,9 @@ export default function AdminVerifyScreen() {
         ) : null}
         {enrollment ? (
           <View style={styles.setup}>
-            <Text style={styles.description}>{t.adminVerify.addAccount}</Text>
+            <Text style={styles.description}>
+              {enrollment.qrSvg ? t.adminVerify.scanQr : t.adminVerify.addAccount}
+            </Text>
             {enrollment.qrSvg ? (
               <View
                 accessible
