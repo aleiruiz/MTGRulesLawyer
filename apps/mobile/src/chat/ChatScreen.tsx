@@ -446,6 +446,12 @@ export default function ChatScreen({
                   <JudgeMessage
                     result={turn.ruling}
                     initiallyExpanded={turn.key === lastAnsweredKey}
+                    onDispute={() =>
+                      router.push({
+                        pathname: "/dispute",
+                        params: { ruling: turn.ruling?.rulingId ?? "" },
+                      })
+                    }
                     onAskAgain={
                       turn.key === lastAnsweredKey && !busy ? () => rerun(turn) : undefined
                     }
@@ -486,7 +492,7 @@ export default function ChatScreen({
 
           {!session && turns.some((turn) => turn.ruling) ? (
             <Text style={styles.aside}>
-              Sign in from the account icon to keep your last 10 chats.
+              Sign in from the account icon to keep your last 10 rulings.
             </Text>
           ) : null}
         </ScrollView>

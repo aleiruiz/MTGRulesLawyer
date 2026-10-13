@@ -89,16 +89,44 @@ function whenLabel(updatedAt: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export default function RecentRulings({ conversations, error, forget }: RecentConversationsState) {
+interface RecentRulingsProps extends RecentConversationsState {
+  /** The account screen has its own heading. */
+  hideTitle?: boolean;
+  /** Show only the newest few, with a link to the rest. */
+  limit?: number;
+}
+
+export default function RecentRulings({
+  conversations,
+  error,
+  forget,
+  hideTitle,
+  limit,
+}: RecentRulingsProps) {
   if (conversations.length === 0 && !error) return null;
+  const shown = limit ? conversations.slice(0, limit) : conversations;
 
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.title}>
-        Recent rulings
-      </Text>
+      {!hideTitle ? (
+        <View style={styles.header}>
+          <Text accessibilityRole="header" style={styles.title}>
+            Recent rulings
+          </Text>
+          {limit && conversations.length > limit ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`All ${conversations.length} rulings`}
+              onPress={() => router.push("/sign-in")}
+              style={styles.allLink}
+            >
+              <Text style={styles.allText}>All {conversations.length}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {conversations.map((conversation) => {
+      {shown.map((conversation) => {
         const dot = conversation.lastOutcome ? outcomeDots[conversation.lastOutcome] : null;
         const followUps = conversation.turnCount - 1;
         const meta = [
@@ -141,7 +169,15 @@ export default function RecentRulings({ conversations, error, forget }: RecentCo
 
 const styles = StyleSheet.create({
   section: { gap: 4 },
-  title: { ...eyebrow, paddingBottom: 6 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 32,
+  },
+  title: { ...eyebrow },
+  allLink: { minHeight: 44, minWidth: 44, alignItems: "flex-end", justifyContent: "center" },
+  allText: { color: colors.accent, fontSize: 13 },
   error: { color: colors.danger, paddingBottom: 6 },
   row: {
     flexDirection: "row",

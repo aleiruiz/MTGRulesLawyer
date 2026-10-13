@@ -1,123 +1,128 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import Text from "../src/ui/Text";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { myChallengesResponseSchema, type MyChallengesResponse } from "@mtg-rules/contracts";
 import { useAuth } from "../src/auth/AuthProvider";
-import { apiUrl } from "../src/api-url";
-import { colors, fonts } from "../src/theme";
+import { challengeStatus } from "../src/challenges/challenge-status";
+import { useMyChallenges } from "../src/challenges/useMyChallenges";
+import Loader from "../src/ui/Loader";
+import Text from "../src/ui/Text";
+import { colors, eyebrow, fonts } from "../src/theme";
 
 export default function MyChallengesScreen() {
   const { session } = useAuth();
-  const [result, setResult] = useState<MyChallengesResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const loadChallenges = useCallback(async () => {
-    if (!session) return;
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`${apiUrl}/api/me/challenges`, {
-        headers: { authorization: `Bearer ${session.access_token}` },
-      });
-      if (!response.ok) throw new Error("Your challenges could not be loaded.");
-      setResult(myChallengesResponseSchema.parse(await response.json()));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Your challenges could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }, [session]);
-
-  useEffect(() => {
-    void loadChallenges();
-  }, [loadChallenges]);
+  const { challenges, loading, error, reload } = useMyChallenges();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.page}>
-        <Text accessibilityRole="header" style={styles.title}>
-          My challenges
-        </Text>
+    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={
+          session ? (
+            <RefreshControl
+              refreshing={loading && challenges !== null}
+              onRefresh={() => void reload()}
+              tintColor={colors.accent}
+              colors={[colors.accent]}
+            />
+          ) : undefined
+        }
+      >
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={styles.heading}>
+            Your disputes
+          </Text>
+          <Text style={styles.lead}>
+            Every dispute is reviewed by a person. Pull down to check for news.
+          </Text>
+        </View>
+
         {!session ? (
-          <Link href="/sign-in" style={styles.link}>
-            Sign in to view your challenges
-          </Link>
-        ) : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              disabled={loading}
-              onPress={() => void loadChallenges()}
-              style={styles.refresh}
-            >
-              <Text style={styles.refreshText}>{loading ? "Loading…" : "Refresh status"}</Text>
-            </Pressable>
-            {error ? (
-              <Text accessibilityRole="alert" style={styles.error}>
-                {error}
-              </Text>
-            ) : null}
-            {result?.challenges.length === 0 ? <Text>No challenges yet.</Text> : null}
-            {result?.challenges.map((challenge) => (
-              <View key={challenge.challengeId} style={styles.card}>
-                <Text style={styles.status}>{challenge.status.replaceAll("_", " ")}</Text>
-                <Text style={styles.question}>{challenge.question}</Text>
-                <Text>{challenge.explanation}</Text>
-                {challenge.proposedOutcome ? (
-                  <Text>Suggested outcome: {challenge.proposedOutcome.replaceAll("_", " ")}</Text>
-                ) : null}
-                {challenge.latestInformationRequest ? (
-                  <View accessibilityLiveRegion="polite" style={styles.infoRequest}>
-                    <Text style={styles.infoTitle}>The reviewer needs more information</Text>
-                    <Text>{challenge.latestInformationRequest.reason}</Text>
-                    <Text style={styles.date}>
-                      Requested{" "}
-                      {new Date(challenge.latestInformationRequest.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                ) : null}
-                {challenge.latestDecision ? (
-                  <View accessibilityLiveRegion="polite" style={styles.infoRequest}>
-                    <Text style={styles.infoTitle}>
-                      Challenge{" "}
-                      {challenge.latestDecision.decision === "approve" ? "approved" : "rejected"}
-                    </Text>
-                    <Text>{challenge.latestDecision.reason}</Text>
-                    {challenge.latestDecision.correctedRulingVersion ? (
-                      <Link
-                        href={{
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/sign-in")}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryText}>Sign in to see your disputes</Text>
+          </Pressable>
+        ) : null}
+        {session && challenges === null && loading ? (
+          <Loader accessibilityLabel="Loading your disputes" />
+        ) : null}
+        {error ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
+        {challenges?.length === 0 ? (
+          <Text style={styles.lead}>
+            No disputes yet. If a ruling looks wrong, tap “This looks wrong” under it.
+          </Text>
+        ) : null}
+
+        {challenges?.map((challenge) => {
+          const status = challengeStatus(challenge);
+          const decision = challenge.latestDecision;
+          return (
+            <View key={challenge.challengeId} style={styles.card}>
+              <View style={[styles.pill, { backgroundColor: status.background }]}>
+                <Text style={[styles.pillText, { color: status.color }]}>{status.label}</Text>
+              </View>
+              <Text style={styles.question}>{challenge.question}</Text>
+              <Text style={styles.explanation}>{challenge.explanation}</Text>
+
+              {challenge.status === "needs_information" && challenge.latestInformationRequest ? (
+                <View accessibilityLiveRegion="polite" style={styles.note}>
+                  <Text style={[eyebrow, { color: colors.info }]}>The judge asks</Text>
+                  <Text style={styles.noteText}>{challenge.latestInformationRequest.reason}</Text>
+                </View>
+              ) : null}
+
+              {decision ? (
+                <View accessibilityLiveRegion="polite" style={styles.note}>
+                  <Text style={eyebrow}>
+                    {decision.decision === "approve" ? "The judge agreed" : "The judge disagreed"}
+                  </Text>
+                  <Text style={styles.noteText}>{decision.reason}</Text>
+                  {decision.correctedRulingVersion ? (
+                    <Pressable
+                      accessibilityRole="link"
+                      onPress={() =>
+                        router.push({
                           pathname: "/rulings",
                           params: {
-                            id: challenge.rulingId,
-                            version: String(challenge.latestDecision.correctedRulingVersion),
+                            id: decision.correctedRulingId ?? challenge.rulingId,
+                            version: String(decision.correctedRulingVersion),
                           },
-                        }}
-                        style={styles.link}
-                      >
-                        Read the corrected answer
-                      </Link>
-                    ) : null}
-                  </View>
-                ) : null}
-                <Link
-                  href={{
-                    pathname: "/rulings",
-                    params: { id: challenge.rulingId, version: String(challenge.rulingVersion) },
-                  }}
-                  style={styles.link}
-                >
-                  Open original ruling
-                </Link>
+                        })
+                      }
+                      style={styles.linkButton}
+                    >
+                      <Text style={styles.link}>Read the corrected ruling</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <View style={styles.footer}>
                 <Text style={styles.date}>
-                  Submitted {new Date(challenge.createdAt).toLocaleDateString()}
+                  Sent {new Date(challenge.createdAt).toLocaleDateString()}
                 </Text>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/rulings",
+                      params: { id: challenge.rulingId, version: String(challenge.rulingVersion) },
+                    })
+                  }
+                  style={styles.linkButton}
+                >
+                  <Text style={styles.link}>Original ruling</Text>
+                </Pressable>
               </View>
-            ))}
-          </>
-        )}
+            </View>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -125,22 +130,51 @@ export default function MyChallengesScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  page: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 14 },
-  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
-  card: { gap: 8, padding: 16, borderRadius: 12, backgroundColor: colors.surface },
-  status: { color: colors.accent, fontFamily: fonts.bodySemibold, textTransform: "capitalize" },
-  question: { color: colors.text, fontSize: 18, fontFamily: fonts.bodySemibold },
-  infoRequest: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: colors.warningSurface },
-  infoTitle: { color: colors.warning, fontFamily: fonts.bodySemibold },
-  date: { color: colors.textMuted, fontSize: 13 },
-  refresh: {
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.accent,
+  page: {
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 32,
+    gap: 16,
   },
-  refreshText: { color: colors.accentInk, fontFamily: fonts.bodySemibold },
+  intro: { gap: 8, paddingBottom: 6 },
+  heading: { fontFamily: fonts.display, fontSize: 28, lineHeight: 33 },
+  lead: { color: colors.textSoft, fontSize: 14.5, lineHeight: 21 },
   error: { color: colors.danger },
-  link: { color: colors.accent, textDecorationLine: "underline" },
+  card: {
+    gap: 10,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+  },
+  pill: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  pillText: { fontFamily: fonts.bodyMedium, fontSize: 12 },
+  question: { fontFamily: fonts.display, fontSize: 18, lineHeight: 24 },
+  explanation: { color: colors.textSoft, fontSize: 14, lineHeight: 20 },
+  note: {
+    gap: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  noteText: { fontSize: 14.5, lineHeight: 21 },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  date: { color: colors.textMuted, fontSize: 12.5 },
+  linkButton: { minHeight: 44, justifyContent: "center" },
+  link: { color: colors.accent, fontSize: 14 },
+  secondary: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 22,
+  },
+  secondaryText: { fontSize: 14 },
+  pressed: { opacity: 0.75 },
 });

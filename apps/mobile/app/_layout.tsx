@@ -68,9 +68,10 @@ function AppStack() {
             }}
           >
             <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
-            <Stack.Screen name="sign-in" options={{ title: "Account" }} />
-            <Stack.Screen name="challenges" options={{ title: "My challenges" }} />
-            <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
+            <Stack.Screen name="sign-in" options={{ title: "You" }} />
+            <Stack.Screen name="challenges" options={{ title: "Disputes" }} />
+            <Stack.Screen name="dispute" options={{ title: "Dispute this ruling" }} />
+            <Stack.Screen name="review-queue" options={{ title: "Review queue" }} />
             <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
             <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
             <Stack.Screen name="table" options={{ title: "Check the table" }} />

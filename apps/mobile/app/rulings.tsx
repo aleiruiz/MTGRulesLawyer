@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useLocalSearchParams, Link } from "expo-router";
-import { Linking, ScrollView, StyleSheet, View } from "react-native";
-import Text from "../src/ui/Text";
+import { router, useLocalSearchParams } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { persistedRulingResponseSchema, type PersistedRulingResponse } from "@mtg-rules/contracts";
 import { apiUrl } from "../src/api-url";
-import ChallengeForm from "../src/challenges/ChallengeForm";
+import JudgeMessage from "../src/chat/JudgeMessage";
+import Loader from "../src/ui/Loader";
+import Text from "../src/ui/Text";
 import { colors, fonts } from "../src/theme";
 
 const rulingIdPattern =
@@ -62,88 +63,46 @@ export default function PublicRulingScreen() {
   }, [id, version]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.notice}>
-          Rules Lens is unofficial Fan Content permitted under the Fan Content Policy. Not
-          approved/endorsed by Wizards. Portions of the materials used are property of Wizards of
-          the Coast. ©Wizards of the Coast LLC.
-        </Text>
-        <Text accessibilityRole="header" style={styles.title}>
-          Shared ruling
-        </Text>
-        {loading ? <Text accessibilityLiveRegion="polite">Loading ruling…</Text> : null}
+    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.page}>
+        {loading ? <Loader accessibilityLabel="Loading ruling" /> : null}
         {error ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {error}
           </Text>
         ) : null}
         {ruling ? (
-          <View style={styles.card}>
-            <Text style={styles.outcome}>{ruling.ruling.outcome.replaceAll("_", " ")}</Text>
-            <Text style={styles.question}>{ruling.question}</Text>
-            <Text style={styles.summary}>{ruling.ruling.summary}</Text>
-            <Text style={styles.meta}>
-              Rules snapshot {ruling.ruling.snapshot.version} ·{" "}
-              {ruling.ruling.snapshot.activatedAt
-                ? new Date(ruling.ruling.snapshot.activatedAt).toLocaleDateString()
-                : "activation date unavailable"}
-            </Text>
-            {ruling.ruling.assumptions.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Assumptions</Text>
-                {ruling.ruling.assumptions.map((assumption, index) => (
-                  <Text key={`${index}-${assumption}`} style={styles.body}>
-                    {assumption}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Reasoning</Text>
-              {ruling.ruling.reasoningSteps.map((step, index) => (
-                <Text key={`${index}-${step.text}`} style={styles.body}>
-                  {index + 1}. {step.text}
-                </Text>
-              ))}
+          <>
+            <View style={styles.questionBubble}>
+              <Text selectable style={styles.question}>
+                {ruling.question}
+              </Text>
             </View>
-            {ruling.ruling.clarificationQuestions.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Questions to clarify</Text>
-                {ruling.ruling.clarificationQuestions.map((question, index) => (
-                  <Text key={`${index}-${question}`} style={styles.body}>
-                    {question}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Evidence</Text>
-              {ruling.ruling.citations.map((citation, index) => (
-                <View key={`${citation.sourceId}-${citation.id}-${index}`} style={styles.citation}>
-                  <Text style={styles.citationTitle}>
-                    [{index + 1}] {citation.label}
-                  </Text>
-                  <Text
-                    accessibilityRole="link"
-                    onPress={() => void Linking.openURL(citation.sourceUrl)}
-                    style={styles.link}
-                  >
-                    Open source
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.meta}>
-              Ruling {ruling.rulingId} · version {ruling.version} ·{" "}
-              {new Date(ruling.createdAt).toLocaleDateString()}
+            <JudgeMessage
+              result={ruling}
+              onDispute={
+                version === undefined
+                  ? () => router.push({ pathname: "/dispute", params: { ruling: ruling.rulingId } })
+                  : undefined
+              }
+            />
+            <Text selectable style={styles.meta}>
+              Ruling version {ruling.version} · {new Date(ruling.createdAt).toLocaleDateString()}
             </Text>
-            <Link href="/" style={styles.link}>
-              Ask a rules question
-            </Link>
-            {version === undefined ? <ChallengeForm rulingId={ruling.rulingId} /> : null}
-          </View>
+          </>
         ) : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.replace("/")}
+          style={({ pressed }) => [styles.ask, pressed && styles.pressed]}
+        >
+          <Text style={styles.askText}>Ask your own question</Text>
+        </Pressable>
+        <Text style={styles.notice}>
+          Rules Lawyer is unofficial Fan Content permitted under the Fan Content Policy. Not
+          approved/endorsed by Wizards. Portions of the materials used are property of Wizards of
+          the Coast. ©Wizards of the Coast LLC.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -151,25 +110,35 @@ export default function PublicRulingScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  container: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 16 },
-  brand: { color: colors.warning, fontSize: 15, fontFamily: fonts.bodySemibold },
-  notice: { color: colors.textMuted, fontSize: 13 },
-  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 30 },
-  error: { color: colors.danger, fontSize: 16 },
-  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, gap: 14 },
-  outcome: {
-    color: colors.accent,
-    fontSize: 14,
-    fontFamily: fonts.bodySemibold,
-    textTransform: "uppercase",
+  page: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 32,
+    gap: 20,
   },
-  question: { color: colors.text, fontSize: 20, fontFamily: fonts.bodySemibold },
-  summary: { color: colors.text, fontSize: 18, lineHeight: 27 },
-  meta: { color: colors.textMuted, fontSize: 13 },
-  section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, gap: 10 },
-  sectionTitle: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 17 },
-  body: { color: colors.text, fontSize: 15, lineHeight: 23 },
-  citation: { backgroundColor: colors.background, borderRadius: 10, padding: 12, gap: 8 },
-  citationTitle: { color: colors.text, fontFamily: fonts.bodySemibold },
-  link: { color: colors.accent, fontSize: 15, textDecorationLine: "underline" },
+  error: { color: colors.danger, fontSize: 16 },
+  questionBubble: {
+    alignSelf: "flex-end",
+    maxWidth: "85%",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderBottomRightRadius: 4,
+    backgroundColor: colors.surfaceRaised,
+  },
+  question: { fontSize: 15, lineHeight: 22 },
+  meta: { color: colors.textSubtle, fontSize: 12 },
+  ask: {
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: colors.accent,
+  },
+  askText: { color: colors.accentInk, fontFamily: fonts.bodySemibold, fontSize: 15 },
+  pressed: { opacity: 0.75 },
+  notice: { color: colors.textSubtle, fontSize: 11.5, lineHeight: 16 },
 });
