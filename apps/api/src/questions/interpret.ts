@@ -125,10 +125,16 @@ export async function interpretQuestion(
   priorTurns: PriorTurn[] = [],
 ): Promise<QuestionInterpretResponse> {
   // Read provider settings before reserving so a placeholder credential does not consume quota.
-  const provider = createOpenAiAdapter(readOpenAiConfig());
+  const providerConfig = readOpenAiConfig();
+  const provider = createOpenAiAdapter(providerConfig);
   const usageConfig = readAiUsageConfig();
   const result = await runReservedAiCallWithMetrics(
-    { kind: "INTERPRETATION", identity },
+    {
+      kind: "INTERPRETATION",
+      identity,
+      model: providerConfig.model,
+      reasoningEffort: providerConfig.reasoningEffort,
+    },
     async (providerSignal) => {
       const generated = await provider.generateStructuredOutputWithUsage(
         interpretationRequest(question, priorTurns),

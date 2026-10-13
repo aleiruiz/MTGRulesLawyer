@@ -42,20 +42,49 @@ export function useIsAdmin(): boolean {
   return isAdmin;
 }
 
-/** The review queue entry on the account screen, shown only to judges. */
+/** The admin entries on the account screen (review queue, AI usage), shown only to judges. */
 export default function AdminReviewLink({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useT();
   if (!isAdmin) return null;
   return (
+    <View style={styles.links}>
+      <AdminLink
+        href="/review-queue"
+        icon="shield-checkmark-outline"
+        title={t.account.reviewQueue}
+        detail={t.account.reviewQueueDetail}
+      />
+      <AdminLink
+        href="/ai-usage"
+        icon="pulse-outline"
+        title={t.account.aiUsage}
+        detail={t.account.aiUsageDetail}
+      />
+    </View>
+  );
+}
+
+function AdminLink({
+  href,
+  icon,
+  title,
+  detail,
+}: {
+  href: "/review-queue" | "/ai-usage";
+  icon: "shield-checkmark-outline" | "pulse-outline";
+  title: string;
+  detail: string;
+}) {
+  return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push("/review-queue")}
+      onPress={() => router.push(href)}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} />
+      <Ionicons name={icon} size={20} color={colors.accent} />
       <View style={styles.text}>
-        <Text style={styles.title}>{t.account.reviewQueue}</Text>
-        <Text style={styles.detail}>{t.account.reviewQueueDetail}</Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.detail}>{detail}</Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
@@ -63,6 +92,7 @@ export default function AdminReviewLink({ isAdmin }: { isAdmin: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  links: { gap: 10 },
   row: {
     minHeight: 64,
     flexDirection: "row",

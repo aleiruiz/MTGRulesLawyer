@@ -74,6 +74,7 @@ function AppStack() {
             <Stack.Screen name="challenges" options={{ title: t.titles.disputes }} />
             <Stack.Screen name="dispute" options={{ title: t.titles.dispute }} />
             <Stack.Screen name="review-queue" options={{ title: t.titles.reviewQueue }} />
+            <Stack.Screen name="ai-usage" options={{ title: t.titles.aiUsage }} />
             <Stack.Screen name="admin-verify" options={{ title: t.titles.adminVerify }} />
             <Stack.Screen name="rulings" options={{ title: t.titles.sharedRuling }} />
             <Stack.Screen name="table" options={{ title: t.titles.table }} />

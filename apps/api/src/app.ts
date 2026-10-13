@@ -22,6 +22,8 @@ import {
   type ChallengeSubmissionRequest,
   type MyChallengesResponse,
   reviewQueueResponseSchema,
+  aiUsageDashboardQuerySchema,
+  type AiUsageDashboardResponse,
   requestChallengeInformationSchema,
   type ReviewQueueResponse,
   reviewDecisionRequestSchema,
@@ -69,6 +71,7 @@ import {
   deleteAppUserDataBySupabaseUserId,
   hasSupabaseSecretKey,
 } from "./account/deletion.js";
+import { getAiUsageDashboard } from "./ai/dashboard.js";
 import { evaluateAdminAssurance, readAdminAuthMaxAgeSeconds } from "./auth/admin-assurance.js";
 import { createAttemptLimiter } from "./http/attempt-limiter.js";
 import { readCorsAllowedOrigins, readTrustedProxies } from "./http/network-config.js";
@@ -127,6 +130,7 @@ export interface BuildAppOptions {
   ownsConversation?: (userId: string, conversationId: string) => Promise<boolean>;
   getRuling?: (rulingId: string, version?: number) => Promise<PersistedRulingResponse | null>;
   getSourceStatus?: () => Promise<SourceStatusResponse>;
+  getAiUsageDashboard?: (days: number) => Promise<AiUsageDashboardResponse>;
   checkDatabase?: () => Promise<void>;
   verifyAccessToken?: AccessTokenVerifier;
   resolveAppUser?: AppUserResolver;
@@ -225,6 +229,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const createChallenge = options.submitChallenge ?? submitChallenge;
   const readMyChallenges = options.listMyChallenges ?? listMyChallenges;
   const readReviewQueue = options.getReviewQueue ?? getReviewQueue;
+  const readAiUsageDashboard =
+    options.getAiUsageDashboard ?? ((days: number) => getAiUsageDashboard(days));
   const requestChallengeInformation = options.requestMoreInformation ?? requestMoreInformation;
   const decideReview = options.decideChallenge ?? decideChallenge;
   const deleteAccount =
@@ -446,6 +452,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         "Review queue could not be loaded",
       );
       return reply.code(503).send({ error: "REVIEW_QUEUE_UNAVAILABLE" });
+    }
+  });
+  app.get("/api/admin/ai-usage", async (request, reply) => {
+    if (request.appUser?.role !== "ADMIN") return reply.code(403).send({ error: "ADMIN_REQUIRED" });
+    const query = aiUsageDashboardQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: "INVALID_AI_USAGE_QUERY" });
+    try {
+      return reply.send(await readAiUsageDashboard(query.data.days));
+    } catch (error) {
+      request.log.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "AI usage dashboard could not be loaded",
+      );
+      return reply.code(503).send({ error: "AI_USAGE_UNAVAILABLE" });
     }
   });
   app.post<{ Params: { challengeId: string } }>(

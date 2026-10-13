@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { describe, it } from "node:test";
 import {
   AiUsageLimitError,
+  classifyAiFailure,
   readAiUsageConfig,
   runReservedAiCall,
   sendAiUsageLimitError,
@@ -95,5 +96,21 @@ void describe("AI usage control configuration", () => {
     assert.equal(response.headers["retry-after"], "37");
     assert.deepEqual(response.json(), { error: "AI_DAILY_LIMIT", retryAfterSeconds: 37 });
     await app.close();
+  });
+});
+
+void describe("AI call failure classification", () => {
+  void it("tells output limits, timeouts and cancellations apart", () => {
+    assert.equal(
+      classifyAiFailure(new Error("OpenAI response was incomplete (max_output_tokens).")),
+      "OUTPUT_LIMIT",
+    );
+    const timeout = new Error("Request timed out.");
+    timeout.name = "APIConnectionTimeoutError";
+    assert.equal(classifyAiFailure(timeout), "TIMEOUT");
+    const aborted = new AbortController();
+    aborted.abort();
+    assert.equal(classifyAiFailure(new Error("anything"), aborted.signal), "CANCELLED");
+    assert.equal(classifyAiFailure(new Error("Rate limit reached")), "ERROR");
   });
 });
