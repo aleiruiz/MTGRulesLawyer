@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
 import {
   boundEvidenceForPrompt,
+  buildFoundationalRulesPrompt,
   buildModelPrompt,
   modelRulingSchema,
   RULING_PROMPT_VERSION,
@@ -28,6 +29,7 @@ for (const [index, fixture] of rulingEvaluationSeedSet.entries()) {
       schema: modelRulingSchema,
       schemaName: "mtg_ruling_evaluation",
       systemPrompt: RULING_SYSTEM_PROMPT,
+      contextPrompt: buildFoundationalRulesPrompt(evidence),
       userPrompt: buildModelPrompt(request, evidence),
       promptVersion: RULING_PROMPT_VERSION,
     }),

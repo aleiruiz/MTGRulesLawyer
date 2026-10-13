@@ -19,6 +19,7 @@ import { assembleConfirmedEvidence } from "../search/retrieval.js";
 import type { EvidenceSearchResponse } from "@mtg-rules/contracts";
 import {
   boundEvidenceForPrompt,
+  buildFoundationalRulesPrompt,
   buildModelPrompt,
   citeRulesById,
   retryWithRequestedRules,
@@ -154,6 +155,8 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
       schema: modelRulingSchema,
       schemaName: "mtg_verified_ruling",
       systemPrompt: RULING_SYSTEM_PROMPT,
+      promptCacheKey: "mtg-verified-ruling",
+      contextPrompt: buildFoundationalRulesPrompt(evidence),
       userPrompt: buildModelPrompt(request, evidence),
       promptVersion: RULING_PROMPT_VERSION,
     });
@@ -170,6 +173,8 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
             schema: modelRulingSchema,
             schemaName: "mtg_verified_ruling",
             systemPrompt: RULING_SYSTEM_PROMPT,
+            promptCacheKey: "mtg-verified-ruling",
+            contextPrompt: buildFoundationalRulesPrompt(evidence),
             userPrompt,
             promptVersion: RULING_PROMPT_VERSION,
           }),

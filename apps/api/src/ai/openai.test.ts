@@ -85,6 +85,37 @@ void describe("OpenAI structured output adapter", () => {
     assert.deepEqual(researched.webSources, [{ url: "https://example.com/ruling" }]);
   });
 
+  void it("sends stable context as its own system message and reports cached tokens", async () => {
+    const sent: OpenAiRequest[] = [];
+    const adapter = createOpenAiAdapter(config, {
+      transport: (request) => {
+        sent.push(request);
+        return Promise.resolve({
+          outputText: JSON.stringify({ answer: "It resolves.", confidence: "high" }),
+          inputTokens: 9_000,
+          cachedInputTokens: 6_000,
+        });
+      },
+      logger: () => undefined,
+    });
+    const result = await adapter.generateStructuredOutputWithUsage({
+      schema: resultSchema,
+      schemaName: "test_answer",
+      systemPrompt: "System prompt.",
+      contextPrompt: "Rules that never change.",
+      promptCacheKey: "test-cache",
+      userPrompt: "User question.",
+      promptVersion: OPENAI_PROMPT_VERSION,
+    });
+    assert.deepEqual(sent[0]?.input, [
+      { role: "system", content: "System prompt." },
+      { role: "system", content: "Rules that never change." },
+      { role: "user", content: "User question." },
+    ]);
+    assert.equal(sent[0]?.promptCacheKey, "test-cache");
+    assert.equal(result.cachedInputTokens, 6_000);
+  });
+
   void it("rejects malformed provider output", async () => {
     const adapter = createOpenAiAdapter(config, {
       transport: () =>

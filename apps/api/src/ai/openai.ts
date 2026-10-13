@@ -58,6 +58,13 @@ export interface GenerateStructuredOutputOptions<TSchema extends z.ZodType> {
   promptVersion: string;
   /** Lets the model run OpenAI's web search tool at most this many times. Off when absent. */
   webSearchMaxCalls?: number;
+  /** Groups requests that share a long prompt prefix so the provider's prompt cache serves it. */
+  promptCacheKey?: string;
+  /**
+   * Stable reference text sent as a second system message, before the user prompt. Text that
+   * repeats across requests belongs here: the provider caches system messages as a prefix.
+   */
+  contextPrompt?: string;
 }
 
 export interface OpenAiRequest {
@@ -68,6 +75,7 @@ export interface OpenAiRequest {
   schemaName: string;
   schema: Record<string, unknown>;
   webSearchMaxCalls?: number;
+  promptCacheKey?: string;
 }
 
 /** A web page the model read through web search. Untrusted: never evidence for a ruling. */
@@ -80,6 +88,8 @@ export interface OpenAiResponse {
   outputText: string;
   requestId?: string;
   inputTokens?: number;
+  /** Input tokens the provider served from its prompt cache (billed at a discount). */
+  cachedInputTokens?: number;
   outputTokens?: number;
   webSearchCalls?: number;
   webSources?: WebSource[];
@@ -93,6 +103,7 @@ export type OpenAiTransport = (
 export interface StructuredOutputResult<T> {
   value: T;
   inputTokens?: number;
+  cachedInputTokens?: number;
   outputTokens?: number;
   webSearchCalls?: number;
   webSources?: WebSource[];
@@ -121,6 +132,7 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
         input: request.input,
         max_output_tokens: request.maxOutputTokens,
         reasoning: { effort: request.reasoningEffort },
+        ...(request.promptCacheKey ? { prompt_cache_key: request.promptCacheKey } : {}),
         ...(request.webSearchMaxCalls
           ? {
               tools: [{ type: "web_search" as const }],
@@ -168,6 +180,7 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
       outputText: response.output_text,
       requestId: response.id,
       inputTokens: response.usage?.input_tokens,
+      cachedInputTokens: response.usage?.input_tokens_details?.cached_tokens,
       outputTokens: response.usage?.output_tokens,
       ...(request.webSearchMaxCalls
         ? { webSearchCalls: webSearchCalls.length, webSources: [...webSources.values()] }
@@ -196,7 +209,11 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
       if (!request.systemPrompt.trim() || request.systemPrompt.length > 8_000) {
         throw new Error("System prompt must contain 1 to 8000 characters.");
       }
-      if (!request.userPrompt.trim() || request.userPrompt.length > MAX_USER_PROMPT_CHARACTERS) {
+      if (
+        !request.userPrompt.trim() ||
+        request.userPrompt.length + (request.contextPrompt?.length ?? 0) >
+          MAX_USER_PROMPT_CHARACTERS
+      ) {
         throw new Error(`User prompt must contain 1 to ${MAX_USER_PROMPT_CHARACTERS} characters.`);
       }
       const startedAt = Date.now();
@@ -213,6 +230,9 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
             model: config.model,
             input: [
               { role: "system", content: request.systemPrompt },
+              ...(request.contextPrompt
+                ? [{ role: "system" as const, content: request.contextPrompt }]
+                : []),
               { role: "user", content: request.userPrompt },
             ],
             maxOutputTokens: config.maxOutputTokens,
@@ -220,6 +240,7 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
             schemaName: request.schemaName,
             schema: z.toJSONSchema(request.schema),
             ...(request.webSearchMaxCalls ? { webSearchMaxCalls: request.webSearchMaxCalls } : {}),
+            ...(request.promptCacheKey ? { promptCacheKey: request.promptCacheKey } : {}),
           },
           signal,
         );
@@ -231,6 +252,7 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
             event: "openai.request.completed",
             requestId: result.requestId,
             inputTokens: result.inputTokens,
+            cachedInputTokens: result.cachedInputTokens,
             outputTokens: result.outputTokens,
             ...(result.webSearchCalls === undefined
               ? {}
@@ -242,6 +264,9 @@ export function createOpenAiAdapter(config: OpenAiConfig, options: OpenAiAdapter
         return {
           value: validated,
           inputTokens: result.inputTokens,
+          ...(result.cachedInputTokens === undefined
+            ? {}
+            : { cachedInputTokens: result.cachedInputTokens }),
           outputTokens: result.outputTokens,
           ...(result.webSearchCalls === undefined
             ? {}
