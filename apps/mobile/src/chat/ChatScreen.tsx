@@ -61,7 +61,8 @@ interface RulingInput {
 }
 
 let turnCounter = 0;
-const nextKey = () => `turn-${(turnCounter += 1)}`;
+// Time-based so keys stay unique even if the module reloads (Fast Refresh) mid-chat.
+const nextKey = () => `turn-${Date.now().toString(36)}-${(turnCounter += 1)}`;
 
 function announce(message: string) {
   // Live regions only reach Android screen readers; this also covers VoiceOver.
@@ -93,7 +94,10 @@ export default function ChatScreen({
   const mounted = useRef(true);
   const started = useRef(false);
 
-  const busy = turns.some((turn) => turn.status === "thinking" || turn.status === "choosing");
+  // The glint is part of answering: the composer waits until the verdict shows.
+  const busy = turns.some(
+    (turn) => turn.status === "thinking" || turn.status === "choosing" || turn.fresh,
+  );
 
   const updateTurn = useCallback((key: string, patch: Partial<Turn>) => {
     if (!mounted.current) return;
@@ -126,7 +130,6 @@ export default function ChatScreen({
         if (controller.signal.aborted || !mounted.current) return;
         if (ruling.conversationId) setConversationId(ruling.conversationId);
         updateTurn(key, { status: "answered", ruling, fresh: true });
-        announce(`${outcomeLabel(ruling.ruling.outcome)}. ${ruling.ruling.summary}`);
       } catch (error) {
         // Leaving the screen aborts quietly; anything else ends the turn so the chat never
         // stays stuck on "thinking".
@@ -331,6 +334,10 @@ export default function ChatScreen({
           ref={scrollRef}
           contentContainerStyle={styles.thread}
           keyboardShouldPersistTaps="handled"
+          // Scrolling by hand stops the thread from pulling the player back to the bottom.
+          onScrollBeginDrag={() => {
+            followEnd.current = false;
+          }}
           onContentSizeChange={() => {
             if (followEnd.current) scrollRef.current?.scrollToEnd({ animated: true });
           }}
@@ -414,9 +421,14 @@ export default function ChatScreen({
               {turn.status === "answered" && turn.ruling && turn.fresh ? (
                 <GlintReveal
                   onDone={() => {
+                    if (followEnd.current) revealTarget.current = turn.key;
                     followEnd.current = false;
-                    revealTarget.current = turn.key;
                     updateTurn(turn.key, { fresh: false });
+                    if (turn.ruling) {
+                      announce(
+                        `${outcomeLabel(turn.ruling.ruling.outcome)}. ${turn.ruling.ruling.summary}`,
+                      );
+                    }
                   }}
                 />
               ) : null}
@@ -600,19 +612,19 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 140,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 12,
+    paddingBottom: 12,
     color: colors.text,
     fontSize: 15,
   },
   send: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: colors.accent,
   },
   sendDisabled: { opacity: 0.4 },

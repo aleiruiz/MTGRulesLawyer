@@ -7,9 +7,14 @@ export default function useReduceMotion(): boolean | null {
 
   useEffect(() => {
     let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => {
-      if (active) setReduceMotion(value);
-    });
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (active) setReduceMotion(value);
+      })
+      // Without an answer, animate: a stuck null would hold back whatever waits on it.
+      .catch(() => {
+        if (active) setReduceMotion(false);
+      });
     const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (value) =>
       setReduceMotion(value),
     );

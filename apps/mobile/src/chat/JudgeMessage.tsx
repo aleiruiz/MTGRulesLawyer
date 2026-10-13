@@ -75,11 +75,19 @@ export default function JudgeMessage({
   const outcome = outcomeStyles[ruling.outcome];
   const { headline, body } = splitVerdict(ruling.summary);
   const citationById = new Map(ruling.citations.map((citation) => [citation.id, citation]));
-  const asking = ruling.outcome === "needs_information" && ruling.clarificationQuestions.length > 0;
+  const questions = ruling.clarificationQuestions;
+  // When the judge needs a detail before ruling, the question leads; otherwise the answer does.
+  const asking = ruling.outcome === "needs_information" && questions.length > 0;
+  const yesNoQuestions = questions.filter(isYesNoQuestion);
   const rulesOf = rulesDate(ruling.snapshot.version);
+  const chipped = new Set([
+    ...ruling.summaryCitationIds,
+    ...ruling.reasoningSteps.flatMap((step) => step.citationIds),
+  ]);
+  const unchipped = ruling.citations.filter((citation) => !chipped.has(citation.id));
 
   function chips(ids: string[], prominent = false) {
-    const cited = ids.flatMap((id) => {
+    const cited = [...new Set(ids)].flatMap((id) => {
       const citation = citationById.get(id);
       return citation ? [citation] : [];
     });
@@ -110,8 +118,8 @@ export default function JudgeMessage({
 
         {asking ? (
           <>
-            {ruling.clarificationQuestions.map((question) => (
-              <Text key={question} selectable style={styles.question}>
+            {ruling.clarificationQuestions.map((question, index) => (
+              <Text key={`${index}-${question}`} selectable style={styles.question}>
                 {question}
               </Text>
             ))}
@@ -134,12 +142,22 @@ export default function JudgeMessage({
           </>
         )}
         {chips(ruling.summaryCitationIds, true)}
+        {!asking && questions.length > 0 ? (
+          <View style={styles.openQuestions}>
+            <Text style={[eyebrow, styles.openQuestionsLabel]}>To be sure, tell the judge</Text>
+            {questions.map((question, index) => (
+              <Text key={`${index}-${question}`} selectable style={styles.openQuestion}>
+                {question}
+              </Text>
+            ))}
+          </View>
+        ) : null}
       </View>
 
-      {asking && onAnswer ? (
+      {onAnswer && yesNoQuestions.length > 0 ? (
         <View style={styles.answers}>
           <Text style={eyebrow}>Tap an answer</Text>
-          {ruling.clarificationQuestions.filter(isYesNoQuestion).flatMap((question) =>
+          {yesNoQuestions.flatMap((question) =>
             ["Yes", "No"].map((answer) => (
               <Pressable
                 key={`${question}-${answer}`}
@@ -149,7 +167,7 @@ export default function JudgeMessage({
                 style={({ pressed }) => [styles.answer, pressed && styles.pressed]}
               >
                 <Text numberOfLines={2} style={styles.answerText}>
-                  {ruling.clarificationQuestions.length > 1 ? `${answer}: ${question}` : answer}
+                  {questions.length > 1 ? `${answer}: ${question}` : answer}
                 </Text>
               </Pressable>
             )),
@@ -206,12 +224,19 @@ export default function JudgeMessage({
         </View>
       ) : null}
 
+      {expanded && unchipped.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={eyebrow}>Also read</Text>
+          {chips(unchipped.map((citation) => citation.id))}
+        </View>
+      ) : null}
+
       {expanded && ruling.assumptions.length > 0 ? (
         <View style={styles.assumptions}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
           <View style={styles.assumptionList}>
-            {ruling.assumptions.map((assumption) => (
-              <Text key={assumption} style={styles.assumptionText}>
+            {ruling.assumptions.map((assumption, index) => (
+              <Text key={`${index}-${assumption}`} style={styles.assumptionText}>
                 {/^assum/i.test(assumption)
                   ? assumption
                   : `Assumes ${assumption.charAt(0).toLowerCase()}${assumption.slice(1)}`}
@@ -238,17 +263,18 @@ export default function JudgeMessage({
       {showChallenge ? <ChallengeForm rulingId={result.rulingId} /> : null}
 
       <View style={styles.footer}>
-        <Text style={styles.footnote}>
+        <Text selectable style={styles.footnote}>
           {rulesOf
-            ? `Checked against the Comprehensive Rules of ${rulesOf} and current Oracle text.`
-            : "Checked against the Comprehensive Rules and current Oracle text."}
+            ? `Checked against the Comprehensive Rules of ${rulesOf} and the Oracle text in that snapshot.`
+            : "Checked against the Comprehensive Rules and the Oracle text in that snapshot."}
+          {`\nSnapshot ${ruling.snapshot.version}`}
         </Text>
         {onAskAgain ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Ask the judge this question again"
-            hitSlop={12}
             onPress={onAskAgain}
+            style={styles.askAgainButton}
           >
             <Text style={styles.askAgain}>Ask again</Text>
           </Pressable>
@@ -386,5 +412,14 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   footer: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   footnote: { flex: 1, color: colors.textSubtle, fontSize: 12, lineHeight: 18 },
-  askAgain: { color: colors.accent, fontSize: 13 },
+  askAgainButton: { minHeight: 44, minWidth: 64, alignItems: "flex-end", marginTop: -12 },
+  askAgain: { color: colors.accent, fontSize: 13, lineHeight: 44 },
+  openQuestions: {
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  openQuestionsLabel: { color: colors.info },
+  openQuestion: { fontSize: 15, lineHeight: 22 },
 });
