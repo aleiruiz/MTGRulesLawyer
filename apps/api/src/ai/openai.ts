@@ -145,6 +145,8 @@ function createSdkTransport(config: OpenAiConfig): OpenAiTransport {
         input: request.input,
         max_output_tokens: request.maxOutputTokens,
         reasoning: { effort: request.reasoningEffort },
+        // Players' questions are not kept on OpenAI's side after the answer.
+        store: false,
         ...(request.promptCacheKey ? { prompt_cache_key: request.promptCacheKey } : {}),
         ...(request.webSearchMaxCalls
           ? {
