@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -19,6 +19,7 @@ import LoadingScreen from "../src/ui/LoadingScreen";
 import { FontsReadyContext } from "../src/ui/fonts-ready";
 import { colors, fonts } from "../src/theme";
 import { LanguageProvider, useT } from "../src/i18n/LanguageProvider";
+import HeaderNavButton from "../src/ui/HeaderNavButton";
 
 // Keeps the loading screen up long enough to read instead of flashing for a frame.
 const MIN_SPLASH_MS = 1_200;
@@ -67,6 +68,12 @@ function AppStack() {
                 : undefined,
               headerShadowVisible: false,
               contentStyle: { backgroundColor: colors.background },
+              // Decided here, not inside the button: any element (even one that renders nothing)
+              // replaces the native back button on iOS and Android.
+              headerLeft: ({ canGoBack }) =>
+                canGoBack && Platform.OS !== "web" ? null : (
+                  <HeaderNavButton canGoBack={canGoBack} />
+                ),
             }}
           >
             <Stack.Screen name="index" options={{ title: t.titles.home, headerShown: false }} />
@@ -83,7 +90,11 @@ function AppStack() {
             <Stack.Screen name="terms" options={{ title: t.titles.terms }} />
             <Stack.Screen
               name="auth/callback"
-              options={{ title: t.titles.signInCallback, headerBackVisible: false }}
+              options={{
+                title: t.titles.signInCallback,
+                headerBackVisible: false,
+                headerLeft: () => null,
+              }}
             />
           </Stack>
         </FontsReadyContext.Provider>

@@ -37,6 +37,10 @@ export const es: Messages = {
     fanContent:
       "Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.",
   },
+  headerNav: {
+    back: "Atrás",
+    home: "Ir al inicio",
+  },
   accountButton: {
     account: "Cuenta",
     signIn: "Iniciar sesión",

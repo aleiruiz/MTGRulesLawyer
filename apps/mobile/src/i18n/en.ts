@@ -33,6 +33,10 @@ export const en = {
     fanContent:
       "Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.",
   },
+  headerNav: {
+    back: "Back",
+    home: "Go to home",
+  },
   accountButton: {
     account: "Account",
     signIn: "Sign in",
