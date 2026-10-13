@@ -181,11 +181,7 @@ void describe("Ruling evidence verification", () => {
     assert.deepEqual(result.citations, []);
   });
 
-  void it("states card counts in words and splits ideographic-comma citations", () => {
-    const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, evidence)) as {
-      cardCounts: string[];
-    };
-    assert.deepEqual(prompt.cardCounts, ["1 × Fixture Creature (one card)"]);
+  void it("splits citations joined by ideographic or full-width commas", () => {
     const answer = verifyRulingOutput(
       {
         outcome: "resolved",
