@@ -46,6 +46,21 @@ const MAX_CARD_KEYWORD_RULES = 12;
 const SEARCHED_RULES_BEFORE_KEYWORDS = 6;
 const RULE_NUMBER = /\b\d{3}(?:\.\d+[a-z]?)?\b/gi;
 
+/**
+ * Rules for card layouts whose second face is not a card the player casts. A preparation
+ * card's inset spell is only ever cast as a copy from exile (722.3), and a copy of a spell
+ * ceases to exist once it leaves the stack (707.10a), so "I cast Lightning Bolt" from Emeritus
+ * of Conflict never puts an instant in the graveyard.
+ */
+const LAYOUT_RULE_NUMBERS: Record<string, string[]> = {
+  prepare: ["722.2a", "722.3", "722.3a", "722.3c", "722.4", "707.10", "707.10a"],
+};
+
+/** The rule numbers the confirmed cards' layouts bring, in a stable order without repeats. */
+export function layoutRuleNumbers(layouts: string[]): string[] {
+  return [...new Set(layouts.flatMap((layout) => LAYOUT_RULE_NUMBERS[layout] ?? []))];
+}
+
 interface RuleHit {
   id: string;
   number: string;
@@ -469,16 +484,36 @@ export async function assembleConfirmedEvidence(
     client,
   );
   const keywordIds = new Set(keywordRules.map(({ id }) => id));
+  const layoutNumbers = layoutRuleNumbers(selectedCards.map(({ card }) => card.layout));
+  const layoutRows = layoutNumbers.length
+    ? await client.rule.findMany({
+        where: { snapshotId: snapshot.id, number: { in: layoutNumbers } },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, number: true, text: true, parent: { select: { number: true } } },
+      })
+    : [];
+  const layoutRules = layoutRows
+    .filter(({ id }) => !keywordIds.has(id))
+    .map((rule) => ({
+      id: rule.id,
+      number: rule.number,
+      text: rule.text.slice(0, MAX_RULE_TEXT_CHARACTERS),
+      parentNumber: rule.parent?.number ?? null,
+      includedBecause: "MATCH" as const,
+      truncated: rule.text.length > MAX_RULE_TEXT_CHARACTERS,
+    }));
+  const cardRuleIds = new Set([...keywordIds, ...layoutRules.map(({ id }) => id)]);
   const searchedRules = (await withSubrulesOfHeadings(searched.rules, snapshot.id, client)).filter(
-    ({ id }) => !keywordIds.has(id),
+    ({ id }) => !cardRuleIds.has(id),
   );
-  // The search's best matches stay first; the cards' keyword rules follow them, ahead of the
-  // rest of the search, so both fit the prompt's searched-rule limit.
+  // The search's best matches stay first; the cards' keyword and layout rules follow them,
+  // ahead of the rest of the search, so all fit the prompt's searched-rule limit.
   const packet = {
     ...searched,
     rules: [
       ...searchedRules.slice(0, SEARCHED_RULES_BEFORE_KEYWORDS),
       ...keywordRules,
+      ...layoutRules,
       ...searchedRules.slice(SEARCHED_RULES_BEFORE_KEYWORDS),
     ],
   };

@@ -107,7 +107,9 @@ export const es: Messages = {
     notRules: "Esta no es una pregunta de reglas",
     editQuestion: "Editar pregunta",
     didYouMean: "¿Quisiste decir?",
-    notFound: "Carta no encontrada",
+    notFoundTitle: (text: string) => `Ninguna carta se llama “${text}”`,
+    notFoundLead:
+      "Busca la carta que querías decir, o marca que no es una carta para obtener el fallo.",
     youWrote: (text: string) => `escribiste “${text}”`,
     useCandidate: (name: string, typeLine: string, text: string) =>
       `Usar ${name}, ${typeLine}, para ${text}`,

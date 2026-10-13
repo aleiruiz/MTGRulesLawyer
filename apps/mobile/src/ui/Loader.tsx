@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
 import { colors } from "../theme";
 
@@ -10,35 +10,56 @@ interface LoaderProps {
 }
 
 const DOTS = [0, 1, 2];
+// One dot rises and brightens at a time; the next starts as it settles, so one is always lit.
+const STEP_MS = 260;
+const CYCLE_MS = STEP_MS * (DOTS.length + 1);
 
-// Three brass dots that brighten in turn. Used wherever the app waits on the server.
+// Three brass dots that rise and brighten in turn. Used wherever the app waits on the server.
+// With reduce motion on they only fade, which still shows the app is working.
 export default function Loader({
   accessibilityLabel,
   size = 10,
   color = colors.accent,
 }: LoaderProps) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const pulses = useRef(DOTS.map(() => new Animated.Value(0))).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
-    let loop: Animated.CompositeAnimation | undefined;
     let cancelled = false;
-    void AccessibilityInfo.isReduceMotionEnabled().then((reduceMotion) => {
-      if (cancelled || reduceMotion) return;
-      loop = Animated.loop(
-        Animated.timing(progress, {
-          toValue: DOTS.length,
-          duration: 1200,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      );
-      loop.start();
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (!cancelled) setReduceMotion(enabled);
     });
     return () => {
       cancelled = true;
-      loop?.stop();
     };
-  }, [progress]);
+  }, []);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel(
+        pulses.map((pulse, index) =>
+          Animated.sequence([
+            Animated.delay(index * STEP_MS),
+            Animated.timing(pulse, {
+              toValue: 1,
+              duration: STEP_MS,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(pulse, {
+              toValue: 0,
+              duration: STEP_MS,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.delay(CYCLE_MS - (index + 2) * STEP_MS),
+          ]),
+        ),
+      ),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulses]);
 
   return (
     <View
@@ -47,25 +68,28 @@ export default function Loader({
       accessibilityRole="progressbar"
       style={[styles.row, { gap: size * 0.6 }]}
     >
-      {DOTS.map((index) => {
-        const opacity = progress.interpolate({
-          inputRange: [index - 1, index, index + 1, index + 2],
-          outputRange: [0.3, 1, 0.45, 0.3],
-          extrapolate: "clamp",
-        });
-        return (
-          <Animated.View
-            key={index}
-            style={{
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: color,
-              opacity,
-            }}
-          />
-        );
-      })}
+      {pulses.map((pulse, index) => (
+        <Animated.View
+          key={index}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: color,
+            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+            transform: reduceMotion
+              ? []
+              : [
+                  {
+                    translateY: pulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -size * 0.5],
+                    }),
+                  },
+                ],
+          }}
+        />
+      ))}
     </View>
   );
 }

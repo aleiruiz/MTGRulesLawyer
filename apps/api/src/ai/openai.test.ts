@@ -244,8 +244,13 @@ void describe("OpenAI structured output adapter", () => {
       /OPENAI_TIMEOUT_MS/,
     );
     assert.throws(
-      () => readOpenAiConfig({ OPENAI_API_KEY: "test-key", OPENAI_MAX_OUTPUT_TOKENS: "5000" }),
+      () => readOpenAiConfig({ OPENAI_API_KEY: "test-key", OPENAI_MAX_OUTPUT_TOKENS: "8001" }),
       /OPENAI_MAX_OUTPUT_TOKENS/,
+    );
+    assert.equal(
+      readOpenAiConfig({ OPENAI_API_KEY: "test-key", OPENAI_MAX_OUTPUT_TOKENS: "8000" })
+        .maxOutputTokens,
+      8_000,
     );
   });
 });

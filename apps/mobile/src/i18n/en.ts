@@ -101,7 +101,8 @@ export const en = {
     notRules: "This isn’t a rules question",
     editQuestion: "Edit question",
     didYouMean: "Did you mean",
-    notFound: "Card not found",
+    notFoundTitle: (text: string) => `No card named “${text}”`,
+    notFoundLead: "Search for the card you meant, or mark it as not a card to get the ruling.",
     youWrote: (text: string) => `you wrote “${text}”`,
     useCandidate: (name: string, typeLine: string, text: string) =>
       `Use ${name}, ${typeLine}, for ${text}`,

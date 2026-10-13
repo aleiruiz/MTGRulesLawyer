@@ -17,7 +17,13 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       data: { version: `lookup-${randomUUID()}`, status: SnapshotStatus.CANDIDATE },
     });
     try {
-      for (const name of ["Lightning Bolt", "Guiding Bolt", "Grizzly Bears", "Jace Beleren"]) {
+      for (const name of [
+        "Lightning Bolt",
+        "Guiding Bolt",
+        "Grizzly Bears",
+        "Jace Beleren",
+        "Tarmogoyf",
+      ]) {
         await prisma.card.create({
           data: {
             snapshotId: snapshot.id,
@@ -35,6 +41,9 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       assert.deepEqual(await names("Lighning Bolt"), ["Lightning Bolt"]);
       assert.deepEqual(await names("grizly bears"), ["Grizzly Bears"]);
       assert.deepEqual(await names("Jace"), ["Jace Beleren"]);
+      // A swapped vowel shares too few trigrams; edit distance still finds the card.
+      assert.deepEqual(await names("tormagoyf"), ["Tarmogoyf"]);
+      assert.deepEqual(await names("tarmogoff"), ["Tarmogoyf"]);
       assert.deepEqual((await names("Bolt")).sort(), ["Guiding Bolt", "Lightning Bolt"]);
       assert.deepEqual(await names("xq"), []);
       assert.deepEqual(await names("Completely unrelated words"), []);
@@ -52,6 +61,42 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       assert.deepEqual(
         guessed.cards.map((card) => [card.name, card.matchKind]),
         [["Lightning Bolt", "approximate"]],
+      );
+
+      // The card named exactly this comes first, then cards that only have a face of that
+      // name, and tokens after real cards.
+      await prisma.card.create({
+        data: {
+          snapshotId: snapshot.id,
+          oracleId: `emeritus-${randomUUID()}`,
+          name: "Emeritus of Conflict // Lightning Bolt",
+          layout: "prepare",
+          faces: {
+            create: [
+              { faceIndex: 0, name: "Emeritus of Conflict" },
+              { faceIndex: 1, name: "Lightning Bolt" },
+            ],
+          },
+        },
+      });
+      await prisma.card.create({
+        data: {
+          snapshotId: snapshot.id,
+          oracleId: `goyf-token-${randomUUID()}`,
+          name: "Tarmogoyf",
+          layout: "token",
+          faces: { create: { faceIndex: 0, name: "Tarmogoyf" } },
+        },
+      });
+      const bolts = await lookupCardsByName("Lightning Bolt", prisma, snapshot.id);
+      assert.deepEqual(
+        bolts.cards.map((card) => card.name),
+        ["Lightning Bolt", "Emeritus of Conflict // Lightning Bolt"],
+      );
+      const goyfs = await lookupCardsByName("Tarmogoyf", prisma, snapshot.id);
+      assert.deepEqual(
+        goyfs.cards.map((card) => card.layout),
+        ["normal", "token"],
       );
     } finally {
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
