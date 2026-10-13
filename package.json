@@ -11,6 +11,7 @@
     "dev:mobile": "pnpm --filter @mtg-rules/mobile start",
     "rules:import": "pnpm --filter @mtg-rules/api import:rules",
     "oracle:import": "pnpm --filter @mtg-rules/api import:oracle",
+    "cards:localized-names": "pnpm --filter @mtg-rules/api import:localized-names",
     "sources:refresh": "pnpm --filter @mtg-rules/api refresh:sources",
     "sources:check": "pnpm --filter @mtg-rules/api check:sources",
     "build": "pnpm db:generate && pnpm -r build",

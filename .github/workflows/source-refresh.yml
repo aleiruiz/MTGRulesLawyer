@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 8 * * *"
   workflow_dispatch:
+    inputs:
+      force_localized_names:
+        description: "Import Spanish card names now instead of waiting for the weekly run"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,6 +46,14 @@ jobs:
 
       - name: Check sources and activate changes
         run: pnpm sources:refresh
+
+      # Reads Scryfall's large every-printing file, so it imports at most once a week unless
+      # forced from a manual run (for example right after a new set).
+      - name: Refresh Spanish card names (weekly)
+        if: ${{ !cancelled() }}
+        env:
+          FORCE_FLAG: ${{ inputs.force_localized_names && '--force' || '' }}
+        run: pnpm cards:localized-names $FORCE_FLAG
 
       - name: Alert on stale sources or failed refreshes
         if: always()

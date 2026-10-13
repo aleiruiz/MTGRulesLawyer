@@ -125,13 +125,23 @@ export async function findExactFaceMatches(
   client: PrismaClient = prisma,
   limit?: number,
 ) {
+  // English Oracle face names, plus printed names in other languages ("Elfos de Llanowar").
   const faceIds = await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT f."id"
-    FROM "CardFace" AS f
-    INNER JOIN "Card" AS c ON c."id" = f."cardId"
-    WHERE c."snapshotId" = ${snapshotId}::uuid
-      AND lower(f."name") = lower(${name})
-    ORDER BY c."name" ASC, c."oracleId" ASC, f."faceIndex" ASC
+    SELECT matches."id"
+    FROM (
+      SELECT f."id", c."name" AS "cardName", c."oracleId", f."faceIndex"
+      FROM "CardFace" AS f
+      INNER JOIN "Card" AS c ON c."id" = f."cardId"
+      WHERE c."snapshotId" = ${snapshotId}::uuid
+        AND lower(f."name") = lower(${name})
+      UNION
+      SELECT f."id", c."name" AS "cardName", c."oracleId", f."faceIndex"
+      FROM "CardLocalizedName" AS l
+      INNER JOIN "Card" AS c ON c."oracleId" = l."oracleId" AND c."snapshotId" = ${snapshotId}::uuid
+      INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
+      WHERE lower(l."name") = lower(${name})
+    ) AS matches
+    ORDER BY matches."cardName" ASC, matches."oracleId" ASC, matches."faceIndex" ASC
     LIMIT ${limit ?? 2_147_483_647}
   `);
   if (faceIds.length === 0) return [];
@@ -142,9 +152,10 @@ export async function findExactFaceMatches(
 }
 
 /**
- * Faces whose names are close to the input by trigram similarity (pg_trgm), best first. The
- * score is the better of whole-name similarity (typos) and word similarity (the input is part
- * of a longer name). Uses the trigram index on lower("name").
+ * Faces whose names (English or printed in another language) are close to the input by
+ * trigram similarity (pg_trgm), best first. The score is the better of whole-name similarity
+ * (typos) and word similarity (the input is part of a longer name). Uses the trigram indexes
+ * on lower("name").
  */
 export async function findApproximateFaceMatches(
   name: string,
@@ -164,16 +175,32 @@ export async function findApproximateFaceMatches(
     // Supabase installs extensions in the "extensions" schema; Postgres ignores missing schemas.
     client.$executeRaw`SET LOCAL search_path = public, extensions`,
     client.$executeRaw`SET LOCAL statement_timeout = ${Prisma.raw(String(APPROXIMATE_TIMEOUT_MS))}`,
+    // Scores each face by its English name or, when closer, one of its printed names in
+    // another language, so a misspelled Spanish name still finds the card.
     client.$queryRaw<Array<{ id: string; score: number }>>(Prisma.sql`
-    SELECT f."id",
-      greatest(similarity(lower(f."name"), ${query}), word_similarity(${query}, lower(f."name")))
-        AS score
-    FROM "CardFace" AS f
-    INNER JOIN "Card" AS c ON c."id" = f."cardId"
-    WHERE c."snapshotId" = ${snapshotId}::uuid
-      AND (lower(f."name") % ${query} OR ${query} <% lower(f."name"))
-    ORDER BY score DESC, similarity(lower(f."name"), ${query}) DESC, length(f."name") ASC,
-      c."oracleId" ASC, f."faceIndex" ASC
+    SELECT matches."id", max(matches."score") AS score
+    FROM (
+      SELECT f."id", c."oracleId", f."faceIndex", length(f."name") AS "nameLength",
+        greatest(similarity(lower(f."name"), ${query}), word_similarity(${query}, lower(f."name")))
+          AS score,
+        similarity(lower(f."name"), ${query}) AS "wholeScore"
+      FROM "CardFace" AS f
+      INNER JOIN "Card" AS c ON c."id" = f."cardId"
+      WHERE c."snapshotId" = ${snapshotId}::uuid
+        AND (lower(f."name") % ${query} OR ${query} <% lower(f."name"))
+      UNION ALL
+      SELECT f."id", c."oracleId", f."faceIndex", length(l."name") AS "nameLength",
+        greatest(similarity(lower(l."name"), ${query}), word_similarity(${query}, lower(l."name")))
+          AS score,
+        similarity(lower(l."name"), ${query}) AS "wholeScore"
+      FROM "CardLocalizedName" AS l
+      INNER JOIN "Card" AS c ON c."oracleId" = l."oracleId" AND c."snapshotId" = ${snapshotId}::uuid
+      INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
+      WHERE lower(l."name") % ${query} OR ${query} <% lower(l."name")
+    ) AS matches
+    GROUP BY matches."id", matches."oracleId", matches."faceIndex"
+    ORDER BY score DESC, max(matches."wholeScore") DESC, min(matches."nameLength") ASC,
+      matches."oracleId" ASC, matches."faceIndex" ASC
     LIMIT ${APPROXIMATE_FACE_CANDIDATES}
   `),
   ]);
