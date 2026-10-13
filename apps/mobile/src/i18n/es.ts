@@ -51,7 +51,7 @@ export const es: Messages = {
     questionLabel: "Tu pregunta",
     questionHint: "Describe la situación de juego, hasta 4000 caracteres.",
     placeholder:
-      "Mi oponente bloquea a mi Aporreador del clan Bolrac con unos Elfos de Llanowar. ¿Cuánto daño recibe?",
+      "Mi oponente bloquea a mi Aporreador del clan Bolrac con una sola criatura: Elfos de Llanowar. ¿Cuánto daño recibe?",
     ask: "Preguntar",
     examplesLabel: "¿Eres nuevo? Prueba un ejemplo",
     exampleLabel: (label: string) => `Ejemplo: ${label}`,
@@ -60,7 +60,7 @@ export const es: Messages = {
       {
         label: "Dañar dos veces y arrollar",
         question:
-          "Mi Aporreador del clan Bolrac tiene dañar dos veces y arrollar, y lo bloquean unos Elfos de Llanowar. ¿Cuánto daño recibe mi oponente?",
+          "Mi Aporreador del clan Bolrac tiene dañar dos veces y arrollar, y mi oponente lo bloquea con una sola criatura: Elfos de Llanowar. ¿Cuánto daño recibe mi oponente?",
       },
       {
         label: "Luna de sangre + Urborg",

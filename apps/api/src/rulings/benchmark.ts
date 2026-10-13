@@ -12,7 +12,11 @@ import "dotenv/config";
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { z } from "zod";
-import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
+import {
+  createOpenAiAdapter,
+  readInterpretReasoningEffort,
+  readOpenAiConfig,
+} from "../ai/openai.js";
 import { prisma } from "../db/client.js";
 import { interpretationRequest, resolveQuestionInterpretation } from "../questions/interpret.js";
 import { assembleConfirmedEvidence } from "../search/retrieval.js";
@@ -80,6 +84,11 @@ if (cases.length === 0) throw new Error("No benchmark cases match the options.")
 
 const config = readOpenAiConfig();
 const model = createOpenAiAdapter(config, { logWriter: () => undefined });
+// The app reads the question at its own effort; the benchmark does the same.
+const interpreter = createOpenAiAdapter(
+  { ...config, reasoningEffort: readInterpretReasoningEffort() },
+  { logWriter: () => undefined },
+);
 
 interface CaseResult {
   id: string;
@@ -133,7 +142,7 @@ async function runCase(testCase: BenchmarkCase, run: number): Promise<CaseResult
     if (missing.length > 0) throw new Error(`Cards not in the snapshot: ${missing.join(", ")}`);
     const interpretation = await resolveQuestionInterpretation(
       testCase.question,
-      await model.generateStructuredOutput(interpretationRequest(testCase.question)),
+      await interpreter.generateStructuredOutput(interpretationRequest(testCase.question)),
     );
     // The app answers an out-of-scope question without a ruling; that is a miss here.
     if (!interpretation.inScope) {
