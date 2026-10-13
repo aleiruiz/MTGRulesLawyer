@@ -1,16 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Platform, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { colors } from "../theme";
 import { useT } from "../i18n/LanguageProvider";
 
 // A screen opened straight from a URL (page reload, sign-in return, shared link) has no
-// history, so the stack shows no back button. This one goes home instead. With history,
-// native platforms keep their own back button; web draws this one as a plain back button.
+// history, so the stack shows no back button. This one goes home instead. With history it
+// goes back; the root layout only uses it for that on web, where it replaces the default.
 export default function HeaderNavButton({ canGoBack }: { canGoBack: boolean | undefined }) {
   const { t } = useT();
-  if (canGoBack && Platform.OS !== "web") return null;
-
   return (
     <Pressable
       accessibilityRole="button"

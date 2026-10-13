@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -68,7 +68,12 @@ function AppStack() {
                 : undefined,
               headerShadowVisible: false,
               contentStyle: { backgroundColor: colors.background },
-              headerLeft: ({ canGoBack }) => <HeaderNavButton canGoBack={canGoBack} />,
+              // Decided here, not inside the button: any element (even one that renders nothing)
+              // replaces the native back button on iOS and Android.
+              headerLeft: ({ canGoBack }) =>
+                canGoBack && Platform.OS !== "web" ? null : (
+                  <HeaderNavButton canGoBack={canGoBack} />
+                ),
             }}
           >
             <Stack.Screen name="index" options={{ title: t.titles.home, headerShown: false }} />
