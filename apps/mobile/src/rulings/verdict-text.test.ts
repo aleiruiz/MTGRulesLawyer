@@ -33,6 +33,14 @@ void describe("isYesNoQuestion", () => {
     assert.equal(isYesNoQuestion("Which creature blocked?"), false);
     assert.equal(isYesNoQuestion("Is it tapped"), false);
   });
+
+  void it("recognizes Spanish yes/no questions", () => {
+    assert.equal(isYesNoQuestion("¿Tenía un contador -1/-1 cuando murió?"), true);
+    assert.equal(isYesNoQuestion("¿La criatura está girada?"), true);
+    assert.equal(isYesNoQuestion("¿Qué criatura bloqueó?"), false);
+    assert.equal(isYesNoQuestion("¿Cuántos contadores tenía?"), false);
+    assert.equal(isYesNoQuestion("¿Por qué lo sacrificaste?"), false);
+  });
 });
 
 void describe("rulesDate", () => {

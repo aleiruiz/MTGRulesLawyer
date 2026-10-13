@@ -1,5 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
+import { Platform } from "react-native";
 import { getLocales } from "expo-localization";
 import * as SecureStore from "expo-secure-store";
 import {
@@ -12,6 +21,19 @@ import {
 } from "./core";
 
 const STORAGE_KEY = "rules-lawyer.language";
+
+// The choice is not sensitive: on the web it lives in localStorage, where SecureStore has no
+// implementation; on phones SecureStore is simply the storage the app already uses.
+const storage = {
+  get: async (): Promise<string | null> => {
+    if (Platform.OS === "web") return globalThis.localStorage?.getItem(STORAGE_KEY) ?? null;
+    return SecureStore.getItemAsync(STORAGE_KEY);
+  },
+  set: async (value: string): Promise<void> => {
+    if (Platform.OS === "web") globalThis.localStorage?.setItem(STORAGE_KEY, value);
+    else await SecureStore.setItemAsync(STORAGE_KEY, value);
+  },
+};
 
 interface LanguageContextValue {
   language: Language;
@@ -34,11 +56,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return initial;
   });
 
+  // A pick made before the saved choice finishes loading wins over it.
+  const picked = useRef(false);
+
   useEffect(() => {
     let active = true;
-    SecureStore.getItemAsync(STORAGE_KEY)
+    storage
+      .get()
       .then((saved) => {
-        if (active && isLanguage(saved)) {
+        if (active && !picked.current && isLanguage(saved)) {
           setCurrentLanguage(saved);
           setLanguageState(saved);
         }
@@ -50,9 +76,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setLanguage = useCallback((next: Language) => {
+    picked.current = true;
     setCurrentLanguage(next);
     setLanguageState(next);
-    void SecureStore.setItemAsync(STORAGE_KEY, next).catch(() => undefined);
+    void storage.set(next).catch(() => undefined);
   }, []);
 
   const value = useMemo(

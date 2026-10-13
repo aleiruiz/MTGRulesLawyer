@@ -86,7 +86,7 @@ export const en = {
       resolved: "Resolved",
       conditional: "Depends on the situation",
       needs_information: "Needs more information",
-      uncertain: "Uncertain",
+      uncertain: "Not certain",
     },
   },
   table: {

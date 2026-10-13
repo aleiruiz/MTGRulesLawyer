@@ -32,7 +32,15 @@ export function splitVerdict(summary: string): { headline: string | null; body: 
 
 const yesNoStart = /^(did|does|do|is|are|was|were|can|could|has|have|had|will|would|should)\b/i;
 
-/** Clarifying questions the player can answer with a tap. */
+// Spanish yes/no questions have no auxiliary verb, so instead rule out the ones that ask for
+// something else ("¿Qué…?", "¿Cuántos…?").
+const spanishOpenQuestion =
+  /^¿\s*(qu[eé]|cu[aá]l|cu[aá]les|cu[aá]nt[oa]s?|c[oó]mo|qui[eé]n|qui[eé]nes|d[oó]nde|cu[aá]ndo|por\s+qu[eé]|para\s+qu[eé]|a\s+qu[eé]|de\s+qu[eé]|en\s+qu[eé])(?![a-záéíóúüñ])/i;
+
+/** Clarifying questions the player can answer with a tap, in English or Spanish. */
 export function isYesNoQuestion(question: string): boolean {
-  return yesNoStart.test(question.trim()) && question.trim().endsWith("?");
+  const text = question.trim();
+  if (!text.endsWith("?")) return false;
+  if (text.startsWith("¿")) return !spanishOpenQuestion.test(text);
+  return yesNoStart.test(text);
 }

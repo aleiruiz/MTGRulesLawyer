@@ -32,7 +32,7 @@ export const es: Messages = {
     loading: "Cargando Rules Lawyer",
     hand: "Un jugador levanta la mano en la mesa para llamar a un juez",
     fanContent:
-      "Contenido de fans no oficial permitido bajo la Política de Contenido de Fans. No aprobado ni respaldado por Wizards.",
+      "Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.",
   },
   accountButton: {
     account: "Cuenta",
@@ -69,13 +69,14 @@ export const es: Messages = {
   },
   sources: {
     rules: (date: string) => `Reglas Completas · ${date}`,
-    cards: (date: string) => `Cartas y aclaraciones oficiales revisadas ${date}`,
+    cards: (date: string) =>
+      `Cartas y aclaraciones oficiales revisadas ${date === "hoy" ? date : `el ${date}`}`,
     today: "hoy",
     overdue: " · Falta una actualización",
   },
   recent: {
     title: "Fallos recientes",
-    all: (count: number) => `Los ${count}`,
+    all: (count: number) => `Ver los ${count}`,
     allLabel: (count: number) => `Ver los ${count} fallos`,
     openHint: "Abre el fallo.",
     deleteLabel: (title: string) => `Borrar fallo: ${title}`,
@@ -91,7 +92,7 @@ export const es: Messages = {
       resolved: "Resuelto",
       conditional: "Depende de la situación",
       needs_information: "Necesita más información",
-      uncertain: "Incierto",
+      uncertain: "No es seguro",
     },
   },
   table: {
@@ -307,7 +308,7 @@ export const es: Messages = {
       "Agrega la URL de Supabase y la clave pública al entorno local para habilitar el inicio de sesión.",
     signingIn: "Iniciando sesión",
     notice:
-      "Reglas tomadas de las Reglas Completas. Texto de cartas y aclaraciones oficiales de Scryfall. Contenido de fans no oficial permitido bajo la Política de Contenido de Fans. No aprobado ni respaldado por Wizards.",
+      "Reglas tomadas de las Reglas Completas. Texto de cartas y aclaraciones oficiales de Scryfall. Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.",
     language: "Idioma",
     reviewQueue: "Cola de revisión",
     reviewQueueDetail: "Disputas esperando a un juez",
@@ -372,7 +373,7 @@ export const es: Messages = {
     versionLine: (version: number, date: string) => `Fallo versión ${version} · ${date}`,
     askOwn: "Haz tu propia pregunta",
     notice:
-      "Rules Lawyer es contenido de fans no oficial permitido bajo la Política de Contenido de Fans. No aprobado ni respaldado por Wizards. Parte de los materiales usados son propiedad de Wizards of the Coast. ©Wizards of the Coast LLC.",
+      "Rules Lawyer is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.",
   },
   adminVerify: {
     title: "Verificar identidad de administrador",
