@@ -4,8 +4,8 @@
 .git
 .github
 .backups
-.env
-.env.*
+**/.env
+**/.env.*
 coverage
 android
 ios

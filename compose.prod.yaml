@@ -30,7 +30,8 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://mtg_rules:${SERVICE_PASSWORD_POSTGRES}@db:5432/mtg_rules_lawyer
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
-      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # The API port is never published, so only Docker-network peers (Coolify's proxy) can reach it.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       SOURCE_STALE_AFTER_HOURS: ${SOURCE_STALE_AFTER_HOURS:-72}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
