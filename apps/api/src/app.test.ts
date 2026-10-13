@@ -904,3 +904,29 @@ void describe("POST /api/questions/ruling", () => {
     assert.equal(response.json<{ error: string }>().error, "INVALID_RULING_ID");
   });
 });
+
+void describe("CORS", () => {
+  const corsApp = buildApp({
+    checkDatabase: () => Promise.resolve(),
+    corsAllowedOrigins: ["https://mtgruleslawyer.io"],
+  });
+
+  after(async () => {
+    await corsApp.close();
+  });
+
+  void it("lets the web app send DELETE requests", async () => {
+    const response = await corsApp.inject({
+      method: "OPTIONS",
+      url: "/api/me/conversations/00000000-0000-4000-8000-000000000001",
+      headers: {
+        origin: "https://mtgruleslawyer.io",
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "authorization",
+      },
+    });
+    assert.equal(response.statusCode, 204);
+    assert.equal(response.headers["access-control-allow-origin"], "https://mtgruleslawyer.io");
+    assert.match(String(response.headers["access-control-allow-methods"]), /\bDELETE\b/);
+  });
+});
