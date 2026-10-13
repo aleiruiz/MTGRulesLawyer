@@ -3,20 +3,10 @@ import { StyleSheet, View } from "react-native";
 import { sourceStatusResponseSchema, type SourceStatusResponse } from "@mtg-rules/contracts";
 import { apiUrl } from "../api-url";
 import Text from "../ui/Text";
+import { rulesDate } from "../rulings/verdict-text";
 import { colors } from "../theme";
 
 const shortDate: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
-
-function rulesDate(version: string | null): string | null {
-  // Rule snapshots are versioned like "rules-v2-20260925-<checksum>".
-  const match = version?.match(/(\d{4})(\d{2})(\d{2})/);
-  if (!match) return null;
-  const [, year, month, day] = match;
-  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString(
-    undefined,
-    shortDate,
-  );
-}
 
 function cardsDate(checkedAt: string | null): string | null {
   if (!checkedAt) return null;
