@@ -106,7 +106,7 @@ pnpm build
 pnpm audit:check
 ```
 
-The Expo build exports Android, iOS, and web bundles. It does not create installable native release builds.
+The Expo build exports Android, iOS, and web bundles. It does not create installable native release builds; see [Android release](docs/android-release.md) for the Google Play build with EAS.
 
 ## Project map
 

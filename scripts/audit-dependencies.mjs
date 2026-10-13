@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 
 const audit = spawnSync("pnpm", ["audit", "--json"], {
   encoding: "utf8",
+  // The JSON report lists every dependency path and outgrows the default 1 MB buffer.
+  maxBuffer: 256 * 1024 * 1024,
   shell: process.platform === "win32",
 });
 
