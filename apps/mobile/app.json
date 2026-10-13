@@ -41,6 +41,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "755511f5-293a-4489-ab80-1961cc1d8081"
+      }
+    },
+    "owner": "aleiruiz"
   }
 }
