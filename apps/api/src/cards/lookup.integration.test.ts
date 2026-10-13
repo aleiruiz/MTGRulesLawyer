@@ -17,7 +17,13 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       data: { version: `lookup-${randomUUID()}`, status: SnapshotStatus.CANDIDATE },
     });
     try {
-      for (const name of ["Lightning Bolt", "Guiding Bolt", "Grizzly Bears", "Jace Beleren"]) {
+      for (const name of [
+        "Lightning Bolt",
+        "Guiding Bolt",
+        "Grizzly Bears",
+        "Jace Beleren",
+        "Tarmogoyf",
+      ]) {
         await prisma.card.create({
           data: {
             snapshotId: snapshot.id,
@@ -35,6 +41,9 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       assert.deepEqual(await names("Lighning Bolt"), ["Lightning Bolt"]);
       assert.deepEqual(await names("grizly bears"), ["Grizzly Bears"]);
       assert.deepEqual(await names("Jace"), ["Jace Beleren"]);
+      // A swapped vowel shares too few trigrams; edit distance still finds the card.
+      assert.deepEqual(await names("tormagoyf"), ["Tarmogoyf"]);
+      assert.deepEqual(await names("tarmogoff"), ["Tarmogoyf"]);
       assert.deepEqual((await names("Bolt")).sort(), ["Guiding Bolt", "Lightning Bolt"]);
       assert.deepEqual(await names("xq"), []);
       assert.deepEqual(await names("Completely unrelated words"), []);

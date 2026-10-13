@@ -13,6 +13,10 @@ const APPROXIMATE_FACE_CANDIDATES = 40;
 const MAX_APPROXIMATE_INPUT_CHARACTERS = 60;
 const MAX_APPROXIMATE_INPUT_WORDS = 6;
 const APPROXIMATE_TIMEOUT_MS = 1_000;
+// Edit-distance fallback for typos trigrams miss ("Tormagoyf"): about one edit per four
+// letters, so short names stay strict.
+const LETTERS_PER_EDIT = 4;
+const MAX_NAME_EDITS = 3;
 
 type FaceMatch = Awaited<ReturnType<typeof loadFaces>>[number];
 
@@ -208,9 +212,51 @@ export async function findApproximateFaceMatches(
   const kept = candidates.filter(
     ({ score }) => score >= MIN_APPROXIMATE_SCORE && score >= best - APPROXIMATE_SCORE_WINDOW,
   );
-  if (kept.length === 0) return [];
-  return loadFaces(
-    kept.map(({ id }) => id),
-    client,
-  );
+  const ids =
+    kept.length > 0
+      ? kept.map(({ id }) => id)
+      : await findFacesByEditDistance(query, snapshotId, client);
+  if (ids.length === 0) return [];
+  return loadFaces(ids, client);
+}
+
+/**
+ * Faces whose names (English or printed in another language) are within a few edits of the
+ * input, fewest edits first. Only names of about the same length are compared.
+ */
+async function findFacesByEditDistance(
+  query: string,
+  snapshotId: string,
+  client: PrismaClient,
+): Promise<string[]> {
+  const edits = Math.min(MAX_NAME_EDITS, Math.max(1, Math.floor(query.length / LETTERS_PER_EDIT)));
+  const [, , matches] = await client.$transaction([
+    client.$executeRaw`SET LOCAL search_path = public, extensions`,
+    client.$executeRaw`SET LOCAL statement_timeout = ${Prisma.raw(String(APPROXIMATE_TIMEOUT_MS))}`,
+    client.$queryRaw<Array<{ id: string; distance: number }>>(Prisma.sql`
+    SELECT matches."id", min(matches."distance") AS distance
+    FROM (
+      SELECT f."id", c."oracleId", f."faceIndex",
+        levenshtein_less_equal(lower(f."name"), ${query}, ${edits}::int) AS distance
+      FROM "CardFace" AS f
+      INNER JOIN "Card" AS c ON c."id" = f."cardId"
+      WHERE c."snapshotId" = ${snapshotId}::uuid
+        AND abs(length(f."name") - ${query.length}) <= ${edits}
+      UNION ALL
+      SELECT f."id", c."oracleId", f."faceIndex",
+        levenshtein_less_equal(lower(l."name"), ${query}, ${edits}::int) AS distance
+      FROM "CardLocalizedName" AS l
+      INNER JOIN "Card" AS c ON c."oracleId" = l."oracleId" AND c."snapshotId" = ${snapshotId}::uuid
+      INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
+      WHERE abs(length(l."name") - ${query.length}) <= ${edits}
+    ) AS matches
+    GROUP BY matches."id", matches."oracleId", matches."faceIndex"
+    HAVING min(matches."distance") <= ${edits}
+    ORDER BY distance ASC, matches."oracleId" ASC, matches."faceIndex" ASC
+    LIMIT ${APPROXIMATE_FACE_CANDIDATES}
+  `),
+  ]);
+  // Only the closest names, as with the trigram pass.
+  const closest = matches[0]?.distance;
+  return matches.filter(({ distance }) => distance === closest).map(({ id }) => id);
 }

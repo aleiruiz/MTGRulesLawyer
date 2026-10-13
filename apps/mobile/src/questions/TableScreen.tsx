@@ -426,14 +426,30 @@ export default function TableScreen({ question }: TableScreenProps) {
           <>
             {interpretation.cardMentions.map((mention, mentionIndex) => {
               if (selectedByMention[mentionIndex] || ignoredSet.has(mentionIndex)) return null;
+              // A name with no match blocks the ruling, so it stands out instead of reading
+              // like the quiet "Did you mean" row.
+              const notFound = mention.candidates.length === 0;
               return (
-                <View key={`${mention.start}-${mention.end}`} style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text accessibilityRole="header" style={styles.eyebrow}>
-                      {mention.candidates.length > 0 ? t.table.didYouMean : t.table.notFound}
-                    </Text>
-                    <Text style={styles.wrote}>{t.table.youWrote(mention.text)}</Text>
-                  </View>
+                <View
+                  key={`${mention.start}-${mention.end}`}
+                  style={[styles.section, notFound && styles.notFound]}
+                >
+                  {notFound ? (
+                    <View style={styles.notFoundHeader}>
+                      <Ionicons name="alert-circle" size={20} color={colors.warning} />
+                      <Text accessibilityRole="header" style={styles.notFoundTitle}>
+                        {t.table.notFoundTitle(mention.text)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.sectionHeader}>
+                      <Text accessibilityRole="header" style={styles.eyebrow}>
+                        {t.table.didYouMean}
+                      </Text>
+                      <Text style={styles.wrote}>{t.table.youWrote(mention.text)}</Text>
+                    </View>
+                  )}
+                  {notFound ? <Text style={styles.noticeText}>{t.table.notFoundLead}</Text> : null}
                   {mention.candidates.length > 0 ? (
                     <ScrollView
                       horizontal
@@ -484,11 +500,13 @@ export default function TableScreen({ question }: TableScreenProps) {
                       }
                       style={({ pressed }) => [
                         styles.chip,
-                        styles.quietChip,
+                        !notFound && styles.quietChip,
                         pressed && styles.pressed,
                       ]}
                     >
-                      <Text style={styles.quietChipText}>{t.table.search}</Text>
+                      <Text style={notFound ? styles.chipText : styles.quietChipText}>
+                        {t.table.search}
+                      </Text>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
@@ -665,6 +683,20 @@ const styles = StyleSheet.create({
   noticeTitle: { fontFamily: fonts.bodySemibold, fontSize: 15 },
   noticeText: { color: colors.textSoft, fontSize: 14, lineHeight: 20 },
   section: { gap: 10 },
+  notFound: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: 16,
+    backgroundColor: colors.warningSurface,
+  },
+  notFoundHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  notFoundTitle: {
+    flexShrink: 1,
+    color: colors.warning,
+    fontFamily: fonts.bodySemibold,
+    fontSize: 15,
+  },
   sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   eyebrow,
   wrote: { flexShrink: 1, color: colors.textMuted, fontSize: 12.5 },
