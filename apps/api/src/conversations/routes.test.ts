@@ -8,6 +8,7 @@ import type {
   QuestionInterpretResponse,
   RulingGenerationResponse,
 } from "@mtg-rules/contracts";
+import type { AiUsageIdentity } from "../ai/usage.js";
 import { buildApp } from "../app.js";
 import type { RulingOwner } from "./attach.js";
 import type { PriorTurn } from "./prior-turns.js";
@@ -44,6 +45,7 @@ function createApp() {
     owners: [] as Array<RulingOwner | undefined>,
     rulingRequests: [] as ConfirmedQuestionEvidenceRequest[],
     deleted: [] as Array<[string, string]>,
+    identities: [] as AiUsageIdentity[],
   };
   const app = buildApp({
     verifyAccessToken: (token) =>
@@ -52,15 +54,19 @@ function createApp() {
           ? { subject: "owner" }
           : token === "other-token"
             ? { subject: "other" }
-            : null,
+            : token === "admin-token"
+              ? { subject: "admin" }
+              : null,
       ),
-    resolveAppUser: (subject) => Promise.resolve({ id: `user-${subject}`, role: "USER" }),
+    resolveAppUser: (subject) =>
+      Promise.resolve({ id: `user-${subject}`, role: subject === "admin" ? "ADMIN" : "USER" }),
     loadPriorTurns: (ids, scope) => {
       calls.priorTurnIds.push(ids);
       calls.priorTurnScopes.push(scope);
       return Promise.resolve(ids.length > 0 ? [priorTurn] : []);
     },
-    interpretQuestion: (_question, _ip, _signal, priorTurns = []) => {
+    interpretQuestion: (_question, identity, _signal, priorTurns = []) => {
+      calls.identities.push(identity);
       calls.interpretTurns.push(priorTurns);
       return Promise.resolve({
         inScope: true,
@@ -73,7 +79,8 @@ function createApp() {
         searchTerms: [],
       } satisfies QuestionInterpretResponse);
     },
-    generateRuling: (request, _ip, _signal, priorTurns = []) => {
+    generateRuling: (request, identity, _signal, priorTurns = []) => {
+      calls.identities.push(identity);
       calls.rulingRequests.push(request);
       calls.rulingTurns.push(priorTurns);
       return Promise.resolve(answer);
@@ -162,6 +169,39 @@ void describe("follow-up questions", () => {
       assert.equal(response.statusCode, 400);
     }
     assert.equal(calls.rulingRequests.length, 0);
+  });
+});
+
+void describe("AI quota identity", () => {
+  void it("uses the account's limits when signed in and none for an admin", async () => {
+    const { app, calls } = createApp();
+    const ask = (url: string, token?: string) =>
+      app.inject({
+        method: "POST",
+        url,
+        ...(token ? { headers: { authorization: `Bearer ${token}` } } : {}),
+        payload: { question: "Does the bolt fizzle?" },
+      });
+    assert.equal((await ask("/api/questions/interpret")).statusCode, 200);
+    assert.equal((await ask("/api/questions/interpret", "owner-token")).statusCode, 200);
+    assert.equal((await ask("/api/questions/ruling", "admin-token")).statusCode, 200);
+    assert.deepEqual(calls.identities, [
+      { clientIp: "127.0.0.1" },
+      { clientIp: "127.0.0.1", accountId: "user-owner", unlimited: false },
+      { clientIp: "127.0.0.1", accountId: "user-admin", unlimited: true },
+    ]);
+  });
+
+  void it("rejects an invalid token instead of treating the caller as anonymous", async () => {
+    const { app, calls } = createApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/questions/interpret",
+      headers: { authorization: "Bearer forged-token" },
+      payload: { question: "Does the bolt fizzle?" },
+    });
+    assert.equal(response.statusCode, 401);
+    assert.equal(calls.identities.length, 0);
   });
 });
 

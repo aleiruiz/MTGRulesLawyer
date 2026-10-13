@@ -26,6 +26,11 @@ export interface AiUsageIdentity {
   accountId?: string;
   /** Use the API framework's trusted client IP value; never accept it from request input. */
   clientIp: string;
+  /**
+   * Set only for an account the database marks as admin. Skips the per-account daily and per-IP
+   * burst limits; the global cost ceiling, concurrency cap and emergency stop still apply.
+   */
+  unlimited?: boolean;
 }
 
 export interface AiUsageRequest {
@@ -244,9 +249,10 @@ export async function reserveAiUsage(
       status: { not: "RELEASED" as const },
       createdAt: { gte: dayStart },
     };
-    const dailyCount = await tx.aiUsageReservation.count({ where: dailyWhere });
+    const unlimited = request.identity.unlimited === true;
+    const dailyCount = unlimited ? 0 : await tx.aiUsageReservation.count({ where: dailyWhere });
     const dailyLimit = limitsFor(config, request.kind, Boolean(accountHash));
-    if (dailyCount >= dailyLimit) {
+    if (!unlimited && dailyCount >= dailyLimit) {
       const oldest = await tx.aiUsageReservation.findFirst({
         where: dailyWhere,
         orderBy: { createdAt: "asc" },
@@ -259,14 +265,16 @@ export async function reserveAiUsage(
       );
     }
 
-    const burstCount = await tx.aiUsageReservation.count({
-      where: {
-        ipHash,
-        status: { not: "RELEASED" },
-        createdAt: { gte: burstStart },
-      },
-    });
-    if (burstCount >= config.ipBurstPerMinute) {
+    const burstCount = unlimited
+      ? 0
+      : await tx.aiUsageReservation.count({
+          where: {
+            ipHash,
+            status: { not: "RELEASED" },
+            createdAt: { gte: burstStart },
+          },
+        });
+    if (!unlimited && burstCount >= config.ipBurstPerMinute) {
       const oldest = await tx.aiUsageReservation.findFirst({
         where: {
           ipHash,

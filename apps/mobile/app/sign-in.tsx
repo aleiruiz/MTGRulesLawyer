@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiUrl } from "../src/api-url";
 import { readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
-import { SOCIAL_PROVIDERS } from "../src/auth/oauth";
+import { ENABLED_SOCIAL_PROVIDERS } from "../src/auth/oauth";
 import type { SocialProvider } from "../src/auth/oauth";
 import { isSupabaseConfigured, supabase } from "../src/auth/supabase";
 import RecentRulings, { useRecentConversations } from "../src/home/RecentRulings";
@@ -215,7 +215,7 @@ export default function AccountScreen() {
             {!isSupabaseConfigured ? (
               <Text style={styles.setup}>{t.account.supabaseSetup}</Text>
             ) : null}
-            {SOCIAL_PROVIDERS.map((item) => (
+            {ENABLED_SOCIAL_PROVIDERS.map((item) => (
               <Pressable
                 key={item}
                 accessibilityRole="button"

@@ -92,7 +92,7 @@ const app = buildApp({
           }
         : { cards: [] },
     ),
-  interpretQuestion: (question, clientIp): Promise<QuestionInterpretResponse> => {
+  interpretQuestion: (question, identity): Promise<QuestionInterpretResponse> => {
     if (question === "limited") {
       return Promise.reject(new AiUsageLimitError("AI_DAILY_LIMIT", 429, 23));
     }
@@ -104,7 +104,7 @@ const app = buildApp({
       cardMentions: [],
       entities: [],
       events: [],
-      knownFacts: [`Question received: ${question}`, `Client IP: ${clientIp}`],
+      knownFacts: [`Question received: ${question}`, `Client IP: ${identity.clientIp}`],
       missingFacts: [],
       searchTerms: [],
     });
@@ -141,8 +141,8 @@ const receivedRulingRequests: Array<{
 let savedRulingResponse: PersistedRulingResponse | null = null;
 let requestedRulingVersion: number | undefined;
 const rulingApp = buildApp({
-  generateRuling: (request, clientIp, signal) => {
-    receivedRulingRequests.push({ request, clientIp, signal });
+  generateRuling: (request, identity, signal) => {
+    receivedRulingRequests.push({ request, clientIp: identity.clientIp, signal });
     return Promise.resolve({
       outcome: "uncertain",
       summary: "The evidence does not establish a supported outcome.",

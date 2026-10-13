@@ -153,7 +153,12 @@ export default function ChatScreen({
       const controller = beginRequest();
       updateTurn(key, { status: "thinking", note: undefined });
       try {
-        const interpretation = await interpretFollowUp(question, priorRulingIds, controller.signal);
+        const interpretation = await interpretFollowUp(
+          question,
+          priorRulingIds,
+          accessToken,
+          controller.signal,
+        );
         if (controller.signal.aborted || !mounted.current) return;
         if (!interpretation.inScope) {
           updateTurn(key, { status: "out_of_scope", note: interpretation.scopeReason });
@@ -196,7 +201,7 @@ export default function ChatScreen({
         );
       }
     },
-    [beginRequest, conversationId, fail, runRuling, updateTurn],
+    [accessToken, beginRequest, conversationId, fail, runRuling, updateTurn],
   );
 
   useEffect(() => {

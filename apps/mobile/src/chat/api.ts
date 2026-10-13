@@ -89,11 +89,13 @@ async function requestJson(
 export async function interpretFollowUp(
   question: string,
   priorRulingIds: string[],
+  accessToken: string | undefined,
   signal?: AbortSignal,
 ): Promise<QuestionInterpretResponse> {
   return questionInterpretResponseSchema.parse(
     await requestJson("/api/questions/interpret", {
       method: "POST",
+      accessToken,
       body: JSON.stringify({ question, priorRulingIds }),
       signal,
     }),

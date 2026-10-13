@@ -23,6 +23,7 @@ import {
   type CardLookupResponse,
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
+import { useAuth } from "../auth/AuthProvider";
 import { useT } from "../i18n/LanguageProvider";
 import { strings } from "../i18n/core";
 
@@ -45,6 +46,10 @@ interface TableScreenProps {
 // player fixes anything it got wrong before the ruling is generated.
 export default function TableScreen({ question }: TableScreenProps) {
   const { t } = useT();
+  const { session } = useAuth();
+  // Read through a ref so a session that loads later does not re-run (and re-bill) interpretation.
+  const accessToken = useRef(session?.access_token);
+  accessToken.current = session?.access_token;
   const searchRequestId = useRef(0);
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -93,12 +98,19 @@ export default function TableScreen({ question }: TableScreenProps) {
     setIsInterpreting(true);
     setRequestError("");
     try {
-      const response = await fetch(`${apiUrl}/api/questions/interpret`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: submittedQuestion }),
-        signal,
-      });
+      const send = (token: string | undefined) =>
+        fetch(`${apiUrl}/api/questions/interpret`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ question: submittedQuestion }),
+          signal,
+        });
+      let response = await send(accessToken.current);
+      // An expired session only costs the account's quota; ask again as a guest instead of failing.
+      if (response.status === 401 && accessToken.current) response = await send(undefined);
       // A proxy or crash can answer with a non-JSON page; treat it like any other failure.
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {

@@ -138,6 +138,42 @@ void describe("AI usage reservation integration", { skip: !enabled }, () => {
     }
   });
 
+  void it("lets an admin account past daily and burst limits but not the concurrency cap", async () => {
+    const client = new PrismaClient();
+    const config = testConfig({
+      accountRulingsPerDay: 1,
+      ipBurstPerMinute: 1,
+      maxConcurrentCalls: 3,
+    });
+    const reservations: string[] = [];
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    const admin: AiUsageRequest = {
+      kind: "RULING",
+      identity: { clientIp: ip, accountId: "admin-account", unlimited: true },
+    };
+
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        reservations.push((await reserveAiUsage(admin, { client, config })).id);
+      }
+      // The same IP without the admin flag is still held to the burst limit.
+      await assert.rejects(
+        reserveAiUsage(request("RULING", ip, "other-account"), { client, config }),
+        (error: unknown) =>
+          error instanceof AiUsageLimitError && error.code === "AI_IP_BURST_LIMIT",
+      );
+      reservations.push((await reserveAiUsage(admin, { client, config })).id);
+      await assert.rejects(
+        reserveAiUsage(admin, { client, config }),
+        (error: unknown) =>
+          error instanceof AiUsageLimitError && error.code === "AI_CONCURRENCY_LIMIT",
+      );
+    } finally {
+      await client.aiUsageReservation.deleteMany({ where: { id: { in: reservations } } });
+      await client.$disconnect();
+    }
+  });
+
   void it("enforces global cost and concurrency caps before another call can reserve", async () => {
     const client = new PrismaClient();
     const config = testConfig({
