@@ -72,13 +72,13 @@ QUÉ HACE
 • Cubre lo difícil: la pila, la prioridad, las capas, las acciones basadas en estado, el daño de combate, daña primero y daña dos veces, el toque mortal, arrollar y los bucles
 • Te deja hacer preguntas de seguimiento en la misma conversación
 • Comparte un fallo con un enlace, para que tu oponente también lo lea
-• Te deja disputar un fallo que creas incorrecto; personas revisan las disputas para mejorar al juez
+• Te deja disputar un fallo que creas incorrecto; un equipo revisa las disputas para mejorar al juez
 • Funciona en español e inglés, y encuentra las cartas por su nombre en español
 
 GRATIS Y DE CÓDIGO ABIERTO
 Sin anuncios ni analíticas. Puedes preguntar sin cuenta, o iniciar sesión con Google o GitHub para guardar tus conversaciones. El código es público en github.com/aleiruiz/MTGRulesLawyer.
 
-BUENO SABER
+A TENER EN CUENTA
 Rules Lawyer es un asistente de investigación con IA, no un juez certificado. En eventos sancionados, el fallo del juez principal es definitivo. Las reglas y los datos de las cartas se actualizan a diario desde fuentes oficiales.
 
 Rules Lawyer es Contenido de Fans no oficial permitido por la Política de Contenido de Fans. No está aprobado ni respaldado por Wizards. Partes de los materiales usados son propiedad de Wizards of the Coast. ©Wizards of the Coast LLC. Las imágenes de las cartas las proporciona Scryfall.
@@ -104,7 +104,7 @@ These follow the [privacy policy](../../apps/mobile/src/legal/documents.ts). If 
 
 **App access:** all functionality is available without special access. Sign-in uses Google or GitHub, which reviewers can use with their own accounts; admin screens are not part of the public app. If Play asks for credentials anyway, choose "All or some functionality is restricted" and explain that any Google account works.
 
-**Content rating (IARC questionnaire):** category "Reference, News, or Educational". Answer No to violence, sexual content, profanity, drugs, gambling and real-money purchases. Users can interact: answer Yes to "shares user-generated content" only if Play counts share links (a ruling link shows the user's question to whoever has the link); otherwise No. Expected rating: Everyone / PEGI 3 or 12 depending on that answer.
+**Content rating (IARC questionnaire):** category "Reference, News, or Educational". Answer No to violence, sexual content, profanity, drugs, gambling and real-money purchases. Users can interact: answer Yes to "shares user-generated content" only if Play counts share links (a ruling link shows the user's question to whoever has the link); otherwise No. Expected rating: Everyone / PEGI 3; a Yes only adds a "Users interact" notice.
 
 **Target audience:** 13 and older (13–15, 16–17, 18+). Not designed for children; the privacy policy says it is not directed at children under 13.
 
@@ -116,17 +116,19 @@ These follow the [privacy policy](../../apps/mobile/src/legal/documents.ts). If 
 - Is all data encrypted in transit? **Yes** (HTTPS only).
 - Can users request deletion? **Yes** (in the app under Tú/You, and at the account deletion link above).
 
-| Data type                                | Collected | Optional?                       | Purpose                                 |
-| ---------------------------------------- | --------- | ------------------------------- | --------------------------------------- |
-| Personal info → Email address            | Yes       | Optional (signed-in users only) | Account management                      |
-| Personal info → Name                     | Yes       | Optional (signed-in users only) | Account management                      |
-| Personal info → User IDs                 | Yes       | Optional (signed-in users only) | Account management, fraud prevention    |
-| Messages → Other in-app messages         | Yes       | Required (questions)            | App functionality                       |
-| Photos and videos                        | No        |                                 |                                         |
-| App activity → Other user-generated text | Yes       | Optional (disputes)             | App functionality                       |
-| Device or other IDs                      | No        |                                 |                                         |
-| Location                                 | No        | (IP is only kept as a hash)     |                                         |
-| App info and performance                 | No        |                                 | No crash reporting or analytics is used |
+| Data type                                   | Collected | Optional?                                                                                            | Purpose                                 |
+| ------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Personal info → Email address               | Yes       | Optional (signed-in users only)                                                                      | Account management                      |
+| Personal info → Name                        | Yes       | Optional (signed-in users only)                                                                      | Account management                      |
+| Personal info → User IDs                    | Yes       | Optional (signed-in users only)                                                                      | Account management, fraud prevention    |
+| Messages → Other in-app messages            | Yes       | Required (questions)                                                                                 | App functionality                       |
+| Photos and videos                           | No        |                                                                                                      |                                         |
+| App activity → Other user-generated content | Yes       | Optional (disputes)                                                                                  | App functionality                       |
+| Device or other IDs                         | No        |                                                                                                      |                                         |
+| Location                                    | No        | IPs appear only in server logs and a short-lived keyed hash for rate limits; never used for location |                                         |
+| App info and performance                    | No        |                                                                                                      | No crash reporting or analytics is used |
+
+The profile picture is the provider's image link, not a photo the user uploads (Photos = No); the provider username counts under User IDs.
 
 Questions are "processed ephemerally": **No** (they are stored on the server).
 
