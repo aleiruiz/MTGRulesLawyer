@@ -113,26 +113,34 @@ export async function readLocalizedNames(
 
   const unique = new Map<string, LocalizedName>();
   let decompressed = 0;
-  for await (const line of lines) {
-    if (!line.trim()) continue;
-    const lineBytes = Buffer.byteLength(line, "utf8");
-    decompressed += lineBytes;
-    if (lineBytes > MAX_RECORD_BYTES) {
-      throw new Error("Scryfall All Cards bulk file contains a record larger than 1 MiB.");
+  try {
+    for await (const line of lines) {
+      if (!line.trim()) continue;
+      const lineBytes = Buffer.byteLength(line, "utf8");
+      decompressed += lineBytes;
+      if (lineBytes > MAX_RECORD_BYTES) {
+        throw new Error("Scryfall All Cards bulk file contains a record larger than 1 MiB.");
+      }
+      if (decompressed > MAX_DECOMPRESSED_BYTES) {
+        throw new Error("Scryfall All Cards bulk file exceeded the decompressed size limit.");
+      }
+      let record: unknown;
+      try {
+        record = JSON.parse(line) as unknown;
+      } catch {
+        throw new Error("Scryfall All Cards bulk file contains an invalid record.");
+      }
+      for (const name of localizedNamesFromPrinting(record, languages)) {
+        const key = `${name.language}\u0000${name.oracleId}\u0000${name.faceIndex}\u0000${name.name.toLowerCase()}`;
+        if (!unique.has(key)) unique.set(key, name);
+      }
     }
-    if (decompressed > MAX_DECOMPRESSED_BYTES) {
-      throw new Error("Scryfall All Cards bulk file exceeded the decompressed size limit.");
-    }
-    let record: unknown;
-    try {
-      record = JSON.parse(line) as unknown;
-    } catch {
-      throw new Error("Scryfall All Cards bulk file contains an invalid record.");
-    }
-    for (const name of localizedNamesFromPrinting(record, languages)) {
-      const key = `${name.language}\u0000${name.oracleId}\u0000${name.faceIndex}\u0000${name.name.toLowerCase()}`;
-      if (!unique.has(key)) unique.set(key, name);
-    }
+  } finally {
+    // Closes the download if reading stopped early (a bad record or a size limit), so the
+    // process does not wait on the open socket.
+    lines.close();
+    source.destroy();
+    gunzip.destroy();
   }
   if (metadata.declaredSize !== null && byteLength !== metadata.declaredSize) {
     throw new Error(
@@ -169,12 +177,14 @@ export interface LocalizedNamesRefreshDependencies {
     languages: ReadonlySet<string>,
   ) => Promise<{ names: LocalizedName[]; checksumSha256: string; byteLength: number }>;
   minimumNames: number;
+  languages: readonly string[];
 }
 
 const defaultDependencies: LocalizedNamesRefreshDependencies = {
   fetchMetadata: fetchAllCardsBulkMetadata,
   readNames: readLocalizedNames,
   minimumNames: MINIMUM_LOCALIZED_NAMES,
+  languages: LOCALIZED_NAME_LANGUAGES,
 };
 
 export type LocalizedNamesRefreshResult =
@@ -230,9 +240,9 @@ export async function refreshLocalizedCardNames(
           unchanged: true,
         };
       }
-      const languages = new Set<string>(LOCALIZED_NAME_LANGUAGES);
+      const languages = new Set<string>(dependencies.languages);
       const { names, checksumSha256 } = await dependencies.readNames(metadata, languages);
-      for (const language of LOCALIZED_NAME_LANGUAGES) {
+      for (const language of dependencies.languages) {
         const forLanguage = names.filter((name) => name.language === language);
         if (forLanguage.length < dependencies.minimumNames) {
           throw new Error(

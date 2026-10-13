@@ -104,9 +104,10 @@ void describe("Localized card name refresh integration", { skip: !enabled }, () 
       declaredSize: null,
     };
     const oracleId = `refresh-${randomUUID()}`;
-    const names = [{ oracleId, faceIndex: 0, language: "es", name: "Nombre de prueba" }];
+    // A made-up language keeps the real Spanish names untouched.
+    const language = `t${randomUUID().slice(0, 6)}`;
+    const names = [{ oracleId, faceIndex: 0, language, name: "Nombre de prueba" }];
     const startedAt = new Date();
-    const before = await prisma.cardLocalizedName.findMany({ where: { language: "es" } });
     try {
       // Too few names: the refresh fails and nothing is replaced.
       const truncated = await refreshLocalizedCardNames(
@@ -117,6 +118,7 @@ void describe("Localized card name refresh integration", { skip: !enabled }, () 
           readNames: () =>
             Promise.resolve({ names, checksumSha256: "c".repeat(64), byteLength: 1 }),
           minimumNames: 2,
+          languages: [language],
         },
       );
       assert.equal(truncated.status, "FAILED");
@@ -130,9 +132,10 @@ void describe("Localized card name refresh integration", { skip: !enabled }, () 
           readNames: () =>
             Promise.resolve({ names, checksumSha256: "c".repeat(64), byteLength: 1 }),
           minimumNames: 1,
+          languages: [language],
         },
       );
-      assert.deepEqual(imported, { status: "IMPORTED", counts: { es: 1 } });
+      assert.deepEqual(imported, { status: "IMPORTED", counts: { [language]: 1 } });
       assert.equal(await prisma.cardLocalizedName.count({ where: { oracleId } }), 1);
 
       // Within the week, an unforced run does not download anything.
@@ -145,9 +148,7 @@ void describe("Localized card name refresh integration", { skip: !enabled }, () 
       );
       assert.equal(skipped.status, "SKIPPED");
     } finally {
-      // Put back whatever Spanish names the database had before the test.
-      await prisma.cardLocalizedName.deleteMany({ where: { language: "es" } });
-      if (before.length > 0) await prisma.cardLocalizedName.createMany({ data: before });
+      await prisma.cardLocalizedName.deleteMany({ where: { language } });
       await prisma.sourceRefreshLog.deleteMany({
         where: { kind: "LOCALIZED_CARD_NAMES", checkedAt: { gte: startedAt } },
       });
