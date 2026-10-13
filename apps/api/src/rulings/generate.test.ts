@@ -181,6 +181,27 @@ void describe("Ruling evidence verification", () => {
     assert.deepEqual(result.citations, []);
   });
 
+  void it("states card counts in words and splits ideographic-comma citations", () => {
+    const prompt = JSON.parse(buildModelPrompt({ question: "Q?" }, evidence)) as {
+      cardCounts: string[];
+    };
+    assert.deepEqual(prompt.cardCounts, ["1 × Fixture Creature (one card)"]);
+    const answer = verifyRulingOutput(
+      {
+        outcome: "resolved",
+        summary: "It attacks.",
+        summarySupport: "SUPPORTED",
+        summaryCitationIds: ["508.1、card1"],
+        reasoningSteps: [{ text: "Step.", support: "SUPPORTED", citationIds: ["508.1，card1"] }],
+        assumptions: [],
+        clarificationQuestions: [],
+      },
+      boundEvidenceForPrompt(evidence),
+      "test-model",
+    );
+    assert.equal(answer.outcome, "resolved");
+  });
+
   void it("keeps the first answer unless research settles the question without web links", () => {
     const first = createClarificationResponse(evidence, ["who controls it"]);
     const base = { ...first, clarificationQuestions: [] as string[] };
