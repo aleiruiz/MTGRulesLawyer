@@ -20,11 +20,7 @@ export default function AccountButton() {
         pressed && styles.pressed,
       ]}
     >
-      <Ionicons
-        name={session ? "person" : "person-outline"}
-        size={20}
-        color={session ? colors.accentInk : colors.accent}
-      />
+      <Ionicons name={session ? "person" : "person-outline"} size={20} color={colors.accent} />
       {session ? <View style={styles.dot} /> : null}
     </Pressable>
   );
@@ -36,12 +32,12 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 22,
     backgroundColor: colors.surface,
   },
-  signedIn: { backgroundColor: colors.accent },
+  signedIn: { borderColor: colors.accent },
   pressed: { opacity: 0.75 },
   dot: {
     position: "absolute",
@@ -52,6 +48,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.background,
     borderRadius: 6,
-    backgroundColor: colors.success,
+    backgroundColor: colors.successDot,
   },
 });

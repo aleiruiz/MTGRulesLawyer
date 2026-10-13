@@ -73,7 +73,8 @@ function AppStack() {
             <Stack.Screen name="review-queue" options={{ title: "Challenge review" }} />
             <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
             <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
-            <Stack.Screen name="chat" options={{ title: "The judge" }} />
+            <Stack.Screen name="table" options={{ title: "Check the table" }} />
+            <Stack.Screen name="chat" options={{ title: "Ruling" }} />
             <Stack.Screen
               name="auth/callback"
               options={{ title: "Sign in", headerBackVisible: false }}

@@ -1,5 +1,5 @@
-import QuestionConfirmationScreen from "../src/questions/QuestionConfirmationScreen";
+import HomeScreen from "../src/home/HomeScreen";
 
-export default function HomeScreen() {
-  return <QuestionConfirmationScreen />;
+export default function HomeRoute() {
+  return <HomeScreen />;
 }
