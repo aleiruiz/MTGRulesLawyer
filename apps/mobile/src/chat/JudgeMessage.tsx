@@ -2,7 +2,6 @@ import { useState, type ComponentProps } from "react";
 import { Pressable, Share, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PersistedRulingResponse } from "@mtg-rules/contracts";
-import ChallengeForm from "../challenges/ChallengeForm";
 import { getPublicRulingUrl } from "../rulings/public-ruling-url";
 import { isYesNoQuestion, rulesDate, splitVerdict } from "../rulings/verdict-text";
 import CitationChip from "../verdict/CitationChip";
@@ -60,6 +59,8 @@ interface JudgeMessageProps {
   onAnswer?: (answer: string) => void;
   /** Earlier rulings in a chat start with their steps folded away. */
   initiallyExpanded?: boolean;
+  /** Opens the dispute screen; left out where a ruling cannot be disputed (old versions). */
+  onDispute?: () => void;
 }
 
 export default function JudgeMessage({
@@ -67,9 +68,9 @@ export default function JudgeMessage({
   onAskAgain,
   onAnswer,
   initiallyExpanded = true,
+  onDispute,
 }: JudgeMessageProps) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
-  const [showChallenge, setShowChallenge] = useState(false);
   const [openCitation, setOpenCitation] = useState<string | null>(null);
   const { ruling } = result;
   const outcome = outcomeStyles[ruling.outcome];
@@ -255,14 +256,10 @@ export default function JudgeMessage({
           accessibilityLabel="Share a link to this ruling"
           onPress={() => void Share.share({ message: getPublicRulingUrl(result.rulingId) })}
         />
-        <ActionButton
-          icon="flag-outline"
-          label="This looks wrong"
-          expanded={showChallenge}
-          onPress={() => setShowChallenge((current) => !current)}
-        />
+        {onDispute ? (
+          <ActionButton icon="flag-outline" label="This looks wrong" onPress={onDispute} />
+        ) : null}
       </View>
-      {showChallenge ? <ChallengeForm rulingId={result.rulingId} /> : null}
 
       <View style={styles.footer}>
         <Text selectable style={styles.footnote}>
@@ -297,20 +294,17 @@ function ActionButton({
   icon,
   label,
   accessibilityLabel,
-  expanded,
   onPress,
 }: {
   icon: ComponentProps<typeof Ionicons>["name"];
   label: string;
   accessibilityLabel?: string;
-  expanded?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={expanded === undefined ? undefined : { expanded }}
       onPress={onPress}
       style={({ pressed }) => [styles.action, pressed && styles.pressed]}
     >

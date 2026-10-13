@@ -132,7 +132,7 @@ export default function HomeScreen() {
             ) : null}
           </View>
 
-          <RecentRulings {...recent} />
+          <RecentRulings {...recent} limit={3} />
           <View style={styles.spacer} />
           <SourcesFooter />
         </ScrollView>

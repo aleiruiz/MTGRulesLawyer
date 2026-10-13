@@ -1,25 +1,38 @@
-import { useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View } from "react-native";
-import Text from "../src/ui/Text";
+import { useState, type ComponentProps } from "react";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, router } from "expo-router";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { apiUrl } from "../src/api-url";
 import { readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
 import { SOCIAL_PROVIDERS } from "../src/auth/oauth";
 import type { SocialProvider } from "../src/auth/oauth";
 import { isSupabaseConfigured, supabase } from "../src/auth/supabase";
-import AdminReviewLink from "../src/reviews/AdminReviewLink";
-import { colors, fonts } from "../src/theme";
+import RecentRulings, { useRecentConversations } from "../src/home/RecentRulings";
+import AdminReviewLink, { useIsAdmin } from "../src/reviews/AdminReviewLink";
+import GlassesLogo from "../src/ui/GlassesLogo";
+import Loader from "../src/ui/Loader";
+import Text from "../src/ui/Text";
+import { colors, eyebrow, fonts } from "../src/theme";
 
-const providerLabels: Record<SocialProvider, string> = {
-  google: "Continue with Google",
-  apple: "Continue with Apple",
-  github: "Continue with GitHub",
+const providers: Record<
+  SocialProvider,
+  { label: string; name: string; icon: ComponentProps<typeof Ionicons>["name"] }
+> = {
+  google: { label: "Continue with Google", name: "Google", icon: "logo-google" },
+  apple: { label: "Continue with Apple", name: "Apple", icon: "logo-apple" },
+  github: { label: "Continue with GitHub", name: "GitHub", icon: "logo-github" },
 };
 
-export default function SignInScreen() {
+function isSocialProvider(value: unknown): value is SocialProvider {
+  return typeof value === "string" && value in providers;
+}
+
+export default function AccountScreen() {
   const { session, signIn, signOut } = useAuth();
+  const isAdmin = useIsAdmin();
+  const recent = useRecentConversations();
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -89,7 +102,7 @@ export default function SignInScreen() {
 
   function confirmDeleteAccount() {
     const warning =
-      "This permanently deletes your account and your challenges. Reviewed challenges stay for the audit record without your name or text. This cannot be undone.";
+      "This permanently deletes your account, your saved rulings and your disputes. Reviewed disputes stay for the audit record without your name or text. This cannot be undone.";
     if (Platform.OS === "web") {
       if (globalThis.confirm?.(warning)) void deleteAccount();
       return;
@@ -110,131 +123,221 @@ export default function SignInScreen() {
     }
   }
 
+  const email = session?.user.email ?? "";
+  const provider: unknown = session?.user.app_metadata.provider;
+  const initial = (email.trim()[0] ?? "?").toUpperCase();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.page}>
-        <Text style={styles.title}>{session ? "Your account" : "Sign in"}</Text>
-        <Text style={styles.description}>
-          {session
-            ? "Track the rulings you challenged and manage your session."
-            : "Sign in to use account features. Public rules questions remain available without an account."}
-        </Text>
+    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.page}>
         {session ? (
           <>
-            <Text accessibilityRole="text" style={styles.signedIn}>
-              You are signed in.
-            </Text>
-            <Link href="/challenges" asChild>
-              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>Track my challenges</Text>
-              </Pressable>
-            </Link>
+            <View style={styles.profile}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initial}</Text>
+              </View>
+              <View style={styles.profileText}>
+                <Text numberOfLines={1} style={styles.name}>
+                  {email || "Signed in"}
+                </Text>
+                <Text style={styles.detail}>
+                  {[
+                    isSocialProvider(provider)
+                      ? `Signed in with ${providers[provider].name}`
+                      : null,
+                    isAdmin ? "Judge reviewer" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Signed in"}
+                </Text>
+              </View>
+            </View>
+
             <AdminReviewLink />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={eyebrow}>Your last 10 rulings</Text>
+                <Text style={styles.detail}>Tap one to keep asking</Text>
+              </View>
+              {recent.loaded && recent.conversations.length === 0 && !recent.error ? (
+                <Text style={styles.detail}>Rulings you ask while signed in are kept here.</Text>
+              ) : null}
+              <RecentRulings {...recent} hideTitle />
+            </View>
+
             <Pressable
               accessibilityRole="button"
-              onPress={() => void beginSignOut()}
-              style={styles.button}
+              onPress={() => router.push("/challenges")}
+              style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
             >
-              <Text style={styles.buttonText}>Sign out</Text>
+              <Ionicons name="flag-outline" size={18} color={colors.textSoft} />
+              <Text style={styles.linkRowText}>Your disputes</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: deleting }}
-              disabled={deleting}
-              onPress={confirmDeleteAccount}
-              style={({ pressed }) => [
-                styles.deleteButton,
-                deleting && styles.disabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              {deleting ? (
-                <ActivityIndicator color={colors.danger} />
-              ) : (
-                <Text style={styles.deleteButtonText}>Delete account</Text>
-              )}
-            </Pressable>
+
+            <View style={styles.section}>
+              <Text style={eyebrow}>Account</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void beginSignOut()}
+                style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryText}>Sign out</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: deleting }}
+                disabled={deleting}
+                onPress={confirmDeleteAccount}
+                style={({ pressed }) => [
+                  styles.secondary,
+                  styles.danger,
+                  deleting && styles.disabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                {deleting ? (
+                  <Loader accessibilityLabel="Deleting account" size={7} color={colors.danger} />
+                ) : (
+                  <Text style={styles.dangerText}>Delete account and history</Text>
+                )}
+              </Pressable>
+            </View>
           </>
         ) : (
-          <>
+          <View style={styles.signIn}>
+            <GlassesLogo width={64} />
+            <Text accessibilityRole="header" style={styles.heading}>
+              Keep your rulings
+            </Text>
+            <Text style={styles.lead}>
+              Sign in to keep your last 10 rulings and dispute a ruling. Asking the judge works
+              without an account.
+            </Text>
             {!isSupabaseConfigured ? (
               <Text style={styles.setup}>
                 Add the Supabase URL and publishable key to the local environment to enable sign-in.
               </Text>
             ) : null}
-            {SOCIAL_PROVIDERS.map((provider) => (
+            {SOCIAL_PROVIDERS.map((item) => (
               <Pressable
-                key={provider}
+                key={item}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !isSupabaseConfigured || pendingProvider !== null }}
                 disabled={!isSupabaseConfigured || pendingProvider !== null}
-                onPress={() => void beginSignIn(provider)}
+                onPress={() => void beginSignIn(item)}
                 style={({ pressed }) => [
-                  styles.button,
+                  styles.provider,
                   (!isSupabaseConfigured || pendingProvider !== null) && styles.disabled,
                   pressed && styles.pressed,
                 ]}
               >
-                {pendingProvider === provider ? (
-                  <ActivityIndicator color={colors.accentInk} />
+                {pendingProvider === item ? (
+                  <Loader accessibilityLabel="Signing in" size={7} />
                 ) : (
-                  <Text style={styles.buttonText}>{providerLabels[provider]}</Text>
+                  <>
+                    <Ionicons name={providers[item].icon} size={18} color={colors.text} />
+                    <Text style={styles.providerText}>{providers[item].label}</Text>
+                  </>
                 )}
               </Pressable>
             ))}
-          </>
+          </View>
         )}
+
         {message ? (
           <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.message}>
             {message}
           </Text>
         ) : null}
-      </View>
+
+        <Text style={styles.notice}>
+          Rules from the Comprehensive Rules. Card text and official rulings from Scryfall.
+          Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by
+          Wizards.
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  page: { flex: 1, justifyContent: "center", padding: 24, gap: 14 },
-  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
-  description: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginBottom: 8 },
-  setup: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: colors.warningSurface,
-    color: colors.warning,
+  page: {
+    flexGrow: 1,
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 28,
+    gap: 24,
   },
-  signedIn: { color: colors.accent, fontFamily: fonts.bodySemibold },
-  button: {
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    paddingHorizontal: 16,
-  },
-  buttonText: { color: colors.accentInk, fontSize: 16, fontFamily: fonts.bodySemibold },
-  secondaryButton: {
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-  },
-  secondaryButtonText: { color: colors.accent, fontSize: 16, fontFamily: fonts.bodySemibold },
-  deleteButton: {
-    minHeight: 48,
+  profile: { flexDirection: "row", alignItems: "center", gap: 14 },
+  avatar: {
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: 10,
-    paddingHorizontal: 16,
+    borderColor: colors.accent,
+    borderRadius: 26,
+    backgroundColor: colors.accentSurface,
   },
-  deleteButtonText: { color: colors.danger, fontSize: 16, fontFamily: fonts.bodySemibold },
-  disabled: { opacity: 0.48 },
+  avatarText: { color: colors.accentText, fontFamily: fonts.displaySemibold, fontSize: 22 },
+  profileText: { flex: 1, gap: 3 },
+  name: { fontSize: 17 },
+  detail: { color: colors.textMuted, fontSize: 12.5 },
+  section: { gap: 10 },
+  sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  linkRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.divider,
+  },
+  linkRowText: { flex: 1, fontSize: 15 },
+  secondary: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+  },
+  secondaryText: { fontSize: 15 },
+  danger: { borderColor: colors.dangerSurface },
+  dangerText: { color: colors.danger, fontSize: 15 },
+  signIn: { flexGrow: 1, justifyContent: "center", gap: 14, paddingTop: 24 },
+  heading: { fontFamily: fonts.display, fontSize: 30, lineHeight: 36 },
+  lead: { color: colors.textSoft, fontSize: 15, lineHeight: 22, marginBottom: 6 },
+  setup: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.warningSurface,
+    color: colors.warning,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  provider: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 26,
+    backgroundColor: colors.surface,
+  },
+  providerText: { fontFamily: fonts.bodyMedium, fontSize: 15 },
+  disabled: { opacity: 0.45 },
   pressed: { opacity: 0.75 },
-  message: { color: colors.danger, fontFamily: fonts.bodySemibold },
+  message: { color: colors.textSoft, fontFamily: fonts.bodyMedium },
+  notice: { color: colors.textSubtle, fontSize: 11.5, lineHeight: 16 },
 });
