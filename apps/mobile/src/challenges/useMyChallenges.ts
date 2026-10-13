@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { myChallengesResponseSchema, type ChallengeResponse } from "@mtg-rules/contracts";
 import { useAuth } from "../auth/AuthProvider";
@@ -11,10 +11,16 @@ export function useMyChallenges() {
   const [challenges, setChallenges] = useState<ChallengeResponse[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Only the newest request may update state, so a slow answer for a signed-out account (or an
+  // older refresh) never replaces newer data.
+  const latestRequest = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++latestRequest.current;
     if (!accessToken) {
       setChallenges(null);
+      setError("");
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -24,14 +30,16 @@ export function useMyChallenges() {
         headers: { authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) throw new Error();
-      setChallenges(myChallengesResponseSchema.parse(await response.json()).challenges);
+      const result = myChallengesResponseSchema.parse(await response.json()).challenges;
+      if (requestId === latestRequest.current) setChallenges(result);
     } catch {
-      setError("Your disputes could not be loaded.");
+      if (requestId === latestRequest.current) setError("Your disputes could not be loaded.");
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   }, [accessToken]);
 
+  // Reruns on focus and whenever the account changes, since `load` depends on the token.
   useFocusEffect(
     useCallback(() => {
       void load();

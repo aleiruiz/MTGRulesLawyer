@@ -153,7 +153,7 @@ export default function AccountScreen() {
               </View>
             </View>
 
-            <AdminReviewLink />
+            <AdminReviewLink isAdmin={isAdmin} />
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>

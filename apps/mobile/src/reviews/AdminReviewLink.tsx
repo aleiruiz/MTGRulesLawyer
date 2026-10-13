@@ -42,8 +42,7 @@ export function useIsAdmin(): boolean {
 }
 
 /** The review queue entry on the account screen, shown only to judges. */
-export default function AdminReviewLink() {
-  const isAdmin = useIsAdmin();
+export default function AdminReviewLink({ isAdmin }: { isAdmin: boolean }) {
   if (!isAdmin) return null;
   return (
     <Pressable

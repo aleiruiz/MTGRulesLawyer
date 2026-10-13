@@ -180,6 +180,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
                         key={choice.outcome}
                         accessibilityRole="radio"
                         accessibilityState={{ checked: selected }}
+                        accessibilityHint={selected ? "Tap again to clear." : undefined}
                         onPress={() => setProposedOutcome(selected ? undefined : choice.outcome)}
                         style={({ pressed }) => [
                           styles.choice,
@@ -224,8 +225,8 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
                   color={evaluationConsent ? colors.accent : colors.textMuted}
                 />
                 <Text style={styles.consentText}>
-                  Let a de-identified version of the corrected ruling be used to test and improve
-                  the judge. Optional; your question, words and account are not exported.
+                  Let a de-identified scenario from this dispute be used to test the judge.
+                  Optional; your original question, explanation and account are not exported.
                 </Text>
               </Pressable>
             </>

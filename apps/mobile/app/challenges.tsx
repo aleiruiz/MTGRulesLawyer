@@ -90,7 +90,7 @@ export default function MyChallengesScreen() {
                         router.push({
                           pathname: "/rulings",
                           params: {
-                            id: challenge.rulingId,
+                            id: decision.correctedRulingId ?? challenge.rulingId,
                             version: String(decision.correctedRulingVersion),
                           },
                         })
