@@ -16,6 +16,8 @@ export const es: Messages = {
     sharedRuling: "Fallo compartido",
     table: "Revisa la mesa",
     ruling: "Fallo",
+    privacy: "Privacidad",
+    terms: "Términos",
     signInCallback: "Iniciar sesión",
   },
   common: {
