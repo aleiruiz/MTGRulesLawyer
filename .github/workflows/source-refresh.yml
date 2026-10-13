@@ -1,8 +1,8 @@
 name: Source refresh
 
+# The production server runs the same steps daily (deploy/daily-maintenance.sh, see docs/deploy.md),
+# so its database never has to be reachable from GitHub. This manual run is only for a database that is.
 on:
-  schedule:
-    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       force_localized_names:

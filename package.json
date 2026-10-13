@@ -34,7 +34,7 @@
     "db:backup": "node scripts/database-backup.mjs",
     "db:restore": "node scripts/database-restore.mjs",
     "db:rehearse-restore": "node scripts/rehearse-database-restore.mjs",
-    "ops:ai-usage": "node scripts/report-ai-usage.mjs"
+    "ops:ai-usage": "tsx scripts/report-ai-usage.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
