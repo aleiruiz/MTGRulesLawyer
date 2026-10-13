@@ -392,6 +392,9 @@ export const es: Messages = {
     signInFirst: "Primero inicia sesión con una cuenta de administrador.",
     addAccount:
       "Agrega esta cuenta a una app de autenticación y escribe el código que muestra. Solo tendrás que hacerlo una vez.",
+    scanQr:
+      "Escanea este código QR con una app de autenticación y escribe el código que muestra. Solo tendrás que hacerlo una vez.",
+    qrLabel: "Código QR para agregar esta cuenta a una app de autenticación",
     openApp: "Abrir la app de autenticación",
     manualKey: "O escribe esta clave de configuración a mano:",
     setupKey: "Clave de configuración del autenticador",

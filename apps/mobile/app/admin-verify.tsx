@@ -4,9 +4,11 @@ import { router } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import TextInput from "../src/ui/TextInput";
 import Text from "../src/ui/Text";
+import { SvgXml } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/AuthProvider";
 import { supabase } from "../src/auth/supabase";
+import { totpQrSvg } from "../src/auth/totp-qr";
 import { colors, fonts } from "../src/theme";
 import { useT } from "../src/i18n/LanguageProvider";
 import { strings } from "../src/i18n/core";
@@ -15,6 +17,7 @@ interface PendingEnrollment {
   factorId: string;
   secret: string;
   uri: string;
+  qrSvg: string | null;
 }
 
 // Keeps an unfinished setup key while the app runs, so leaving and reopening this screen does not
@@ -87,6 +90,7 @@ export default function AdminVerifyScreen() {
         factorId: enrolled.id,
         secret: enrolled.totp.secret,
         uri: enrolled.totp.uri,
+        qrSvg: totpQrSvg(enrolled.totp.qr_code),
       };
       pendingEnrollments.set(userId, created);
       if (!active) return;
@@ -146,7 +150,19 @@ export default function AdminVerifyScreen() {
         ) : null}
         {enrollment ? (
           <View style={styles.setup}>
-            <Text style={styles.description}>{t.adminVerify.addAccount}</Text>
+            <Text style={styles.description}>
+              {enrollment.qrSvg ? t.adminVerify.scanQr : t.adminVerify.addAccount}
+            </Text>
+            {enrollment.qrSvg ? (
+              <View
+                accessible
+                accessibilityLabel={t.adminVerify.qrLabel}
+                accessibilityRole="image"
+                style={styles.qr}
+              >
+                <SvgXml xml={enrollment.qrSvg} width={200} height={200} />
+              </View>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => void Linking.openURL(enrollment.uri).catch(() => undefined)}
@@ -217,6 +233,8 @@ const styles = StyleSheet.create({
   title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
   description: { color: colors.textMuted, fontSize: 16, lineHeight: 23 },
   setup: { gap: 10 },
+  // Authenticator apps scan most reliably with dark modules on a light quiet zone.
+  qr: { alignSelf: "center", padding: 12, borderRadius: 8, backgroundColor: "#ffffff" },
   meta: { color: colors.textMuted, fontSize: 13 },
   secret: {
     padding: 12,

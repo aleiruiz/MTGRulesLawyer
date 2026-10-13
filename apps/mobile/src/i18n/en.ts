@@ -378,6 +378,9 @@ export const en = {
     signInFirst: "Sign in with an admin account first.",
     addAccount:
       "Add this account to an authenticator app, then enter the code it shows. You will only need to do this once.",
+    scanQr:
+      "Scan this QR code with an authenticator app, then enter the code it shows. You will only need to do this once.",
+    qrLabel: "QR code for adding this account to an authenticator app",
     openApp: "Open authenticator app",
     manualKey: "Or enter this setup key manually:",
     setupKey: "Authenticator setup key",
