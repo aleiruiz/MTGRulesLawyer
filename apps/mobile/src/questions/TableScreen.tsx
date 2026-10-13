@@ -98,15 +98,19 @@ export default function TableScreen({ question }: TableScreenProps) {
     setIsInterpreting(true);
     setRequestError("");
     try {
-      const response = await fetch(`${apiUrl}/api/questions/interpret`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken.current ? { authorization: `Bearer ${accessToken.current}` } : {}),
-        },
-        body: JSON.stringify({ question: submittedQuestion }),
-        signal,
-      });
+      const send = (token: string | undefined) =>
+        fetch(`${apiUrl}/api/questions/interpret`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ question: submittedQuestion }),
+          signal,
+        });
+      let response = await send(accessToken.current);
+      // An expired session only costs the account's quota; ask again as a guest instead of failing.
+      if (response.status === 401 && accessToken.current) response = await send(undefined);
       // A proxy or crash can answer with a non-JSON page; treat it like any other failure.
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {

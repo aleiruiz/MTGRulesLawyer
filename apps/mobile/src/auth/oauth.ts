@@ -12,6 +12,8 @@ export const SOCIAL_PROVIDERS = [
   "github",
 ] as const satisfies readonly Provider[];
 export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
+/** Providers offered on the sign-in screen. Apple waits for the iOS release and its developer account. */
+export const ENABLED_SOCIAL_PROVIDERS: readonly SocialProvider[] = ["google", "github"];
 export type SocialSignInResult = "signed_in" | "cancelled" | "redirected";
 
 const handledCallbacks = new Map<string, Promise<void>>();
