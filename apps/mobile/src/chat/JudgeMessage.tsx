@@ -80,6 +80,8 @@ export default function JudgeMessage({
   const asking = ruling.outcome === "needs_information" && questions.length > 0;
   const yesNoQuestions = questions.filter(isYesNoQuestion);
   const rulesOf = rulesDate(ruling.snapshot.version);
+  // Without steps there is nothing to fold, so the rest always shows.
+  const showDetails = expanded || ruling.reasoningSteps.length === 0;
   const chipped = new Set([
     ...ruling.summaryCitationIds,
     ...ruling.reasoningSteps.flatMap((step) => step.citationIds),
@@ -224,14 +226,14 @@ export default function JudgeMessage({
         </View>
       ) : null}
 
-      {expanded && unchipped.length > 0 ? (
+      {showDetails && unchipped.length > 0 ? (
         <View style={styles.section}>
           <Text style={eyebrow}>Also read</Text>
           {chips(unchipped.map((citation) => citation.id))}
         </View>
       ) : null}
 
-      {expanded && ruling.assumptions.length > 0 ? (
+      {showDetails && ruling.assumptions.length > 0 ? (
         <View style={styles.assumptions}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
           <View style={styles.assumptionList}>
