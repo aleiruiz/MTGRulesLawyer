@@ -62,6 +62,42 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
         guessed.cards.map((card) => [card.name, card.matchKind]),
         [["Lightning Bolt", "approximate"]],
       );
+
+      // The card named exactly this comes first, then cards that only have a face of that
+      // name, and tokens after real cards.
+      await prisma.card.create({
+        data: {
+          snapshotId: snapshot.id,
+          oracleId: `emeritus-${randomUUID()}`,
+          name: "Emeritus of Conflict // Lightning Bolt",
+          layout: "prepare",
+          faces: {
+            create: [
+              { faceIndex: 0, name: "Emeritus of Conflict" },
+              { faceIndex: 1, name: "Lightning Bolt" },
+            ],
+          },
+        },
+      });
+      await prisma.card.create({
+        data: {
+          snapshotId: snapshot.id,
+          oracleId: `goyf-token-${randomUUID()}`,
+          name: "Tarmogoyf",
+          layout: "token",
+          faces: { create: { faceIndex: 0, name: "Tarmogoyf" } },
+        },
+      });
+      const bolts = await lookupCardsByName("Lightning Bolt", prisma, snapshot.id);
+      assert.deepEqual(
+        bolts.cards.map((card) => card.name),
+        ["Lightning Bolt", "Emeritus of Conflict // Lightning Bolt"],
+      );
+      const goyfs = await lookupCardsByName("Tarmogoyf", prisma, snapshot.id);
+      assert.deepEqual(
+        goyfs.cards.map((card) => card.layout),
+        ["normal", "token"],
+      );
     } finally {
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
     }

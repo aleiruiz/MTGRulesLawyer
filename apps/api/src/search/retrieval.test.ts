@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   addRequestedRules,
   CORE_RULE_NUMBERS,
+  layoutRuleNumbers,
   rankRulings,
   rulesForCardKeywords,
   withCoreRules,
@@ -58,6 +59,14 @@ void describe("core rules", () => {
     // The prompt keeps at most this many core rules; more would be dropped silently.
     assert.ok(CORE_RULE_NUMBERS.length <= MAX_PROMPT_CORE_RULES);
     for (const number of CORE_RULE_NUMBERS) assert.equal(number, number.toLowerCase());
+  });
+
+  void it("brings the preparation and spell-copy rules for a prepare card, once", () => {
+    // Casting Emeritus of Conflict's Lightning Bolt casts a copy that never reaches a graveyard.
+    const numbers = layoutRuleNumbers(["normal", "prepare", "prepare"]);
+    for (const number of ["722.3", "707.10a"]) assert.ok(numbers.includes(number));
+    assert.equal(new Set(numbers).size, numbers.length);
+    assert.deepEqual(layoutRuleNumbers(["normal", "token"]), []);
   });
 
   void it("keeps a core rule the search also found in the prompt, past the searched cap", () => {

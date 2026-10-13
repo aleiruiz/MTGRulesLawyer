@@ -133,19 +133,22 @@ export async function findExactFaceMatches(
   const faceIds = await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT matches."id"
     FROM (
-      SELECT f."id", c."name" AS "cardName", c."oracleId", f."faceIndex"
+      SELECT f."id", c."name" AS "cardName", c."layout", c."oracleId", f."faceIndex"
       FROM "CardFace" AS f
       INNER JOIN "Card" AS c ON c."id" = f."cardId"
       WHERE c."snapshotId" = ${snapshotId}::uuid
         AND lower(f."name") = lower(${name})
       UNION
-      SELECT f."id", c."name" AS "cardName", c."oracleId", f."faceIndex"
+      SELECT f."id", c."name" AS "cardName", c."layout", c."oracleId", f."faceIndex"
       FROM "CardLocalizedName" AS l
       INNER JOIN "Card" AS c ON c."oracleId" = l."oracleId" AND c."snapshotId" = ${snapshotId}::uuid
       INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
       WHERE lower(l."name") = lower(${name})
     ) AS matches
-    ORDER BY matches."cardName" ASC, matches."oracleId" ASC, matches."faceIndex" ASC
+    -- The card named exactly this comes before a card with a face of that name (Lightning Bolt
+    -- before Emeritus of Conflict // Lightning Bolt), and real cards before tokens.
+    ORDER BY (lower(matches."cardName") = lower(${name})) DESC, (matches."layout" = 'token') ASC,
+      matches."cardName" ASC, matches."oracleId" ASC, matches."faceIndex" ASC
     LIMIT ${limit ?? 2_147_483_647}
   `);
   if (faceIds.length === 0) return [];
@@ -184,7 +187,7 @@ export async function findApproximateFaceMatches(
     client.$queryRaw<Array<{ id: string; score: number }>>(Prisma.sql`
     SELECT matches."id", max(matches."score") AS score
     FROM (
-      SELECT f."id", c."oracleId", f."faceIndex", length(f."name") AS "nameLength",
+      SELECT f."id", c."oracleId", f."faceIndex", c."layout", length(f."name") AS "nameLength",
         greatest(similarity(lower(f."name"), ${query}), word_similarity(${query}, lower(f."name")))
           AS score,
         similarity(lower(f."name"), ${query}) AS "wholeScore"
@@ -193,7 +196,7 @@ export async function findApproximateFaceMatches(
       WHERE c."snapshotId" = ${snapshotId}::uuid
         AND (lower(f."name") % ${query} OR ${query} <% lower(f."name"))
       UNION ALL
-      SELECT f."id", c."oracleId", f."faceIndex", length(l."name") AS "nameLength",
+      SELECT f."id", c."oracleId", f."faceIndex", c."layout", length(l."name") AS "nameLength",
         greatest(similarity(lower(l."name"), ${query}), word_similarity(${query}, lower(l."name")))
           AS score,
         similarity(lower(l."name"), ${query}) AS "wholeScore"
@@ -202,9 +205,9 @@ export async function findApproximateFaceMatches(
       INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
       WHERE lower(l."name") % ${query} OR ${query} <% lower(l."name")
     ) AS matches
-    GROUP BY matches."id", matches."oracleId", matches."faceIndex"
+    GROUP BY matches."id", matches."oracleId", matches."faceIndex", matches."layout"
     ORDER BY score DESC, max(matches."wholeScore") DESC, min(matches."nameLength") ASC,
-      matches."oracleId" ASC, matches."faceIndex" ASC
+      (matches."layout" = 'token') ASC, matches."oracleId" ASC, matches."faceIndex" ASC
     LIMIT ${APPROXIMATE_FACE_CANDIDATES}
   `),
   ]);
@@ -236,23 +239,24 @@ async function findFacesByEditDistance(
     client.$queryRaw<Array<{ id: string; distance: number }>>(Prisma.sql`
     SELECT matches."id", min(matches."distance") AS distance
     FROM (
-      SELECT f."id", c."oracleId", f."faceIndex",
+      SELECT f."id", c."oracleId", f."faceIndex", c."layout",
         levenshtein_less_equal(lower(f."name"), ${query}, ${edits}::int) AS distance
       FROM "CardFace" AS f
       INNER JOIN "Card" AS c ON c."id" = f."cardId"
       WHERE c."snapshotId" = ${snapshotId}::uuid
         AND abs(length(f."name") - ${query.length}) <= ${edits}
       UNION ALL
-      SELECT f."id", c."oracleId", f."faceIndex",
+      SELECT f."id", c."oracleId", f."faceIndex", c."layout",
         levenshtein_less_equal(lower(l."name"), ${query}, ${edits}::int) AS distance
       FROM "CardLocalizedName" AS l
       INNER JOIN "Card" AS c ON c."oracleId" = l."oracleId" AND c."snapshotId" = ${snapshotId}::uuid
       INNER JOIN "CardFace" AS f ON f."cardId" = c."id" AND f."faceIndex" = l."faceIndex"
       WHERE abs(length(l."name") - ${query.length}) <= ${edits}
     ) AS matches
-    GROUP BY matches."id", matches."oracleId", matches."faceIndex"
+    GROUP BY matches."id", matches."oracleId", matches."faceIndex", matches."layout"
     HAVING min(matches."distance") <= ${edits}
-    ORDER BY distance ASC, matches."oracleId" ASC, matches."faceIndex" ASC
+    ORDER BY distance ASC, (matches."layout" = 'token') ASC, matches."oracleId" ASC,
+      matches."faceIndex" ASC
     LIMIT ${APPROXIMATE_FACE_CANDIDATES}
   `),
   ]);
