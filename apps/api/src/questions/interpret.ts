@@ -5,7 +5,11 @@ import {
 import { z } from "zod";
 import { lookupCardsByName } from "../cards/lookup.js";
 import type { PriorTurn } from "../conversations/prior-turns.js";
-import { createOpenAiAdapter, readOpenAiConfig } from "../ai/openai.js";
+import {
+  createOpenAiAdapter,
+  readInterpretReasoningEffort,
+  readOpenAiConfig,
+} from "../ai/openai.js";
 import {
   estimateAiTokenCostMicros,
   readAiUsageConfig,
@@ -125,7 +129,10 @@ export async function interpretQuestion(
   priorTurns: PriorTurn[] = [],
 ): Promise<QuestionInterpretResponse> {
   // Read provider settings before reserving so a placeholder credential does not consume quota.
-  const providerConfig = readOpenAiConfig();
+  const providerConfig = {
+    ...readOpenAiConfig(),
+    reasoningEffort: readInterpretReasoningEffort(),
+  };
   const provider = createOpenAiAdapter(providerConfig);
   const usageConfig = readAiUsageConfig();
   const result = await runReservedAiCallWithMetrics(

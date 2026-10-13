@@ -5,6 +5,7 @@ import {
   createOpenAiAdapter,
   OPENAI_DEFAULT_MODEL,
   OPENAI_PROMPT_VERSION,
+  readInterpretReasoningEffort,
   readOpenAiConfig,
   type OpenAiRequest,
 } from "./openai.js";
@@ -235,6 +236,17 @@ void describe("OpenAI structured output adapter", () => {
     assert.throws(
       () => readOpenAiConfig({ OPENAI_API_KEY: "your-openai-api-key" }),
       /OPENAI_API_KEY/,
+    );
+  });
+
+  void it("reads the question at its own effort, low by default", () => {
+    assert.equal(readInterpretReasoningEffort({ OPENAI_REASONING_EFFORT: "high" }), "low");
+    assert.equal(
+      readInterpretReasoningEffort({ OPENAI_INTERPRET_REASONING_EFFORT: "medium" }),
+      "medium",
+    );
+    assert.throws(() =>
+      readInterpretReasoningEffort({ OPENAI_INTERPRET_REASONING_EFFORT: "fast" }),
     );
   });
 
