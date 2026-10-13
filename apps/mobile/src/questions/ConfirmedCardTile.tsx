@@ -113,12 +113,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 9,
     backgroundColor: colors.surface,
   },
   secondaryButtonText: {
-    color: colors.goldBright,
+    color: colors.accent,
     fontSize: 14,
     fontWeight: "700",
     textAlign: "center",
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.successSurface,
   },
-  smallButtonText: { color: colors.goldBright, fontSize: 24, fontWeight: "700" },
+  smallButtonText: { color: colors.accent, fontSize: 24, fontWeight: "700" },
   removeButton: {
     minHeight: 44,
     alignItems: "center",

@@ -30,6 +30,6 @@ export default function Text({ style, ...props }: TextProps) {
 }
 
 const styles = StyleSheet.create({
-  base: { color: colors.text },
+  base: { color: colors.text, fontFamily: fonts.body },
   systemFont: { fontFamily: Platform.select({ ios: "System", default: "sans-serif" }) },
 });

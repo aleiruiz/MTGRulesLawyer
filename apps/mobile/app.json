@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#14111d",
+    "backgroundColor": "#0E1013",
     "plugins": ["expo-router", "expo-secure-store"],
     "ios": {
       "supportsTablet": true,
@@ -17,7 +17,7 @@
       "package": "com.aleiruiz.mtgruleslawyer",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#14111d"
+        "backgroundColor": "#0E1013"
       }
     },
     "web": {

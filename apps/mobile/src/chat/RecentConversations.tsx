@@ -111,8 +111,8 @@ export default function RecentConversations() {
 const styles = StyleSheet.create({
   section: { gap: 8, marginTop: 12 },
   title: {
-    color: colors.gold,
-    fontFamily: fonts.display,
+    color: colors.accent,
+    fontFamily: fonts.bodySemibold,
     fontSize: 14,
     letterSpacing: 1.6,
     textTransform: "uppercase",

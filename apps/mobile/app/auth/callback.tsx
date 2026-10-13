@@ -35,7 +35,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.page}>
       {loading || (code && !session && !errorMessage) ? (
-        <ActivityIndicator color={colors.goldBright} />
+        <ActivityIndicator color={colors.accent} />
       ) : null}
       <Text accessibilityRole={errorMessage ? "alert" : "text"} style={styles.message}>
         {errorMessage

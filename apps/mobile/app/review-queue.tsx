@@ -7,9 +7,9 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
+import TextInput from "../src/ui/TextInput";
 import Text from "../src/ui/Text";
 import {
   reviewDecisionRequestSchema,
@@ -567,10 +567,10 @@ export default function ReviewQueueScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { width: "100%", maxWidth: 800, alignSelf: "center", padding: 18, gap: 14 },
-  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
   card: { gap: 10, padding: 16, borderRadius: 14, backgroundColor: colors.surface },
-  status: { color: colors.goldBright, fontSize: 13, fontWeight: "800", textTransform: "uppercase" },
-  sectionTitle: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 16 },
+  status: { color: colors.accent, fontSize: 13, fontWeight: "800", textTransform: "uppercase" },
+  sectionTitle: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 16 },
   body: { color: colors.text, fontSize: 15, lineHeight: 22 },
   meta: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
   citation: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: colors.background },
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.surface,
   },
-  selectedChoice: { borderColor: colors.gold, backgroundColor: colors.successSurface },
+  selectedChoice: { borderColor: colors.accent, backgroundColor: colors.successSurface },
   choiceText: { color: colors.text, fontSize: 12, textTransform: "capitalize" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   rejectButton: {
@@ -611,9 +611,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 9,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
   },
-  buttonText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 14, fontWeight: "700" },
   rejectButtonText: { color: colors.text, fontSize: 14, fontWeight: "700" },
   message: { color: colors.warning, fontWeight: "600" },
 });

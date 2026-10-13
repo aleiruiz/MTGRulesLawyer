@@ -6,16 +6,15 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
+import TextInput from "../ui/TextInput";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import type { PersistedRulingResponse, QuestionInterpretResponse } from "@mtg-rules/contracts";
 import { useAuth } from "../auth/AuthProvider";
-import GrimoireBackdrop from "../ui/GrimoireBackdrop";
-import ManaLoader from "../ui/ManaLoader";
+import Loader from "../ui/Loader";
 import Text from "../ui/Text";
 import { colors, fonts } from "../theme";
 import {
@@ -312,7 +311,6 @@ export default function ChatScreen({
 
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
-      <GrimoireBackdrop />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         // The stack header sits above this view on iOS: status bar plus the 44pt bar.
@@ -325,7 +323,7 @@ export default function ChatScreen({
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
-          {loadingConversation ? <ManaLoader accessibilityLabel="Opening chat" size={14} /> : null}
+          {loadingConversation ? <Loader accessibilityLabel="Opening chat" size={14} /> : null}
           {loadError ? (
             <View style={styles.notice}>
               <Text accessibilityRole="alert" style={styles.noticeText}>
@@ -369,7 +367,7 @@ export default function ChatScreen({
 
               {turn.status === "thinking" ? (
                 <View style={styles.thinking}>
-                  <ManaLoader accessibilityLabel="The judge is thinking" size={10} />
+                  <Loader accessibilityLabel="The judge is thinking" size={10} />
                   <Text style={styles.thinkingText}>
                     {loadingLines[index % loadingLines.length]}
                   </Text>
@@ -458,7 +456,7 @@ export default function ChatScreen({
             onPress={sendFollowUp}
             style={[styles.send, (busy || !input.trim()) && styles.sendDisabled]}
           >
-            <Ionicons name="arrow-up" size={20} color={colors.ink} />
+            <Ionicons name="arrow-up" size={20} color={colors.accentInk} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -485,19 +483,19 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderTopRightRadius: 4,
-    backgroundColor: colors.parchment,
+    backgroundColor: colors.surfaceRaised,
   },
-  userText: { color: colors.ink, fontSize: 16, lineHeight: 22 },
+  userText: { color: colors.text, fontSize: 16, lineHeight: 22 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: colors.goldDeep,
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: "rgba(201, 162, 74, 0.18)",
+    backgroundColor: colors.neutralSurface,
   },
-  chipText: { color: colors.ink, fontSize: 12, fontWeight: "600" },
+  chipText: { color: colors.textSoft, fontSize: 12, fontWeight: "600" },
   aside: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
   thinking: {
     alignSelf: "flex-start",
@@ -512,7 +510,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 4,
     backgroundColor: colors.surface,
   },
-  thinkingText: { color: colors.textMuted, fontFamily: fonts.serifItalic, fontSize: 16 },
+  thinkingText: { color: colors.textMuted, fontFamily: fonts.displayItalic, fontSize: 16 },
   judgeNote: {
     alignSelf: "flex-start",
     maxWidth: "92%",
@@ -532,13 +530,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 20,
   },
-  choiceText: { color: colors.goldBright, fontWeight: "600" },
+  choiceText: { color: colors.accent, fontWeight: "600" },
   notice: { gap: 8, padding: 14, borderRadius: 12, backgroundColor: colors.surface },
   noticeText: { color: colors.text },
-  link: { color: colors.goldBright, textDecorationLine: "underline" },
+  link: { color: colors.accent, textDecorationLine: "underline" },
   disabledLink: { opacity: 0.4 },
   composer: {
     width: "100%",
@@ -572,7 +570,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 22,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
   },
   sendDisabled: { opacity: 0.4 },
 });

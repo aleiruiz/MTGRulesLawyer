@@ -40,7 +40,7 @@ export default function AdminReviewLink() {
       style={{
         alignSelf: "center",
         padding: 10,
-        color: colors.goldBright,
+        color: colors.accent,
         textDecorationLine: "underline",
       }}
     >

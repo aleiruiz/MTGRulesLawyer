@@ -1,8 +1,7 @@
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Text from "./Text";
-import ManaLoader from "./ManaLoader";
-import GrimoireBackdrop from "./GrimoireBackdrop";
-import logo from "../../assets/logo.png";
+import Loader from "./Loader";
+import GlassesLogo from "./GlassesLogo";
 import { colors, fonts } from "../theme";
 
 interface LoadingScreenProps {
@@ -13,17 +12,16 @@ interface LoadingScreenProps {
 export default function LoadingScreen({ fontsReady }: LoadingScreenProps) {
   return (
     <View style={styles.screen}>
-      <GrimoireBackdrop />
       <View style={styles.center}>
-        <Image accessible={false} source={logo} style={styles.logo} />
+        <GlassesLogo width={120} />
         <Text
           accessibilityRole="header"
-          style={[styles.title, fontsReady && { fontFamily: fonts.displayHeavy }]}
+          style={[styles.title, fontsReady && { fontFamily: fonts.display }]}
         >
           Rules Lawyer
         </Text>
-        <ManaLoader accessibilityLabel="Loading Rules Lawyer" size={16} />
-        <Text style={[styles.flavor, fontsReady && { fontFamily: fonts.serifItalic }]}>
+        <Loader accessibilityLabel="Loading Rules Lawyer" size={16} />
+        <Text style={[styles.flavor, fontsReady && { fontFamily: fonts.displayItalic }]}>
           Shuffling the rules…
         </Text>
       </View>
@@ -38,8 +36,7 @@ export default function LoadingScreen({ fontsReady }: LoadingScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 22, padding: 24 },
-  logo: { width: 132, height: 132 },
-  title: { color: colors.goldBright, fontSize: 30, fontWeight: "800", letterSpacing: 0.5 },
+  title: { color: colors.accent, fontSize: 30, fontWeight: "800", letterSpacing: 0.5 },
   flavor: { color: colors.textMuted, fontSize: 18 },
   notice: {
     paddingHorizontal: 28,

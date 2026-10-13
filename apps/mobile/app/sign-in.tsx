@@ -175,7 +175,7 @@ export default function SignInScreen() {
                 ]}
               >
                 {pendingProvider === provider ? (
-                  <ActivityIndicator color={colors.ink} />
+                  <ActivityIndicator color={colors.accentInk} />
                 ) : (
                   <Text style={styles.buttonText}>{providerLabels[provider]}</Text>
                 )}
@@ -196,7 +196,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   page: { flex: 1, justifyContent: "center", padding: 24, gap: 14 },
-  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
   description: { color: colors.textMuted, fontSize: 16, lineHeight: 23, marginBottom: 8 },
   setup: {
     padding: 12,
@@ -204,26 +204,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warningSurface,
     color: colors.warning,
   },
-  signedIn: { color: colors.goldBright, fontWeight: "700" },
+  signedIn: { color: colors.accent, fontWeight: "700" },
   button: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
     paddingHorizontal: 16,
   },
-  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 16, fontWeight: "700" },
   secondaryButton: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  secondaryButtonText: { color: colors.goldBright, fontSize: 16, fontWeight: "700" },
+  secondaryButtonText: { color: colors.accent, fontSize: 16, fontWeight: "700" },
   deleteButton: {
     minHeight: 48,
     alignItems: "center",
