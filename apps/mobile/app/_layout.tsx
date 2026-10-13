@@ -19,6 +19,7 @@ import LoadingScreen from "../src/ui/LoadingScreen";
 import { FontsReadyContext } from "../src/ui/fonts-ready";
 import { colors, fonts } from "../src/theme";
 import { LanguageProvider, useT } from "../src/i18n/LanguageProvider";
+import HeaderNavButton from "../src/ui/HeaderNavButton";
 
 // Keeps the loading screen up long enough to read instead of flashing for a frame.
 const MIN_SPLASH_MS = 1_200;
@@ -67,6 +68,7 @@ function AppStack() {
                 : undefined,
               headerShadowVisible: false,
               contentStyle: { backgroundColor: colors.background },
+              headerLeft: ({ canGoBack }) => <HeaderNavButton canGoBack={canGoBack} />,
             }}
           >
             <Stack.Screen name="index" options={{ title: t.titles.home, headerShown: false }} />
@@ -83,7 +85,11 @@ function AppStack() {
             <Stack.Screen name="terms" options={{ title: t.titles.terms }} />
             <Stack.Screen
               name="auth/callback"
-              options={{ title: t.titles.signInCallback, headerBackVisible: false }}
+              options={{
+                title: t.titles.signInCallback,
+                headerBackVisible: false,
+                headerLeft: () => null,
+              }}
             />
           </Stack>
         </FontsReadyContext.Provider>
