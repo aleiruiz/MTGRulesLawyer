@@ -33,7 +33,11 @@ export default function RaisedHand() {
       }),
     );
     loop.start();
-    return () => loop.stop();
+    return () => {
+      loop.stop();
+      // Rest in the raised pose rather than freezing mid-wave.
+      progress.setValue(1);
+    };
   }, [progress, reduceMotion]);
 
   const rise = progress.interpolate({

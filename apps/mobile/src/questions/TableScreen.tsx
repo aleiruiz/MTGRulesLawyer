@@ -162,6 +162,11 @@ export default function TableScreen({ question }: TableScreenProps) {
     router.replace({ pathname: "/chat", params: { draft: draftId } });
   }
 
+  function editQuestion() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
+  }
+
   function openCardSearch(mode: SearchMode, initialText = "") {
     searchRequestId.current += 1;
     setIsSearching(false);
@@ -384,7 +389,7 @@ export default function TableScreen({ question }: TableScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="Edit question"
             hitSlop={8}
-            onPress={() => router.back()}
+            onPress={editQuestion}
           >
             <Text style={styles.link}>Edit</Text>
           </Pressable>
@@ -410,7 +415,7 @@ export default function TableScreen({ question }: TableScreenProps) {
           <View style={styles.notice}>
             <Text style={styles.noticeTitle}>This isn’t a rules question</Text>
             <Text style={styles.noticeText}>{interpretation.scopeReason}</Text>
-            <SecondaryButton label="Edit question" onPress={() => router.back()} />
+            <SecondaryButton label="Edit question" onPress={editQuestion} />
           </View>
         ) : null}
 
@@ -670,12 +675,12 @@ const styles = StyleSheet.create({
   wrote: { flexShrink: 1, color: colors.textMuted, fontSize: 12.5 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: "center",
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: colors.accent,
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: colors.accentSurface,
   },
   chipText: { color: colors.accentText, fontSize: 14 },
@@ -753,7 +758,7 @@ const styles = StyleSheet.create({
   },
   resultName: { fontSize: 15 },
   resultType: { color: colors.textMuted, fontSize: 12.5 },
-  textButton: { alignSelf: "flex-start", minHeight: 40, justifyContent: "center" },
+  textButton: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
   textButtonLabel: { color: colors.accent, fontSize: 14 },
   footer: {
     gap: 8,

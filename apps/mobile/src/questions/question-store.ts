@@ -10,7 +10,9 @@ export function saveQuestion(question: string): string {
   return id;
 }
 
-/** A reload finds nothing, since questions are never persisted. */
-export function getQuestion(id: string): string | undefined {
-  return questions.get(id);
+/** Hands the question over once and forgets it. A reload finds nothing. */
+export function takeQuestion(id: string): string | undefined {
+  const question = questions.get(id);
+  questions.delete(id);
+  return question;
 }

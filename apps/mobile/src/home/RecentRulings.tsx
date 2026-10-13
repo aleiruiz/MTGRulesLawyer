@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import type { ConversationSummary } from "@mtg-rules/contracts";
 import { useAuth } from "../auth/AuthProvider";
@@ -88,13 +89,6 @@ function whenLabel(updatedAt: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function confirmForget(conversation: ConversationSummary, forget: (id: string) => void) {
-  Alert.alert("Delete this ruling?", conversation.title, [
-    { text: "Cancel", style: "cancel" },
-    { text: "Delete", style: "destructive", onPress: () => forget(conversation.id) },
-  ]);
-}
-
 export default function RecentRulings({ conversations, error, forget }: RecentConversationsState) {
   if (conversations.length === 0 && !error) return null;
 
@@ -114,29 +108,31 @@ export default function RecentRulings({ conversations, error, forget }: RecentCo
           .filter(Boolean)
           .join(" · ");
         return (
-          <Pressable
-            key={conversation.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${dot ? `${dot.label}: ` : ""}${conversation.title}, ${meta}`}
-            accessibilityHint="Opens the ruling. Long press to delete it."
-            accessibilityActions={[{ name: "delete", label: "Delete ruling" }]}
-            onAccessibilityAction={(event) => {
-              if (event.nativeEvent.actionName === "delete") {
-                confirmForget(conversation, (id) => void forget(id));
-              }
-            }}
-            onLongPress={() => confirmForget(conversation, (id) => void forget(id))}
-            onPress={() => router.push({ pathname: "/chat", params: { id: conversation.id } })}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-          >
-            <View style={[styles.dot, { backgroundColor: dot?.color ?? colors.border }]} />
-            <View style={styles.rowText}>
-              <Text numberOfLines={2} style={styles.rowTitle}>
-                {conversation.title}
-              </Text>
-              <Text style={styles.meta}>{meta}</Text>
-            </View>
-          </Pressable>
+          <View key={conversation.id} style={styles.row}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${dot ? `${dot.label}: ` : ""}${conversation.title}, ${meta}`}
+              accessibilityHint="Opens the ruling."
+              onPress={() => router.push({ pathname: "/chat", params: { id: conversation.id } })}
+              style={({ pressed }) => [styles.open, pressed && styles.pressed]}
+            >
+              <View style={[styles.dot, { backgroundColor: dot?.color ?? colors.border }]} />
+              <View style={styles.rowText}>
+                <Text numberOfLines={2} style={styles.rowTitle}>
+                  {conversation.title}
+                </Text>
+                <Text style={styles.meta}>{meta}</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ruling: ${conversation.title}`}
+              onPress={() => void forget(conversation.id)}
+              style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+            >
+              <Ionicons name="trash-outline" size={17} color={colors.textMuted} />
+            </Pressable>
+          </View>
         );
       })}
     </View>
@@ -149,13 +145,19 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, paddingBottom: 6 },
   row: {
     flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  open: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
     minHeight: 56,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
   },
+  delete: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   pressed: { opacity: 0.7 },
   dot: { width: 9, height: 9, marginTop: 6, borderRadius: 5 },
   rowText: { flex: 1, gap: 3 },

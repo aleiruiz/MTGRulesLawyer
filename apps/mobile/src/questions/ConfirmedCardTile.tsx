@@ -90,7 +90,10 @@ export default function ConfirmedCardTile({
         >
           <Ionicons name="remove" size={16} color={colors.text} />
         </Pressable>
-        <Text accessibilityLabel={`${copyCount} copies`} style={styles.count}>
+        <Text
+          accessibilityLabel={`${copyCount} ${copyCount === 1 ? "copy" : "copies"}`}
+          style={styles.count}
+        >
           ×{copyCount}
         </Text>
         <Pressable
@@ -145,14 +148,14 @@ const styles = StyleSheet.create({
   textCardOracle: { flex: 1, color: colors.textSoft, fontSize: 11, lineHeight: 15 },
   textCardStats: { alignSelf: "flex-end", fontFamily: fonts.bodySemibold, fontSize: 12 },
   faceButton: {
-    minHeight: 36,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 22,
   },
   faceText: { color: colors.textSoft, fontSize: 13 },
   stepper: {
@@ -161,12 +164,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 22,
   },
-  stepButton: { width: 44, height: 36, alignItems: "center", justifyContent: "center" },
+  stepButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   count: { fontFamily: fonts.bodyMedium, fontSize: 14 },
   actions: { flexDirection: "row", justifyContent: "space-between" },
-  action: { minHeight: 36, justifyContent: "center", paddingHorizontal: 4 },
+  action: { minHeight: 44, minWidth: 64, justifyContent: "center", paddingHorizontal: 4 },
   actionText: { color: colors.accent, fontSize: 13 },
   removeText: { color: colors.textMuted },
   disabled: { opacity: 0.35 },
