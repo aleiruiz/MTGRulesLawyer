@@ -60,7 +60,7 @@ void describe("Conversation history integration", { skip: !enabled }, () => {
         sources: [
           {
             id: source.id,
-            kind: source.kind,
+            kind: SourceKind.COMPREHENSIVE_RULES,
             sourceUrl: source.sourceUrl,
             sourceVersion: source.sourceVersion,
             sourcePublishedAt: null,

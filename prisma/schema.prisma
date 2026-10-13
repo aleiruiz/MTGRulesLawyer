@@ -24,6 +24,7 @@ enum SourceKind {
   COMPREHENSIVE_RULES
   ORACLE_CARDS
   OFFICIAL_RULINGS
+  LOCALIZED_CARD_NAMES
 }
 
 enum QuestionStatus {
@@ -193,6 +194,22 @@ model Card {
   @@unique([snapshotId, oracleId])
   @@index([snapshotId, name])
   @@index([name])
+}
+
+/// A card face's printed name in another language (from Scryfall's printings), so players can
+/// name cards the way their copies read. Keyed by Oracle ID, which is stable across snapshots;
+/// one face can have several translations across printings.
+model CardLocalizedName {
+  id        String   @id @default(uuid()) @db.Uuid
+  oracleId  String
+  faceIndex Int
+  /// ISO 639-1 code as Scryfall uses it, e.g. "es".
+  language  String
+  name      String
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([language, oracleId, faceIndex, name])
+  @@index([oracleId])
 }
 
 model CardFace {

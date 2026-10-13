@@ -11,13 +11,15 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 const BULK_DATA_URLS = {
   oracle_cards: "https://api.scryfall.com/bulk-data/oracle-cards",
   rulings: "https://api.scryfall.com/bulk-data/rulings",
+  // Every printing in every language: the only bulk file with printed (localized) names.
+  all_cards: "https://api.scryfall.com/bulk-data/all-cards",
 } as const;
 type ScryfallBulkType = keyof typeof BULK_DATA_URLS;
-const REQUEST_HEADERS = {
+export const SCRYFALL_REQUEST_HEADERS = {
   accept: "application/json;q=0.9,*/*;q=0.8",
   "user-agent": "MTGRulesLawyer/0.1 (Oracle bulk import)",
 };
-const MAX_BULK_BYTES = 1024 * 1024 * 1024;
+export const MAX_BULK_BYTES = 1024 * 1024 * 1024;
 
 export interface OracleBulkMetadata {
   updatedAt: Date;
@@ -46,12 +48,19 @@ export async function fetchRulingsBulkMetadata(
   return fetchScryfallBulkMetadata("rulings", fetcher);
 }
 
+/** Metadata for Scryfall's bulk file of every printing, which carries localized card names. */
+export async function fetchAllCardsBulkMetadata(
+  fetcher: typeof fetch = fetch,
+): Promise<OracleBulkMetadata> {
+  return fetchScryfallBulkMetadata("all_cards", fetcher);
+}
+
 async function fetchScryfallBulkMetadata(
   type: ScryfallBulkType,
   fetcher: typeof fetch,
 ): Promise<OracleBulkMetadata> {
   const response = await fetcher(BULK_DATA_URLS[type], {
-    headers: REQUEST_HEADERS,
+    headers: SCRYFALL_REQUEST_HEADERS,
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
@@ -91,7 +100,7 @@ export async function downloadOracleBulk(
   fetcher: typeof fetch = fetch,
 ): Promise<DownloadedOracleBulk> {
   const response = await fetcher(metadata.downloadUrl, {
-    headers: { ...REQUEST_HEADERS, accept: "application/json;q=0.9,*/*;q=0.8" },
+    headers: { ...SCRYFALL_REQUEST_HEADERS, accept: "application/json;q=0.9,*/*;q=0.8" },
     signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok || !response.body) {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient, SnapshotStatus } from "@prisma/client";
 import { after, describe, it } from "node:test";
 import { findApproximateFaceMatches, findExactFaceMatches, lookupCardsByName } from "./lookup.js";
+import { refreshLocalizedCardNames } from "./localized-names.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const prisma = new PrismaClient();
@@ -54,6 +55,102 @@ void describe("Approximate card lookup integration", { skip: !enabled }, () => {
       );
     } finally {
       await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
+    }
+  });
+
+  void it("finds cards by their printed Spanish names, exact or misspelled", async () => {
+    const snapshot = await prisma.dataSnapshot.create({
+      data: { version: `lookup-es-${randomUUID()}`, status: SnapshotStatus.CANDIDATE },
+    });
+    const oracleId = `elves-${randomUUID()}`;
+    const language = `t${randomUUID().slice(0, 6)}`;
+    try {
+      await prisma.card.create({
+        data: {
+          snapshotId: snapshot.id,
+          oracleId,
+          name: "Llanowar Elves",
+          layout: "normal",
+          faces: { create: { faceIndex: 0, name: "Llanowar Elves" } },
+        },
+      });
+      await prisma.cardLocalizedName.create({
+        data: { oracleId, faceIndex: 0, language, name: "Elfos de Llanowar" },
+      });
+
+      const exact = await lookupCardsByName("elfos de llanowar", prisma, snapshot.id);
+      assert.deepEqual(
+        exact.cards.map((card) => [card.name, card.matchKind]),
+        [["Llanowar Elves", "exact"]],
+      );
+      const guessed = await lookupCardsByName("Elfos de Llanowr", prisma, snapshot.id);
+      assert.deepEqual(
+        guessed.cards.map((card) => [card.name, card.matchKind]),
+        [["Llanowar Elves", "approximate"]],
+      );
+    } finally {
+      await prisma.cardLocalizedName.deleteMany({ where: { language } });
+      await prisma.dataSnapshot.deleteMany({ where: { id: snapshot.id } });
+    }
+  });
+});
+
+void describe("Localized card name refresh integration", { skip: !enabled }, () => {
+  void it("imports names, keeps them when the file looks truncated, and runs weekly", async () => {
+    const metadata = {
+      updatedAt: new Date("2026-10-01T00:00:00Z"),
+      sourceUrl: "https://api.scryfall.com/bulk-data/all-cards",
+      downloadUrl: "https://data.scryfall.io/all-cards/all-cards.json",
+      declaredSize: null,
+    };
+    const oracleId = `refresh-${randomUUID()}`;
+    const names = [{ oracleId, faceIndex: 0, language: "es", name: "Nombre de prueba" }];
+    const startedAt = new Date();
+    const before = await prisma.cardLocalizedName.findMany({ where: { language: "es" } });
+    try {
+      // Too few names: the refresh fails and nothing is replaced.
+      const truncated = await refreshLocalizedCardNames(
+        prisma,
+        { force: true },
+        {
+          fetchMetadata: () => Promise.resolve(metadata),
+          readNames: () =>
+            Promise.resolve({ names, checksumSha256: "c".repeat(64), byteLength: 1 }),
+          minimumNames: 2,
+        },
+      );
+      assert.equal(truncated.status, "FAILED");
+      assert.equal(await prisma.cardLocalizedName.count({ where: { oracleId } }), 0);
+
+      const imported = await refreshLocalizedCardNames(
+        prisma,
+        { force: true },
+        {
+          fetchMetadata: () => Promise.resolve(metadata),
+          readNames: () =>
+            Promise.resolve({ names, checksumSha256: "c".repeat(64), byteLength: 1 }),
+          minimumNames: 1,
+        },
+      );
+      assert.deepEqual(imported, { status: "IMPORTED", counts: { es: 1 } });
+      assert.equal(await prisma.cardLocalizedName.count({ where: { oracleId } }), 1);
+
+      // Within the week, an unforced run does not download anything.
+      const skipped = await refreshLocalizedCardNames(
+        prisma,
+        {},
+        {
+          fetchMetadata: () => Promise.reject(new Error("should not be called")),
+        },
+      );
+      assert.equal(skipped.status, "SKIPPED");
+    } finally {
+      // Put back whatever Spanish names the database had before the test.
+      await prisma.cardLocalizedName.deleteMany({ where: { language: "es" } });
+      if (before.length > 0) await prisma.cardLocalizedName.createMany({ data: before });
+      await prisma.sourceRefreshLog.deleteMany({
+        where: { kind: "LOCALIZED_CARD_NAMES", checkedAt: { gte: startedAt } },
+      });
     }
   });
 });

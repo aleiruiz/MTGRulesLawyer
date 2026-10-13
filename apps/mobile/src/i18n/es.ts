@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 // Spanish (Mexico). Magic terms follow Wizards' official Spanish: "Reglas Completas", "dañar dos
 // veces", "arrollar". The judge's verdict is a "fallo"; card rulings are "aclaraciones oficiales".
-// Card names stay in English because card search uses the English Oracle names.
+// Examples use the official Spanish card names; card search knows both Spanish and English names.
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 export const es: Messages = {
@@ -44,7 +44,7 @@ export const es: Messages = {
     questionLabel: "Tu pregunta",
     questionHint: "Describe la situación de juego, hasta 4000 caracteres.",
     placeholder:
-      "Mi oponente bloquea a mi Bolrac-Clan Basher con Llanowar Elves. ¿Cuánto daño recibe?",
+      "Mi oponente bloquea a mi Aporreador del clan Bolrac con unos Elfos de Llanowar. ¿Cuánto daño recibe?",
     ask: "Preguntar",
     examplesLabel: "¿Eres nuevo? Prueba un ejemplo",
     exampleLabel: (label: string) => `Ejemplo: ${label}`,
@@ -53,17 +53,17 @@ export const es: Messages = {
       {
         label: "Dañar dos veces y arrollar",
         question:
-          "Mi Bolrac-Clan Basher tiene dañar dos veces y arrollar, y lo bloquea Llanowar Elves. ¿Cuánto daño recibe mi oponente?",
+          "Mi Aporreador del clan Bolrac tiene dañar dos veces y arrollar, y lo bloquean unos Elfos de Llanowar. ¿Cuánto daño recibe mi oponente?",
       },
       {
-        label: "Blood Moon + Urborg",
+        label: "Luna de sangre + Urborg",
         question:
-          "Blood Moon y Urborg, Tomb of Yawgmoth están en el campo de batalla. ¿Qué maná pueden producir mi Swamp y mi Forest?",
+          "Luna de sangre y Urborg, la tumba de Yawgmoth están en el campo de batalla. ¿Qué maná pueden producir mi Pantano y mi Bosque?",
       },
       {
         label: "¿Es un bucle?",
         question:
-          "Controlo Exquisite Blood y Sanguine Bond, y mi oponente pierde 1 vida. ¿Qué pasa?",
+          "Controlo Sangre exquisita y Vínculo sangriento, y mi oponente pierde 1 vida. ¿Qué pasa?",
       },
     ],
   },
@@ -132,11 +132,11 @@ export const es: Messages = {
     resolveTitle: "Encontrar la carta correcta",
     replaceTitle: "Cambiar carta",
     cardName: "Nombre de la carta",
-    cardPlaceholder: "Nombre en inglés, puede estar incompleto o mal escrito",
+    cardPlaceholder: "Nombre en español o inglés; puede estar incompleto o mal escrito",
     searchCards: "Buscar cartas por nombre",
     searching: "Buscando cartas",
     noCardFound:
-      "No se encontró ninguna carta con ese nombre. Revisa cómo se escribe o prueba con parte del nombre en inglés.",
+      "No se encontró ninguna carta con ese nombre. Revisa cómo se escribe o prueba con parte del nombre.",
     searchFailed: "Falló la búsqueda de cartas. Revisa la conexión e inténtalo de nuevo.",
     chooseCard: (name: string) => `Elegir ${name}`,
   },

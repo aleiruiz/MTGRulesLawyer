@@ -178,7 +178,7 @@ async function refreshOracle(
   });
 }
 
-async function runLoggedRefresh(
+export async function runLoggedRefresh(
   client: PrismaClient,
   kind: SourceKind,
   initialUrl: string,
