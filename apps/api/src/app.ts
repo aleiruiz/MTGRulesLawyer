@@ -268,6 +268,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   void app.register(cors, {
     origin: corsAllowedOrigins.length > 0 ? corsAllowedOrigins : false,
+    // @fastify/cors only allows GET, HEAD and POST by default, which blocked
+    // deleting rulings and accounts from the web app.
+    methods: ["GET", "HEAD", "POST", "DELETE"],
   });
   app.addHook("onResponse", (request, reply, done) => {
     const statusCode = reply.statusCode;
