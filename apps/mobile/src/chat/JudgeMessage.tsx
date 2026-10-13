@@ -1,204 +1,427 @@
-import { useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { useState, type ComponentProps } from "react";
+import { Pressable, Share, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PersistedRulingResponse } from "@mtg-rules/contracts";
 import ChallengeForm from "../challenges/ChallengeForm";
 import { getPublicRulingUrl } from "../rulings/public-ruling-url";
+import { isYesNoQuestion, rulesDate, splitVerdict } from "../rulings/verdict-text";
+import CitationChip from "../verdict/CitationChip";
+import CitationSheet from "../verdict/CitationSheet";
 import Text from "../ui/Text";
-import { colors, fonts } from "../theme";
+import { colors, eyebrow, fonts } from "../theme";
 
-type Outcome = PersistedRulingResponse["ruling"]["outcome"];
+type Ruling = PersistedRulingResponse["ruling"];
+type Outcome = Ruling["outcome"];
 
-const outcomeStyles: Record<Outcome, { label: string; color: string; background: string }> = {
-  resolved: { label: "Ruling", color: colors.success, background: colors.successSurface },
-  conditional: { label: "It depends", color: colors.warning, background: colors.warningSurface },
+const outcomeStyles: Record<
+  Outcome,
+  {
+    label: string;
+    color: string;
+    background: string;
+    icon: ComponentProps<typeof Ionicons>["name"];
+  }
+> = {
+  resolved: {
+    label: "Resolved",
+    color: colors.success,
+    background: colors.successSurface,
+    icon: "checkmark",
+  },
+  conditional: {
+    label: "It depends",
+    color: colors.warning,
+    background: colors.warningSurface,
+    icon: "git-branch-outline",
+  },
   needs_information: {
-    label: "Need more details",
+    label: "One more detail",
     color: colors.info,
     background: colors.infoSurface,
+    icon: "help",
   },
-  uncertain: { label: "Not certain", color: colors.danger, background: colors.dangerSurface },
+  uncertain: {
+    label: "Not certain",
+    color: colors.neutral,
+    background: colors.neutralSurface,
+    icon: "remove",
+  },
 };
 
 export function outcomeLabel(outcome: Outcome): string {
   return outcomeStyles[outcome].label;
 }
 
-function citationLabels(ruling: PersistedRulingResponse["ruling"], ids: string[]): string {
-  return ids
-    .map((id) => {
-      const index = ruling.citations.findIndex((citation) => citation.id === id);
-      return `[${index + 1}] ${ruling.citations[index]?.label ?? id}`;
-    })
-    .join(", ");
+interface JudgeMessageProps {
+  result: PersistedRulingResponse;
+  /** Offered on the latest answer: asks the judge the same question again. */
+  onAskAgain?: () => void;
+  /** Offered on the latest answer when the judge asked something: sends a tapped answer. */
+  onAnswer?: (answer: string) => void;
+  /** Earlier rulings in a chat start with their steps folded away. */
+  initiallyExpanded?: boolean;
 }
 
 export default function JudgeMessage({
   result,
   onAskAgain,
-}: {
-  result: PersistedRulingResponse;
-  /** Offered on the latest answer: asks the judge the same question again. */
-  onAskAgain?: () => void;
-}) {
-  const [showDetails, setShowDetails] = useState(false);
+  onAnswer,
+  initiallyExpanded = true,
+}: JudgeMessageProps) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [showChallenge, setShowChallenge] = useState(false);
+  const [openCitation, setOpenCitation] = useState<string | null>(null);
   const { ruling } = result;
   const outcome = outcomeStyles[ruling.outcome];
+  const { headline, body } = splitVerdict(ruling.summary);
+  const citationById = new Map(ruling.citations.map((citation) => [citation.id, citation]));
+  const questions = ruling.clarificationQuestions;
+  // When the judge needs a detail before ruling, the question leads; otherwise the answer does.
+  const asking = ruling.outcome === "needs_information" && questions.length > 0;
+  const yesNoQuestions = questions.filter(isYesNoQuestion);
+  const rulesOf = rulesDate(ruling.snapshot.version);
+  // Without steps there is nothing to fold, so the rest always shows.
+  const showDetails = expanded || ruling.reasoningSteps.length === 0;
+  const chipped = new Set([
+    ...ruling.summaryCitationIds,
+    ...ruling.reasoningSteps.flatMap((step) => step.citationIds),
+  ]);
+  const unchipped = ruling.citations.filter((citation) => !chipped.has(citation.id));
+
+  function chips(ids: string[], prominent = false) {
+    const cited = [...new Set(ids)].flatMap((id) => {
+      const citation = citationById.get(id);
+      return citation ? [citation] : [];
+    });
+    if (cited.length === 0) return null;
+    return (
+      <View style={styles.chips}>
+        {cited.map((citation) => (
+          <CitationChip
+            key={citation.id}
+            citation={citation}
+            prominent={prominent}
+            onPress={() => setOpenCitation(citation.id)}
+          />
+        ))}
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.bubble}>
-      <View style={[styles.badge, { backgroundColor: outcome.background }]}>
-        <Text style={[styles.badgeText, { color: outcome.color }]}>{outcome.label}</Text>
-      </View>
-      <Text selectable style={styles.summary}>
-        {ruling.summary}
-      </Text>
-      {ruling.clarificationQuestions.length > 0 ? (
-        <View style={styles.clarify}>
-          {ruling.clarificationQuestions.map((item) => (
-            <Text key={item} style={styles.clarifyText}>
-              {item}
+    <View style={styles.wrap}>
+      <View style={styles.card}>
+        <View style={[styles.badge, { backgroundColor: outcome.background }]}>
+          <Ionicons name={outcome.icon} size={12} color={outcome.color} />
+          <Text style={[styles.badgeText, { color: outcome.color }]}>
+            {outcome.label.toUpperCase()}
+          </Text>
+        </View>
+
+        {asking ? (
+          <>
+            {ruling.clarificationQuestions.map((question, index) => (
+              <Text key={`${index}-${question}`} selectable style={styles.question}>
+                {question}
+              </Text>
+            ))}
+            <Text selectable style={styles.body}>
+              {ruling.summary}
             </Text>
-          ))}
-          <Text style={styles.hint}>Answer below to continue.</Text>
+          </>
+        ) : (
+          <>
+            {headline ? (
+              <Text selectable style={styles.headline}>
+                {headline}
+              </Text>
+            ) : null}
+            {body ? (
+              <Text selectable style={headline ? styles.body : styles.bodyLarge}>
+                {body}
+              </Text>
+            ) : null}
+          </>
+        )}
+        {chips(ruling.summaryCitationIds, true)}
+        {!asking && questions.length > 0 ? (
+          <View style={styles.openQuestions}>
+            <Text style={[eyebrow, styles.openQuestionsLabel]}>To be sure, tell the judge</Text>
+            {questions.map((question, index) => (
+              <Text key={`${index}-${question}`} selectable style={styles.openQuestion}>
+                {question}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      {onAnswer && yesNoQuestions.length > 0 ? (
+        <View style={styles.answers}>
+          <Text style={eyebrow}>Tap an answer</Text>
+          {yesNoQuestions.flatMap((question) =>
+            ["Yes", "No"].map((answer) => (
+              <Pressable
+                key={`${question}-${answer}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${answer}: ${question}`}
+                onPress={() => onAnswer(`${question} ${answer}.`)}
+                style={({ pressed }) => [styles.answer, pressed && styles.pressed]}
+              >
+                <Text numberOfLines={2} style={styles.answerText}>
+                  {questions.length > 1 ? `${answer}: ${question}` : answer}
+                </Text>
+              </Pressable>
+            )),
+          )}
+          <Text style={styles.hint}>Or answer in your own words below.</Text>
         </View>
       ) : null}
 
-      {showDetails ? (
-        <View style={styles.details}>
-          {ruling.reasoningSteps.map((step, index) => (
-            <View key={`${index}-${step.text}`} style={styles.step}>
-              <Text selectable>
-                {index + 1}. {step.text}
-              </Text>
-              {step.citationIds.length > 0 ? (
-                <Text style={styles.meta}>{citationLabels(ruling, step.citationIds)}</Text>
+      {ruling.reasoningSteps.length > 0 ? (
+        <View style={styles.section}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            onPress={() => setExpanded((current) => !current)}
+            style={styles.sectionToggle}
+          >
+            <Text style={eyebrow}>How it plays out</Text>
+            <View style={styles.toggleRight}>
+              {!expanded ? (
+                <Text style={styles.toggleCount}>
+                  {ruling.reasoningSteps.length} step{ruling.reasoningSteps.length === 1 ? "" : "s"}
+                </Text>
               ) : null}
+              <Ionicons
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.textMuted}
+              />
             </View>
-          ))}
-          {ruling.assumptions.map((item) => (
-            <Text key={item} style={styles.meta}>
-              Assumes: {item}
-            </Text>
-          ))}
-          {ruling.citations.map((citation, index) => (
-            <View key={citation.id} style={styles.citation}>
-              <Text style={styles.citationTitle}>
-                [{index + 1}] {citation.label}
+          </Pressable>
+          {expanded
+            ? ruling.reasoningSteps.map((step, index) => {
+                const last = index === ruling.reasoningSteps.length - 1;
+                return (
+                  <View key={`${index}-${step.text}`} style={styles.step}>
+                    <View style={styles.rail}>
+                      <View style={[styles.number, last && styles.numberLast]}>
+                        <Text style={[styles.numberText, last && styles.numberTextLast]}>
+                          {index + 1}
+                        </Text>
+                      </View>
+                      {!last ? <View style={styles.line} /> : null}
+                    </View>
+                    <View style={[styles.stepBody, last && styles.stepBodyLast]}>
+                      <Text selectable style={styles.stepText}>
+                        {step.text}
+                      </Text>
+                      {chips(step.citationIds)}
+                    </View>
+                  </View>
+                );
+              })
+            : null}
+        </View>
+      ) : null}
+
+      {showDetails && unchipped.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={eyebrow}>Also read</Text>
+          {chips(unchipped.map((citation) => citation.id))}
+        </View>
+      ) : null}
+
+      {showDetails && ruling.assumptions.length > 0 ? (
+        <View style={styles.assumptions}>
+          <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+          <View style={styles.assumptionList}>
+            {ruling.assumptions.map((assumption, index) => (
+              <Text key={`${index}-${assumption}`} style={styles.assumptionText}>
+                {/^assum/i.test(assumption)
+                  ? assumption
+                  : `Assumes ${assumption.charAt(0).toLowerCase()}${assumption.slice(1)}`}
               </Text>
-              <Text selectable style={styles.meta}>
-                {citation.excerpt}
-              </Text>
-              <Pressable
-                accessibilityRole="link"
-                onPress={() => void Linking.openURL(citation.sourceUrl)}
-              >
-                <Text style={styles.link}>Source</Text>
-              </Pressable>
-            </View>
-          ))}
-          <Text selectable style={styles.meta}>
-            Ruling ID {result.rulingId}
-          </Text>
-          <Text style={styles.meta}>
-            Rules snapshot {ruling.snapshot.version}
-            {ruling.snapshot.activatedAt
-              ? ` · ${new Date(ruling.snapshot.activatedAt).toLocaleDateString()}`
-              : ""}
-          </Text>
+            ))}
+          </View>
         </View>
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showDetails }}
-          onPress={() => setShowDetails((current) => !current)}
-          style={styles.action}
-        >
-          <Ionicons
-            name={showDetails ? "chevron-up" : "book-outline"}
-            size={15}
-            color={colors.accent}
-          />
-          <Text style={styles.actionText}>{showDetails ? "Hide reasoning" : "Reasoning"}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="Open the shareable ruling page"
-          onPress={() => void Linking.openURL(getPublicRulingUrl(result.rulingId))}
-          style={styles.action}
-        >
-          <Ionicons name="share-outline" size={15} color={colors.accent} />
-          <Text style={styles.actionText}>Share</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showChallenge }}
+        <ActionButton
+          icon="share-outline"
+          label="Share"
+          accessibilityLabel="Share a link to this ruling"
+          onPress={() => void Share.share({ message: getPublicRulingUrl(result.rulingId) })}
+        />
+        <ActionButton
+          icon="flag-outline"
+          label="This looks wrong"
+          expanded={showChallenge}
           onPress={() => setShowChallenge((current) => !current)}
-          style={styles.action}
-        >
-          <Ionicons name="flag-outline" size={15} color={colors.accent} />
-          <Text style={styles.actionText}>Challenge</Text>
-        </Pressable>
+        />
+      </View>
+      {showChallenge ? <ChallengeForm rulingId={result.rulingId} /> : null}
+
+      <View style={styles.footer}>
+        <Text selectable style={styles.footnote}>
+          {rulesOf
+            ? `Checked against the Comprehensive Rules of ${rulesOf} and the Oracle text in that snapshot.`
+            : "Checked against the Comprehensive Rules and the Oracle text in that snapshot."}
+          {`\nSnapshot ${ruling.snapshot.version}`}
+        </Text>
         {onAskAgain ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Ask the judge this question again"
             onPress={onAskAgain}
-            style={styles.action}
+            style={styles.askAgainButton}
           >
-            <Ionicons name="refresh" size={15} color={colors.accent} />
-            <Text style={styles.actionText}>Ask again</Text>
+            <Text style={styles.askAgain}>Ask again</Text>
           </Pressable>
         ) : null}
       </View>
-      {showChallenge ? <ChallengeForm rulingId={result.rulingId} /> : null}
+
+      <CitationSheet
+        ruling={ruling}
+        citationId={openCitation}
+        onSelect={setOpenCitation}
+        onClose={() => setOpenCitation(null)}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  bubble: {
-    alignSelf: "stretch",
+function ActionButton({
+  icon,
+  label,
+  accessibilityLabel,
+  expanded,
+  onPress,
+}: {
+  icon: ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  accessibilityLabel?: string;
+  expanded?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+    >
+      <Ionicons name={icon} size={16} color={colors.text} />
+      <Text style={styles.actionText}>{label}</Text>
+    </Pressable>
+  );
+}
 
-    gap: 10,
-    padding: 14,
+const styles = StyleSheet.create({
+  wrap: { alignSelf: "stretch", gap: 18 },
+  card: {
+    gap: 12,
+    padding: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
-    borderTopLeftRadius: 4,
+    borderRadius: 20,
     backgroundColor: colors.surface,
   },
-  badge: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10 },
-  badgeText: { fontFamily: fonts.bodySemibold, fontSize: 12, letterSpacing: 0.6 },
-  summary: { fontSize: 16, lineHeight: 23 },
-  clarify: {
-    gap: 6,
-    padding: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.info,
-    backgroundColor: colors.infoSurface,
-  },
-  clarifyText: { color: colors.text, fontFamily: fonts.bodySemibold },
-  hint: { color: colors.textMuted, fontSize: 12 },
-  details: { gap: 10, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.border },
-  step: { gap: 3 },
-  meta: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
-  citation: { gap: 4, padding: 10, borderRadius: 10, backgroundColor: colors.background },
-  citationTitle: { color: colors.accent, fontFamily: fonts.bodySemibold },
-  link: { color: colors.accent, textDecorationLine: "underline", fontSize: 13 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  action: {
-    minHeight: 36,
+  badge: {
+    alignSelf: "flex-start",
+    height: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
+    gap: 6,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+  },
+  badgeText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, letterSpacing: 0.4 },
+  headline: { fontFamily: fonts.display, fontSize: 28, lineHeight: 33 },
+  question: { fontFamily: fonts.display, fontSize: 23, lineHeight: 29 },
+  body: { color: colors.textSoft, fontSize: 15.5, lineHeight: 23 },
+  bodyLarge: { fontSize: 17, lineHeight: 25 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  answers: { gap: 8 },
+  answer: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 14,
+    backgroundColor: colors.accentSurface,
+  },
+  answerText: { color: colors.accentText, fontSize: 15 },
+  hint: { color: colors.textMuted, fontSize: 12.5 },
+  section: { gap: 4 },
+  sectionToggle: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  toggleCount: { color: colors.textMuted, fontSize: 12.5 },
+  step: { flexDirection: "row", gap: 14 },
+  rail: { alignItems: "center" },
+  number: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    borderRadius: 13,
+  },
+  numberLast: { backgroundColor: colors.accent },
+  numberText: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 12.5 },
+  numberTextLast: { color: colors.accentInk },
+  line: { flex: 1, width: 1.5, minHeight: 16, backgroundColor: colors.border },
+  stepBody: { flex: 1, gap: 8, paddingTop: 2, paddingBottom: 18 },
+  stepBodyLast: { paddingBottom: 4 },
+  stepText: { fontSize: 15, lineHeight: 22 },
+  assumptions: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSunken,
+  },
+  assumptionList: { flex: 1, gap: 6 },
+  assumptionText: { color: colors.textSoft, fontSize: 13.5, lineHeight: 20 },
+  actions: { flexDirection: "row", gap: 10 },
+  action: {
+    flex: 1,
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
+    borderRadius: 22,
   },
-  actionText: { color: colors.accent, fontSize: 13, fontFamily: fonts.bodySemibold },
+  actionText: { fontSize: 14 },
+  pressed: { opacity: 0.7 },
+  footer: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  footnote: { flex: 1, color: colors.textSubtle, fontSize: 12, lineHeight: 18 },
+  askAgainButton: { minHeight: 44, minWidth: 64, alignItems: "flex-end", marginTop: -12 },
+  askAgain: { color: colors.accent, fontSize: 13, lineHeight: 44 },
+  openQuestions: {
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  openQuestionsLabel: { color: colors.info },
+  openQuestion: { fontSize: 15, lineHeight: 22 },
 });

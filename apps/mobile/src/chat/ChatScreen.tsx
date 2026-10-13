@@ -27,6 +27,8 @@ import {
 import { QuestionRequestError } from "../questions/question-error-message";
 import { discardDraft, getDraft } from "./draft-store";
 import JudgeMessage, { outcomeLabel } from "./JudgeMessage";
+import GlintReveal from "../verdict/GlintReveal";
+import ThinkingCard from "../verdict/ThinkingCard";
 import { contextRulingIds, mergeCards, resolveMentions, toChatCard, type ChatCard } from "./turns";
 
 type Mention = QuestionInterpretResponse["cardMentions"][number];
@@ -45,6 +47,8 @@ interface Turn {
   pendingCards?: ChatCard[];
   /** Set once the question was interpreted; a retry without it interprets again. */
   gameState?: ChatGameState;
+  /** The answer just arrived: the glasses glint plays before the verdict shows. */
+  fresh?: boolean;
   unmatched?: string[];
 }
 
@@ -57,9 +61,8 @@ interface RulingInput {
 }
 
 let turnCounter = 0;
-const nextKey = () => `turn-${(turnCounter += 1)}`;
-
-const loadingLines = ["Consulting the rulebook…", "Checking the stack…", "Weighing the evidence…"];
+// Time-based so keys stay unique even if the module reloads (Fast Refresh) mid-chat.
+const nextKey = () => `turn-${Date.now().toString(36)}-${(turnCounter += 1)}`;
 
 function announce(message: string) {
   // Live regions only reach Android screen readers; this also covers VoiceOver.
@@ -82,11 +85,19 @@ export default function ChatScreen({
   const [loadingConversation, setLoadingConversation] = useState(Boolean(initialConversationId));
   const [input, setInput] = useState("");
   const scrollRef = useRef<ScrollView>(null);
+  // The thread follows new content to the bottom, except right after a ruling is revealed:
+  // then it scrolls to the top of the verdict so the answer is read first.
+  const followEnd = useRef(true);
+  const revealTarget = useRef<string | null>(null);
+  const turnOffsets = useRef(new Map<string, number>());
   const abortRef = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const started = useRef(false);
 
-  const busy = turns.some((turn) => turn.status === "thinking" || turn.status === "choosing");
+  // The glint is part of answering: the composer waits until the verdict shows.
+  const busy = turns.some(
+    (turn) => turn.status === "thinking" || turn.status === "choosing" || turn.fresh,
+  );
 
   const updateTurn = useCallback((key: string, patch: Partial<Turn>) => {
     if (!mounted.current) return;
@@ -118,8 +129,7 @@ export default function ChatScreen({
         const ruling = await askJudge(request, accessToken, controller.signal);
         if (controller.signal.aborted || !mounted.current) return;
         if (ruling.conversationId) setConversationId(ruling.conversationId);
-        updateTurn(key, { status: "answered", ruling });
-        announce(`${outcomeLabel(ruling.ruling.outcome)}. ${ruling.ruling.summary}`);
+        updateTurn(key, { status: "answered", ruling, fresh: true });
       } catch (error) {
         // Leaving the screen aborts quietly; anything else ends the turn so the chat never
         // stays stuck on "thinking".
@@ -251,10 +261,11 @@ export default function ChatScreen({
   const rulingIdsBefore = (index: number) =>
     contextRulingIds(turns.slice(0, index).map((turn) => turn.ruling));
 
-  function sendFollowUp() {
-    const question = input.trim();
+  function sendFollowUp(text?: string) {
+    const question = (text ?? input).trim();
     if (!question || busy || loadError) return;
-    setInput("");
+    if (text === undefined) setInput("");
+    followEnd.current = true;
     const key = nextKey();
     const carriedCards = cardsBefore(turns.length);
     const priorRulingIds = rulingIdsBefore(turns.length);
@@ -287,6 +298,7 @@ export default function ChatScreen({
   /** Retries a failed turn, or asks again on an answered one (the old answer is replaced). */
   function rerun(turn: Turn) {
     if (busy) return;
+    followEnd.current = true;
     const index = turns.findIndex((item) => item.key === turn.key);
     // A follow-up that failed before it was interpreted has to be interpreted again, or
     // cards named in it would be lost.
@@ -308,6 +320,7 @@ export default function ChatScreen({
   }
 
   const lastAnsweredKey = [...turns].reverse().find((turn) => turn.status === "answered")?.key;
+  const lastTurn = turns[turns.length - 1];
 
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
@@ -321,7 +334,13 @@ export default function ChatScreen({
           ref={scrollRef}
           contentContainerStyle={styles.thread}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          // Scrolling by hand stops the thread from pulling the player back to the bottom.
+          onScrollBeginDrag={() => {
+            followEnd.current = false;
+          }}
+          onContentSizeChange={() => {
+            if (followEnd.current) scrollRef.current?.scrollToEnd({ animated: true });
+          }}
         >
           {loadingConversation ? <Loader accessibilityLabel="Opening chat" size={14} /> : null}
           {loadError ? (
@@ -336,7 +355,11 @@ export default function ChatScreen({
           ) : null}
 
           {turns.map((turn, index) => (
-            <View key={turn.key} style={styles.turn}>
+            <View
+              key={turn.key}
+              onLayout={(event) => turnOffsets.current.set(turn.key, event.nativeEvent.layout.y)}
+              style={styles.turn}
+            >
               <View style={styles.userBubble}>
                 <Text selectable style={styles.userText}>
                   {turn.question}
@@ -366,12 +389,10 @@ export default function ChatScreen({
               ) : null}
 
               {turn.status === "thinking" ? (
-                <View style={styles.thinking}>
-                  <Loader accessibilityLabel="The judge is thinking" size={10} />
-                  <Text style={styles.thinkingText}>
-                    {loadingLines[index % loadingLines.length]}
-                  </Text>
-                </View>
+                <ThinkingCard
+                  cardNames={turn.cards.map((card) => card.name)}
+                  reading={index > 0 && !turn.gameState}
+                />
               ) : null}
 
               {turn.status === "choosing" && turn.pendingMentions ? (
@@ -397,11 +418,44 @@ export default function ChatScreen({
                 </View>
               ) : null}
 
-              {turn.status === "answered" && turn.ruling ? (
-                <JudgeMessage
-                  result={turn.ruling}
-                  onAskAgain={turn.key === lastAnsweredKey && !busy ? () => rerun(turn) : undefined}
+              {turn.status === "answered" && turn.ruling && turn.fresh ? (
+                <GlintReveal
+                  onDone={() => {
+                    if (followEnd.current) revealTarget.current = turn.key;
+                    followEnd.current = false;
+                    updateTurn(turn.key, { fresh: false });
+                    if (turn.ruling) {
+                      announce(
+                        `${outcomeLabel(turn.ruling.ruling.outcome)}. ${turn.ruling.ruling.summary}`,
+                      );
+                    }
+                  }}
                 />
+              ) : null}
+
+              {turn.status === "answered" && turn.ruling && !turn.fresh ? (
+                <View
+                  onLayout={(event) => {
+                    if (revealTarget.current !== turn.key) return;
+                    revealTarget.current = null;
+                    const top =
+                      (turnOffsets.current.get(turn.key) ?? 0) + event.nativeEvent.layout.y - 12;
+                    scrollRef.current?.scrollTo({ y: Math.max(0, top), animated: true });
+                  }}
+                >
+                  <JudgeMessage
+                    result={turn.ruling}
+                    initiallyExpanded={turn.key === lastAnsweredKey}
+                    onAskAgain={
+                      turn.key === lastAnsweredKey && !busy ? () => rerun(turn) : undefined
+                    }
+                    onAnswer={
+                      turn.key === lastAnsweredKey && !busy
+                        ? (answer) => sendFollowUp(answer)
+                        : undefined
+                    }
+                  />
+                </View>
               ) : null}
 
               {turn.status === "out_of_scope" ? (
@@ -438,26 +492,34 @@ export default function ChatScreen({
         </ScrollView>
 
         <View style={styles.composer}>
-          <TextInput
-            accessibilityLabel="Follow-up question"
-            editable={!loadError}
-            multiline
-            maxLength={4_000}
-            onChangeText={setInput}
-            placeholder={busy ? "The judge is answering…" : "Ask a follow-up…"}
-            placeholderTextColor={colors.textSubtle}
-            style={styles.input}
-            value={input}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Send follow-up"
-            disabled={busy || !input.trim() || Boolean(loadError)}
-            onPress={sendFollowUp}
-            style={[styles.send, (busy || !input.trim()) && styles.sendDisabled]}
-          >
-            <Ionicons name="arrow-up" size={20} color={colors.accentInk} />
-          </Pressable>
+          <View style={styles.composerBox}>
+            <TextInput
+              accessibilityLabel="Follow-up question"
+              editable={!loadError}
+              multiline
+              maxLength={4_000}
+              onChangeText={setInput}
+              placeholder={
+                busy
+                  ? "The judge is answering…"
+                  : lastTurn?.ruling?.ruling.outcome === "needs_information"
+                    ? "Or answer in your own words"
+                    : "Ask a follow-up about this table"
+              }
+              style={styles.input}
+              value={input}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send follow-up"
+              accessibilityState={{ disabled: busy || !input.trim() || Boolean(loadError) }}
+              disabled={busy || !input.trim() || Boolean(loadError)}
+              onPress={() => sendFollowUp()}
+              style={[styles.send, (busy || !input.trim()) && styles.sendDisabled]}
+            >
+              <Ionicons name="arrow-up" size={18} color={colors.accentInk} />
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -471,21 +533,23 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 760,
     alignSelf: "center",
-    gap: 18,
-    padding: 16,
-    paddingBottom: 24,
+    gap: 28,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 28,
   },
-  turn: { gap: 10 },
+  turn: { gap: 20 },
   userBubble: {
     alignSelf: "flex-end",
-    maxWidth: "88%",
+    maxWidth: "85%",
     gap: 8,
-    padding: 12,
-    borderRadius: 16,
-    borderTopRightRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderBottomRightRadius: 4,
     backgroundColor: colors.surfaceRaised,
   },
-  userText: { color: colors.text, fontSize: 16, lineHeight: 22 },
+  userText: { color: colors.text, fontSize: 15, lineHeight: 22 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
     paddingHorizontal: 8,
@@ -497,20 +561,6 @@ const styles = StyleSheet.create({
   },
   chipText: { color: colors.textSoft, fontSize: 12, fontFamily: fonts.bodySemibold },
   aside: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
-  thinking: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    borderTopLeftRadius: 4,
-    backgroundColor: colors.surface,
-  },
-  thinkingText: { color: colors.textMuted, fontFamily: fonts.displayItalic, fontSize: 16 },
   judgeNote: {
     alignSelf: "flex-start",
     maxWidth: "92%",
@@ -539,30 +589,35 @@ const styles = StyleSheet.create({
   link: { color: colors.accent, textDecorationLine: "underline" },
   disabledLink: { opacity: 0.4 },
   composer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    backgroundColor: colors.background,
+  },
+  composerBox: {
     width: "100%",
-    maxWidth: 792,
+    maxWidth: 760,
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.backgroundDeep,
+    padding: 4,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 140,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
+    paddingTop: 12,
+    paddingBottom: 12,
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
   },
   send: {
     width: 44,
