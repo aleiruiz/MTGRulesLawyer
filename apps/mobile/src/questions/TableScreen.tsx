@@ -23,6 +23,7 @@ import {
   type CardLookupResponse,
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
+import { useAuth } from "../auth/AuthProvider";
 import { useT } from "../i18n/LanguageProvider";
 import { strings } from "../i18n/core";
 
@@ -45,6 +46,10 @@ interface TableScreenProps {
 // player fixes anything it got wrong before the ruling is generated.
 export default function TableScreen({ question }: TableScreenProps) {
   const { t } = useT();
+  const { session } = useAuth();
+  // Read through a ref so a session that loads later does not re-run (and re-bill) interpretation.
+  const accessToken = useRef(session?.access_token);
+  accessToken.current = session?.access_token;
   const searchRequestId = useRef(0);
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -95,7 +100,10 @@ export default function TableScreen({ question }: TableScreenProps) {
     try {
       const response = await fetch(`${apiUrl}/api/questions/interpret`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken.current ? { authorization: `Bearer ${accessToken.current}` } : {}),
+        },
         body: JSON.stringify({ question: submittedQuestion }),
         signal,
       });

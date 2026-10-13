@@ -10,6 +10,7 @@ import {
   estimateAiTokenCostMicros,
   readAiUsageConfig,
   runReservedAiCallWithMetrics,
+  type AiUsageIdentity,
 } from "../ai/usage.js";
 import {
   createOpenAiAdapter,
@@ -522,7 +523,7 @@ export function createClarificationResponse(
 
 export async function generateRuling(
   request: ConfirmedQuestionEvidenceRequest,
-  clientIp: string,
+  identity: AiUsageIdentity,
   signal?: AbortSignal,
   priorTurns: PriorTurn[] = [],
 ): Promise<RulingGenerationResponse> {
@@ -597,7 +598,7 @@ export async function generateRuling(
     const provider = createOpenAiAdapter(providerConfig);
     const usageConfig = readAiUsageConfig();
     const result = await runReservedAiCallWithMetrics(
-      { kind: "RULING", identity: { clientIp } },
+      { kind: "RULING", identity },
       async (providerSignal) => {
         const generated = await provider.generateStructuredOutputWithUsage(
           {
@@ -647,7 +648,7 @@ export async function generateRuling(
             extendedPrompt.length + contextPrompt.length > MAX_USER_PROMPT_CHARACTERS
               ? Promise.reject(new Error("The extended prompt is too large."))
               : runReservedAiCallWithMetrics(
-                  { kind: "RULING_RETRY", identity: { clientIp } },
+                  { kind: "RULING_RETRY", identity },
                   async (providerSignal) => {
                     const generated = await provider.generateStructuredOutputWithUsage(
                       {
@@ -713,7 +714,7 @@ export async function generateRuling(
     let research: { value: StructuredOutputResult<ModelRuling> };
     try {
       research = await runReservedAiCallWithMetrics(
-        { kind: "RULING_RESEARCH", identity: { clientIp } },
+        { kind: "RULING_RESEARCH", identity },
         async (providerSignal) => {
           const generated = await provider.generateStructuredOutputWithUsage(
             {

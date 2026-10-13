@@ -10,6 +10,7 @@ import {
   estimateAiTokenCostMicros,
   readAiUsageConfig,
   runReservedAiCallWithMetrics,
+  type AiUsageIdentity,
 } from "../ai/usage.js";
 
 const QUESTION_INTERPRET_PROMPT_VERSION = "question-interpret-v4";
@@ -119,7 +120,7 @@ export function interpretationRequest(question: string, priorTurns: PriorTurn[] 
 
 export async function interpretQuestion(
   question: string,
-  clientIp: string,
+  identity: AiUsageIdentity,
   signal?: AbortSignal,
   priorTurns: PriorTurn[] = [],
 ): Promise<QuestionInterpretResponse> {
@@ -127,7 +128,7 @@ export async function interpretQuestion(
   const provider = createOpenAiAdapter(readOpenAiConfig());
   const usageConfig = readAiUsageConfig();
   const result = await runReservedAiCallWithMetrics(
-    { kind: "INTERPRETATION", identity: { clientIp } },
+    { kind: "INTERPRETATION", identity },
     async (providerSignal) => {
       const generated = await provider.generateStructuredOutputWithUsage(
         interpretationRequest(question, priorTurns),

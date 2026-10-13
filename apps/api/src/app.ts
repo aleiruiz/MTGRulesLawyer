@@ -33,7 +33,7 @@ import {
   type ConversationDetailResponse,
   type ConversationListResponse,
 } from "@mtg-rules/contracts";
-import { AiUsageLimitError, sendAiUsageLimitError } from "./ai/usage.js";
+import { AiUsageLimitError, sendAiUsageLimitError, type AiUsageIdentity } from "./ai/usage.js";
 import { lookupCardsByName } from "./cards/lookup.js";
 import { interpretQuestion } from "./questions/interpret.js";
 import { assembleConfirmedEvidence, InvalidConfirmedCardsError } from "./search/retrieval.js";
@@ -99,7 +99,7 @@ export interface BuildAppOptions {
   lookupCardsByName?: (name: string) => Promise<CardLookupResponse>;
   interpretQuestion?: (
     question: string,
-    clientIp: string,
+    identity: AiUsageIdentity,
     signal?: AbortSignal,
     priorTurns?: PriorTurn[],
   ) => Promise<QuestionInterpretResponse>;
@@ -108,7 +108,7 @@ export interface BuildAppOptions {
   ) => Promise<EvidenceSearchResponse>;
   generateRuling?: (
     request: ConfirmedQuestionEvidenceRequest,
-    clientIp: string,
+    identity: AiUsageIdentity,
     signal?: AbortSignal,
     priorTurns?: PriorTurn[],
   ) => Promise<RulingGenerationResponse>;
@@ -544,12 +544,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Provide a non-empty question up to 4000 characters." });
     }
+    // Signing in is optional; it applies the account's own limits instead of the anonymous ones.
+    if (request.headers.authorization !== undefined) {
+      await authenticate(request, reply);
+      if (reply.sent) return reply;
+    }
     const disconnect = createClientDisconnectController(request, reply);
     try {
       const priorTurns = await readPriorTurns(parsed.data.priorRulingIds);
       const result = await interpret(
         parsed.data.question,
-        request.ip,
+        usageIdentity(request),
         disconnect.signal,
         priorTurns,
       );
@@ -630,7 +635,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           ? { userId: owner.userId, conversationId: owner.conversationId }
           : undefined,
       );
-      const result = await createRuling(parsed.data, request.ip, disconnect.signal, priorTurns);
+      const result = await createRuling(
+        parsed.data,
+        usageIdentity(request),
+        disconnect.signal,
+        priorTurns,
+      );
       return reply.send(
         persistedRulingResponseSchema.parse(await persistRuling(parsed.data, result, owner)),
       );
@@ -676,4 +686,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** Quota identity from verified auth only: the account's own limits, and none for admins. */
+function usageIdentity(request: FastifyRequest): AiUsageIdentity {
+  return {
+    clientIp: request.ip,
+    ...(request.appUser
+      ? { accountId: request.appUser.id, unlimited: request.appUser.role === "ADMIN" }
+      : {}),
+  };
 }
