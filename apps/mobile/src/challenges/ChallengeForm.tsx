@@ -180,8 +180,8 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: colors.accent,
   },
-  buttonText: { color: colors.accentInk, fontSize: 14, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 14, fontFamily: fonts.bodySemibold },
   disabled: { opacity: 0.45 },
   link: { color: colors.accent, textDecorationLine: "underline" },
-  message: { color: colors.textMuted, fontWeight: "600" },
+  message: { color: colors.textMuted, fontFamily: fonts.bodySemibold },
 });

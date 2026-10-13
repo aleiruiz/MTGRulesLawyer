@@ -128,10 +128,10 @@ const styles = StyleSheet.create({
   page: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 14 },
   title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
   card: { gap: 8, padding: 16, borderRadius: 12, backgroundColor: colors.surface },
-  status: { color: colors.accent, fontWeight: "800", textTransform: "capitalize" },
-  question: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  status: { color: colors.accent, fontFamily: fonts.bodySemibold, textTransform: "capitalize" },
+  question: { color: colors.text, fontSize: 18, fontFamily: fonts.bodySemibold },
   infoRequest: { gap: 5, padding: 10, borderRadius: 8, backgroundColor: colors.warningSurface },
-  infoTitle: { color: colors.warning, fontWeight: "700" },
+  infoTitle: { color: colors.warning, fontFamily: fonts.bodySemibold },
   date: { color: colors.textMuted, fontSize: 13 },
   refresh: {
     minHeight: 44,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.accent,
   },
-  refreshText: { color: colors.accentInk, fontWeight: "700" },
+  refreshText: { color: colors.accentInk, fontFamily: fonts.bodySemibold },
   error: { color: colors.danger },
   link: { color: colors.accent, textDecorationLine: "underline" },
 });

@@ -36,7 +36,7 @@ export default function LoadingScreen({ fontsReady }: LoadingScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 22, padding: 24 },
-  title: { color: colors.accent, fontSize: 30, fontWeight: "800", letterSpacing: 0.5 },
+  title: { color: colors.accent, fontSize: 30, fontFamily: fonts.bodySemibold, letterSpacing: 0.5 },
   flavor: { color: colors.textMuted, fontSize: 18 },
   notice: {
     paddingHorizontal: 28,

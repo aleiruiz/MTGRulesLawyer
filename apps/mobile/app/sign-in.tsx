@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warningSurface,
     color: colors.warning,
   },
-  signedIn: { color: colors.accent, fontWeight: "700" },
+  signedIn: { color: colors.accent, fontFamily: fonts.bodySemibold },
   button: {
     minHeight: 48,
     alignItems: "center",
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     paddingHorizontal: 16,
   },
-  buttonText: { color: colors.accentInk, fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 16, fontFamily: fonts.bodySemibold },
   secondaryButton: {
     minHeight: 48,
     alignItems: "center",
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  secondaryButtonText: { color: colors.accent, fontSize: 16, fontWeight: "700" },
+  secondaryButtonText: { color: colors.accent, fontSize: 16, fontFamily: fonts.bodySemibold },
   deleteButton: {
     minHeight: 48,
     alignItems: "center",
@@ -233,8 +233,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  deleteButtonText: { color: colors.danger, fontSize: 16, fontWeight: "700" },
+  deleteButtonText: { color: colors.danger, fontSize: 16, fontFamily: fonts.bodySemibold },
   disabled: { opacity: 0.48 },
   pressed: { opacity: 0.75 },
-  message: { color: colors.danger, fontWeight: "600" },
+  message: { color: colors.danger, fontFamily: fonts.bodySemibold },
 });

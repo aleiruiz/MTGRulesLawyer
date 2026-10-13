@@ -181,13 +181,13 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.info,
     backgroundColor: colors.infoSurface,
   },
-  clarifyText: { color: colors.text, fontWeight: "600" },
+  clarifyText: { color: colors.text, fontFamily: fonts.bodySemibold },
   hint: { color: colors.textMuted, fontSize: 12 },
   details: { gap: 10, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.border },
   step: { gap: 3 },
   meta: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   citation: { gap: 4, padding: 10, borderRadius: 10, backgroundColor: colors.background },
-  citationTitle: { color: colors.accent, fontWeight: "700" },
+  citationTitle: { color: colors.accent, fontFamily: fonts.bodySemibold },
   link: { color: colors.accent, textDecorationLine: "underline", fontSize: 13 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   action: {
@@ -200,5 +200,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 18,
   },
-  actionText: { color: colors.accent, fontSize: 13, fontWeight: "600" },
+  actionText: { color: colors.accent, fontSize: 13, fontFamily: fonts.bodySemibold },
 });

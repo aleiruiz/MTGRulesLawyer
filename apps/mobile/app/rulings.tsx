@@ -152,7 +152,7 @@ export default function PublicRulingScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, gap: 16 },
-  brand: { color: colors.warning, fontSize: 15, fontWeight: "700" },
+  brand: { color: colors.warning, fontSize: 15, fontFamily: fonts.bodySemibold },
   notice: { color: colors.textMuted, fontSize: 13 },
   title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 30 },
   error: { color: colors.danger, fontSize: 16 },
@@ -160,16 +160,16 @@ const styles = StyleSheet.create({
   outcome: {
     color: colors.accent,
     fontSize: 14,
-    fontWeight: "800",
+    fontFamily: fonts.bodySemibold,
     textTransform: "uppercase",
   },
-  question: { color: colors.text, fontSize: 20, fontWeight: "700" },
+  question: { color: colors.text, fontSize: 20, fontFamily: fonts.bodySemibold },
   summary: { color: colors.text, fontSize: 18, lineHeight: 27 },
   meta: { color: colors.textMuted, fontSize: 13 },
   section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14, gap: 10 },
   sectionTitle: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 17 },
   body: { color: colors.text, fontSize: 15, lineHeight: 23 },
   citation: { backgroundColor: colors.background, borderRadius: 10, padding: 12, gap: 8 },
-  citationTitle: { color: colors.text, fontWeight: "700" },
+  citationTitle: { color: colors.text, fontFamily: fonts.bodySemibold },
   link: { color: colors.accent, fontSize: 15, textDecorationLine: "underline" },
 });

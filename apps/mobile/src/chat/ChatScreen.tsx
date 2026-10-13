@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.neutralSurface,
   },
-  chipText: { color: colors.textSoft, fontSize: 12, fontWeight: "600" },
+  chipText: { color: colors.textSoft, fontSize: 12, fontFamily: fonts.bodySemibold },
   aside: { color: colors.textMuted, fontSize: 13, textAlign: "center" },
   thinking: {
     alignSelf: "flex-start",
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   noteText: { fontSize: 15, lineHeight: 21 },
-  errorText: { color: colors.danger, fontWeight: "600" },
+  errorText: { color: colors.danger, fontFamily: fonts.bodySemibold },
   choiceGroup: { gap: 8 },
   choice: {
     minHeight: 40,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     borderRadius: 20,
   },
-  choiceText: { color: colors.accent, fontWeight: "600" },
+  choiceText: { color: colors.accent, fontFamily: fonts.bodySemibold },
   notice: { gap: 8, padding: 14, borderRadius: 12, backgroundColor: colors.surface },
   noticeText: { color: colors.text },
   link: { color: colors.accent, textDecorationLine: "underline" },

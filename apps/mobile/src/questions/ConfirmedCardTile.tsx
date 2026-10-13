@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import Text from "../ui/Text";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
-import { colors } from "../theme";
+import { colors, fonts } from "../theme";
 
 type Card = CardLookupResponse["cards"][number];
 
@@ -104,8 +104,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
-  faceName: { color: colors.text, fontWeight: "700" },
+  cardTitle: { color: colors.text, fontSize: 16, fontFamily: fonts.bodySemibold },
+  faceName: { color: colors.text, fontFamily: fonts.bodySemibold },
   oracleText: { color: colors.text, minHeight: 52 },
   secondaryButton: {
     minHeight: 44,
@@ -120,10 +120,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: colors.accent,
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.bodySemibold,
     textAlign: "center",
   },
-  countText: { textAlign: "center", color: colors.text, fontWeight: "600" },
+  countText: { textAlign: "center", color: colors.text, fontFamily: fonts.bodySemibold },
   inlineButtons: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   smallButton: {
     minWidth: 48,
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.successSurface,
   },
-  smallButtonText: { color: colors.accent, fontSize: 24, fontWeight: "700" },
+  smallButtonText: { color: colors.accent, fontSize: 24, fontFamily: fonts.bodySemibold },
   removeButton: {
     minHeight: 44,
     alignItems: "center",
@@ -141,6 +141,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.dangerSurface,
   },
-  removeButtonText: { color: colors.danger, fontWeight: "700" },
+  removeButtonText: { color: colors.danger, fontFamily: fonts.bodySemibold },
   oracleId: { color: colors.textMuted, fontSize: 11 },
 });

@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     paddingHorizontal: 16,
   },
-  buttonText: { color: colors.accentInk, fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 16, fontFamily: fonts.bodySemibold },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  secondaryButtonText: { color: colors.accent, fontSize: 15, fontWeight: "700" },
+  secondaryButtonText: { color: colors.accent, fontSize: 15, fontFamily: fonts.bodySemibold },
   disabled: { opacity: 0.48 },
-  message: { color: colors.danger, fontWeight: "600" },
+  message: { color: colors.danger, fontFamily: fonts.bodySemibold },
 });
