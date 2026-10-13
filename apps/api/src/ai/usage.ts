@@ -36,6 +36,22 @@ export interface AiUsageIdentity {
 export interface AiUsageRequest {
   identity: AiUsageIdentity;
   kind: UsageKind;
+  /** Recorded with the call so the usage dashboard can compare settings. */
+  model?: string;
+  reasoningEffort?: string;
+}
+
+export type AiCallFailure = "OUTPUT_LIMIT" | "TIMEOUT" | "CANCELLED" | "ERROR";
+
+/** Why a started provider call failed, from the error the adapter or SDK threw. */
+export function classifyAiFailure(error: unknown, signal?: AbortSignal): AiCallFailure {
+  if (signal?.aborted) return "CANCELLED";
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : String(error);
+  if (/max_output_tokens/.test(message)) return "OUTPUT_LIMIT";
+  if (/timeout|timed out/i.test(`${name} ${message}`)) return "TIMEOUT";
+  if (name === "AbortError" || /aborted/i.test(message)) return "CANCELLED";
+  return "ERROR";
 }
 
 export function estimateAiTokenCostMicros(
@@ -203,6 +219,8 @@ export interface AiReservation {
     actualCostMicros?: bigint,
     tokenUsage?: { inputTokens?: number; outputTokens?: number },
   ): Promise<void>;
+  /** Finalizes a started call that failed, recording why. */
+  fail(failure: AiCallFailure): Promise<void>;
   releaseBeforeProviderCall(): Promise<void>;
 }
 
@@ -325,6 +343,8 @@ export async function reserveAiUsage(
         accountHash,
         ipHash,
         kind: request.kind,
+        model: request.model,
+        reasoningEffort: request.reasoningEffort,
         reservedCostMicros: config.reservedCostMicros,
         createdAt: now,
         expiresAt: new Date(now.getTime() + config.reservationTtlMs),
@@ -357,6 +377,7 @@ export async function reserveAiUsage(
     status: "COMPLETED" | "RELEASED",
     actualCostMicros?: bigint,
     tokenUsage?: { inputTokens?: number; outputTokens?: number },
+    failure?: AiCallFailure,
   ) {
     if (actualCostMicros !== undefined && actualCostMicros < 0n) {
       throw new Error("actualCostMicros cannot be negative.");
@@ -373,6 +394,7 @@ export async function reserveAiUsage(
           actualCostMicros,
           inputTokens: tokenUsage?.inputTokens,
           outputTokens: tokenUsage?.outputTokens,
+          failure,
           completedAt: new Date(),
         },
       });
@@ -389,6 +411,7 @@ export async function reserveAiUsage(
       actualCostMicros?: bigint,
       tokenUsage?: { inputTokens?: number; outputTokens?: number },
     ) => transition("COMPLETED", actualCostMicros, tokenUsage),
+    fail: (failure: AiCallFailure) => transition("COMPLETED", undefined, undefined, failure),
     releaseBeforeProviderCall: () => transition("RELEASED"),
   };
 }
@@ -425,7 +448,7 @@ export async function runReservedAiCallWithMetrics<T>(
     return result;
   } catch (error) {
     // Once the provider call begins, errors still consume a request and the reserved cost.
-    await reservation.complete().catch(() => undefined);
+    await reservation.fail(classifyAiFailure(error, options.signal)).catch(() => undefined);
     throw error;
   }
 }

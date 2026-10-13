@@ -96,6 +96,17 @@ enum AiReservationStatus {
   RELEASED
 }
 
+/// Why a provider call that started did not return a usable response.
+enum AiCallFailure {
+  /// The model used up its output tokens (reasoning included) before answering.
+  OUTPUT_LIMIT
+  /// The provider did not answer within OPENAI_TIMEOUT_MS.
+  TIMEOUT
+  /// The player left or the request was aborted.
+  CANCELLED
+  ERROR
+}
+
 model DataSnapshot {
   id             String                @id @default(uuid()) @db.Uuid
   version        String                @unique
@@ -440,6 +451,10 @@ model AiUsageReservation {
   actualCostMicros   BigInt?
   inputTokens        Int?
   outputTokens       Int?
+  /// The model and reasoning effort the call used, for comparing settings over time.
+  model              String?
+  reasoningEffort    String?
+  failure            AiCallFailure?
   createdAt          DateTime            @default(now()) @db.Timestamptz(6)
   expiresAt          DateTime            @db.Timestamptz(6)
   completedAt        DateTime?           @db.Timestamptz(6)

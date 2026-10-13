@@ -584,3 +584,80 @@ export const sourceStatusResponseSchema = z.object({
 });
 
 export type SourceStatusResponse = z.infer<typeof sourceStatusResponseSchema>;
+
+const aiCallStatsSchema = z.object({
+  calls: z.number().int().nonnegative(),
+  failures: z.object({
+    OUTPUT_LIMIT: z.number().int().nonnegative(),
+    TIMEOUT: z.number().int().nonnegative(),
+    CANCELLED: z.number().int().nonnegative(),
+    ERROR: z.number().int().nonnegative(),
+  }),
+  averageOutputTokens: z.number().nonnegative().nullable(),
+  /** How long successful calls took, from reservation to completion. */
+  medianMs: z.number().nonnegative().nullable(),
+  p95Ms: z.number().nonnegative().nullable(),
+  maxMs: z.number().nonnegative().nullable(),
+});
+
+export const aiUsageDashboardQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(14),
+});
+
+/** The admin AI usage dashboard: spend against the daily cap, speed, failures and outcomes. */
+export const aiUsageDashboardResponseSchema = z.object({
+  generatedAt: z.string().datetime(),
+  days: z.number().int().positive(),
+  settings: z.object({
+    model: z.string(),
+    reasoningEffort: z.string(),
+    maxOutputTokens: z.number().int().positive(),
+    timeoutMs: z.number().int().positive(),
+    /** Without token rates every call counts the fixed reserved cost against the cap. */
+    costRatesConfigured: z.boolean(),
+    reservedCostMicros: z.number().int().nonnegative(),
+  }),
+  today: z.object({
+    /** What the daily cap counts: actual cost, or the reserved cost when there is none. */
+    countedCostMicros: z.number().int().nonnegative(),
+    dailyLimitMicros: z.number().int().positive(),
+    alertThresholdMicros: z.number().int().nonnegative(),
+    calls: z.number().int().nonnegative(),
+  }),
+  daily: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        calls: z.number().int().nonnegative(),
+        failures: z.number().int().nonnegative(),
+        inputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        countedCostMicros: z.number().int().nonnegative(),
+      }),
+    )
+    .max(90),
+  byKind: z
+    .array(
+      aiCallStatsSchema.extend({
+        kind: z.enum(["INTERPRETATION", "RULING", "RULING_RETRY", "RULING_RESEARCH"]),
+      }),
+    )
+    .max(4),
+  /** Ruling calls (first answers, retries and research) by the settings they ran with. */
+  rulingsBySetting: z
+    .array(
+      aiCallStatsSchema.extend({
+        model: z.string().nullable(),
+        reasoningEffort: z.string().nullable(),
+      }),
+    )
+    .max(20),
+  rulingOutcomes: z.object({
+    resolved: z.number().int().nonnegative(),
+    conditional: z.number().int().nonnegative(),
+    needs_information: z.number().int().nonnegative(),
+    uncertain: z.number().int().nonnegative(),
+  }),
+});
+
+export type AiUsageDashboardResponse = z.infer<typeof aiUsageDashboardResponseSchema>;

@@ -19,6 +19,7 @@ import type {
   ChallengeSubmissionRequest,
   MyChallengesResponse,
   ReviewQueueResponse,
+  AiUsageDashboardResponse,
   ReviewDecisionRequest,
   ReviewDecisionResponse,
 } from "@mtg-rules/contracts";
@@ -271,6 +272,47 @@ const reviewQueueFixture: ReviewQueueResponse = {
     },
   ],
 };
+const aiUsageDays: number[] = [];
+const aiCallStats = {
+  calls: 2,
+  failures: { OUTPUT_LIMIT: 1, TIMEOUT: 0, CANCELLED: 0, ERROR: 0 },
+  averageOutputTokens: 1_300,
+  medianMs: 15_000,
+  p95Ms: 30_000,
+  maxMs: 30_000,
+};
+const aiUsageFixture: AiUsageDashboardResponse = {
+  generatedAt: "2026-10-13T12:00:00.000Z",
+  days: 7,
+  settings: {
+    model: "gpt-6-luna",
+    reasoningEffort: "medium",
+    maxOutputTokens: 8_000,
+    timeoutMs: 90_000,
+    costRatesConfigured: false,
+    reservedCostMicros: 20_000,
+  },
+  today: {
+    countedCostMicros: 40_000,
+    dailyLimitMicros: 5_000_000,
+    alertThresholdMicros: 4_000_000,
+    calls: 2,
+  },
+  daily: [
+    {
+      date: "2026-10-13",
+      calls: 2,
+      failures: 1,
+      inputTokens: 20_000,
+      outputTokens: 2_600,
+      countedCostMicros: 40_000,
+    },
+  ],
+  byKind: [{ kind: "RULING", ...aiCallStats }],
+  rulingsBySetting: [{ model: "gpt-6-luna", reasoningEffort: "medium", ...aiCallStats }],
+  rulingOutcomes: { resolved: 1, conditional: 0, needs_information: 0, uncertain: 0 },
+};
+
 const reviewApp = buildApp({
   verifyAccessToken: (token) =>
     Promise.resolve(
@@ -281,6 +323,10 @@ const reviewApp = buildApp({
   resolveAppUser: (subject) =>
     Promise.resolve({ id: subject, role: subject === "admin-token" ? "ADMIN" : "USER" }),
   getReviewQueue: () => Promise.resolve(reviewQueueFixture),
+  getAiUsageDashboard: (days) => {
+    aiUsageDays.push(days);
+    return Promise.resolve(aiUsageFixture);
+  },
   requestMoreInformation: (challengeId, reviewerId, reason) => {
     reviewRequests.push({ challengeId, reviewerId, reason });
     return Promise.resolve();
@@ -392,6 +438,29 @@ void describe("admin challenge review routes", () => {
     assert.equal(first?.originalRuling.snapshot.version, "2026-10");
     assert.equal(first?.originalRuling.citations[0]?.label, "Rule 101.1");
     assert.equal(first?.challenge.explanation, "The answer may overlook a replacement effect.");
+  });
+
+  void it("shows AI usage only to admins, for a bounded number of days", async () => {
+    const denied = await reviewApp.inject({
+      method: "GET",
+      url: "/api/admin/ai-usage",
+      headers: { authorization: "Bearer user-token" },
+    });
+    assert.equal(denied.statusCode, 403);
+    const invalid = await reviewApp.inject({
+      method: "GET",
+      url: "/api/admin/ai-usage?days=365",
+      headers: { authorization: "Bearer admin-token" },
+    });
+    assert.equal(invalid.statusCode, 400);
+    const response = await reviewApp.inject({
+      method: "GET",
+      url: "/api/admin/ai-usage?days=7",
+      headers: { authorization: "Bearer admin-token" },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json<AiUsageDashboardResponse>().settings.reasoningEffort, "medium");
+    assert.deepEqual(aiUsageDays, [7]);
   });
 
   void it("uses the verified admin identity when requesting more information", async () => {
