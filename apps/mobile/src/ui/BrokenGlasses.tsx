@@ -12,8 +12,8 @@ export default function BrokenGlasses({ width = 96 }: BrokenGlassesProps) {
   return (
     <Svg
       width={width}
-      height={(width * 60) / 124}
-      viewBox="-2 -2 124 60"
+      height={(width * 48) / 124}
+      viewBox="-2 12 124 48"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
     >
