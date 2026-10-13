@@ -23,6 +23,7 @@ import { splitVerdict } from "../rulings/verdict-text";
 import Text from "../ui/Text";
 import TextInput from "../ui/TextInput";
 import Loader from "../ui/Loader";
+import BrokenGlasses from "../ui/BrokenGlasses";
 import { colors, eyebrow, fonts } from "../theme";
 import ChallengeRow from "./ChallengeRow";
 import { useMyChallenges } from "./useMyChallenges";
@@ -126,6 +127,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
       >
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
           <View style={styles.intro}>
+            <BrokenGlasses width={112} />
             <Text accessibilityRole="header" style={styles.heading}>
               Tell a judge what’s wrong
             </Text>
@@ -286,7 +288,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     gap: 22,
   },
-  intro: { gap: 8 },
+  intro: { gap: 10 },
   heading: { fontFamily: fonts.display, fontSize: 28, lineHeight: 33 },
   lead: { color: colors.textSoft, fontSize: 14.5, lineHeight: 21 },
   error: { color: colors.danger },
