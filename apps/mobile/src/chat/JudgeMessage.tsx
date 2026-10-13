@@ -120,7 +120,7 @@ export default function JudgeMessage({
           <Ionicons
             name={showDetails ? "chevron-up" : "book-outline"}
             size={15}
-            color={colors.goldBright}
+            color={colors.accent}
           />
           <Text style={styles.actionText}>{showDetails ? "Hide reasoning" : "Reasoning"}</Text>
         </Pressable>
@@ -130,7 +130,7 @@ export default function JudgeMessage({
           onPress={() => void Linking.openURL(getPublicRulingUrl(result.rulingId))}
           style={styles.action}
         >
-          <Ionicons name="share-outline" size={15} color={colors.goldBright} />
+          <Ionicons name="share-outline" size={15} color={colors.accent} />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
         <Pressable
@@ -139,7 +139,7 @@ export default function JudgeMessage({
           onPress={() => setShowChallenge((current) => !current)}
           style={styles.action}
         >
-          <Ionicons name="flag-outline" size={15} color={colors.goldBright} />
+          <Ionicons name="flag-outline" size={15} color={colors.accent} />
           <Text style={styles.actionText}>Challenge</Text>
         </Pressable>
         {onAskAgain ? (
@@ -149,7 +149,7 @@ export default function JudgeMessage({
             onPress={onAskAgain}
             style={styles.action}
           >
-            <Ionicons name="refresh" size={15} color={colors.goldBright} />
+            <Ionicons name="refresh" size={15} color={colors.accent} />
             <Text style={styles.actionText}>Ask again</Text>
           </Pressable>
         ) : null}
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   badge: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10 },
-  badgeText: { fontFamily: fonts.display, fontSize: 12, letterSpacing: 0.6 },
+  badgeText: { fontFamily: fonts.bodySemibold, fontSize: 12, letterSpacing: 0.6 },
   summary: { fontSize: 16, lineHeight: 23 },
   clarify: {
     gap: 6,
@@ -181,14 +181,14 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.info,
     backgroundColor: colors.infoSurface,
   },
-  clarifyText: { color: colors.text, fontWeight: "600" },
+  clarifyText: { color: colors.text, fontFamily: fonts.bodySemibold },
   hint: { color: colors.textMuted, fontSize: 12 },
   details: { gap: 10, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.border },
   step: { gap: 3 },
   meta: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   citation: { gap: 4, padding: 10, borderRadius: 10, backgroundColor: colors.background },
-  citationTitle: { color: colors.goldBright, fontWeight: "700" },
-  link: { color: colors.goldBright, textDecorationLine: "underline", fontSize: 13 },
+  citationTitle: { color: colors.accent, fontFamily: fonts.bodySemibold },
+  link: { color: colors.accent, textDecorationLine: "underline", fontSize: 13 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   action: {
     minHeight: 36,
@@ -200,5 +200,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 18,
   },
-  actionText: { color: colors.goldBright, fontSize: 13, fontWeight: "600" },
+  actionText: { color: colors.accent, fontSize: 13, fontFamily: fonts.bodySemibold },
 });

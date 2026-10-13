@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import TextInput from "../src/ui/TextInput";
 import Text from "../src/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/AuthProvider";
@@ -186,7 +187,7 @@ export default function AdminVerifyScreen() {
               style={[styles.button, verifying && styles.disabled]}
             >
               {verifying ? (
-                <ActivityIndicator color={colors.ink} />
+                <ActivityIndicator color={colors.accentInk} />
               ) : (
                 <Text style={styles.buttonText}>Verify</Text>
               )}
@@ -215,7 +216,7 @@ export default function AdminVerifyScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   page: { width: "100%", maxWidth: 560, alignSelf: "center", padding: 24, gap: 14 },
-  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 28 },
+  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 28 },
   description: { color: colors.textMuted, fontSize: 16, lineHeight: 23 },
   setup: { gap: 10 },
   meta: { color: colors.textMuted, fontSize: 13 },
@@ -244,20 +245,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
     paddingHorizontal: 16,
   },
-  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 16, fontFamily: fonts.bodySemibold },
   secondaryButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  secondaryButtonText: { color: colors.goldBright, fontSize: 15, fontWeight: "700" },
+  secondaryButtonText: { color: colors.accent, fontSize: 15, fontFamily: fonts.bodySemibold },
   disabled: { opacity: 0.48 },
-  message: { color: colors.danger, fontWeight: "600" },
+  message: { color: colors.danger, fontFamily: fonts.bodySemibold },
 });

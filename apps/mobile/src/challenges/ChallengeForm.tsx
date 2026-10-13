@@ -1,7 +1,8 @@
 import { colors, fonts } from "../theme";
 import { useState } from "react";
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import TextInput from "../ui/TextInput";
 import Text from "../ui/Text";
 import {
   challengeResponseSchema,
@@ -146,7 +147,7 @@ export default function ChallengeForm({ rulingId }: { rulingId: string }) {
 
 const styles = StyleSheet.create({
   container: { gap: 10, padding: 14, borderRadius: 10, backgroundColor: colors.background },
-  title: { color: colors.goldBright, fontFamily: fonts.display, fontSize: 18 },
+  title: { color: colors.accent, fontFamily: fonts.bodySemibold, fontSize: 18 },
   help: { color: colors.textMuted, fontSize: 13, lineHeight: 19 },
   input: {
     color: colors.text,
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
   },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   consent: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 4 },
-  consentMark: { color: colors.goldBright, fontSize: 20, lineHeight: 22 },
+  consentMark: { color: colors.accent, fontSize: 20, lineHeight: 22 },
   choice: {
     paddingHorizontal: 9,
     paddingVertical: 7,
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.surface,
   },
-  selectedChoice: { borderColor: colors.gold, backgroundColor: colors.successSurface },
+  selectedChoice: { borderColor: colors.accent, backgroundColor: colors.successSurface },
   choiceText: { color: colors.text, fontSize: 12, textTransform: "capitalize" },
   button: {
     minHeight: 44,
@@ -177,10 +178,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 9,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
   },
-  buttonText: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  buttonText: { color: colors.accentInk, fontSize: 14, fontFamily: fonts.bodySemibold },
   disabled: { opacity: 0.45 },
-  link: { color: colors.goldBright, textDecorationLine: "underline" },
-  message: { color: colors.textMuted, fontWeight: "600" },
+  link: { color: colors.accent, textDecorationLine: "underline" },
+  message: { color: colors.textMuted, fontFamily: fonts.bodySemibold },
 });

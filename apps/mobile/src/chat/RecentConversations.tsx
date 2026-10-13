@@ -111,8 +111,8 @@ export default function RecentConversations() {
 const styles = StyleSheet.create({
   section: { gap: 8, marginTop: 12 },
   title: {
-    color: colors.gold,
-    fontFamily: fonts.display,
+    color: colors.accent,
+    fontFamily: fonts.bodySemibold,
     fontSize: 14,
     letterSpacing: 1.6,
     textTransform: "uppercase",
@@ -137,6 +137,6 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 15 },
   meta: { color: colors.textSubtle, fontSize: 12 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9 },
-  badgeText: { fontSize: 11, fontWeight: "700" },
+  badgeText: { fontSize: 11, fontFamily: fonts.bodySemibold },
   delete: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
 });

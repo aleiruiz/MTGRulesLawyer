@@ -3,11 +3,17 @@ import { StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
-import { Cinzel_700Bold, Cinzel_800ExtraBold } from "@expo-google-fonts/cinzel";
 import {
-  CormorantGaramond_500Medium_Italic,
-  CormorantGaramond_600SemiBold,
-} from "@expo-google-fonts/cormorant-garamond";
+  Spectral_400Regular,
+  Spectral_400Regular_Italic,
+  Spectral_600SemiBold,
+} from "@expo-google-fonts/spectral";
+import {
+  InstrumentSans_400Regular,
+  InstrumentSans_500Medium,
+  InstrumentSans_600SemiBold,
+} from "@expo-google-fonts/instrument-sans";
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 import { AuthProvider, useAuth } from "../src/auth/AuthProvider";
 import LoadingScreen from "../src/ui/LoadingScreen";
 import { FontsReadyContext } from "../src/ui/fonts-ready";
@@ -19,10 +25,14 @@ const MIN_SPLASH_MS = 1_200;
 function AppStack() {
   const { loading: authLoading } = useAuth();
   const [fontsLoaded, fontError] = useFonts({
-    Cinzel_700Bold,
-    Cinzel_800ExtraBold,
-    CormorantGaramond_500Medium_Italic,
-    CormorantGaramond_600SemiBold,
+    Spectral_400Regular,
+    Spectral_400Regular_Italic,
+    Spectral_600SemiBold,
+    InstrumentSans_400Regular,
+    InstrumentSans_500Medium,
+    InstrumentSans_600SemiBold,
+    IBMPlexMono_400Regular,
+    IBMPlexMono_500Medium,
   });
   const [minimumElapsed, setMinimumElapsed] = useState(false);
 
@@ -49,8 +59,10 @@ function AppStack() {
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: colors.backgroundDeep },
-              headerTintColor: colors.goldBright,
-              headerTitleStyle: fontsLoaded ? { fontFamily: fonts.display } : undefined,
+              headerTintColor: colors.text,
+              headerTitleStyle: fontsLoaded
+                ? { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.textMuted }
+                : undefined,
               headerShadowVisible: false,
               contentStyle: { backgroundColor: colors.background },
             }}

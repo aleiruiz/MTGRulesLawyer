@@ -1,21 +1,13 @@
 import { colors, fonts } from "../theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import TextInput from "../ui/TextInput";
 import Text from "../ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import logo from "../../assets/logo.png";
+import GlassesLogo from "../ui/GlassesLogo";
 import AccountButton from "../ui/AccountButton";
-import GrimoireBackdrop from "../ui/GrimoireBackdrop";
-import ManaLoader from "../ui/ManaLoader";
+import Loader from "../ui/Loader";
 import { router } from "expo-router";
 import { saveDraft } from "../chat/draft-store";
 import RecentConversations from "../chat/RecentConversations";
@@ -326,11 +318,10 @@ export default function QuestionConfirmationScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <GrimoireBackdrop />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View style={styles.brand}>
-            <Image accessible={false} source={logo} style={styles.logo} />
+            <GlassesLogo width={44} />
             <Text accessibilityRole="header" style={styles.title}>
               Rules Lawyer
             </Text>
@@ -341,7 +332,7 @@ export default function QuestionConfirmationScreen() {
         <View style={styles.divider} />
         <Text style={styles.sectionTitle}>Describe the game situation</Text>
         <TextInput
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={colors.textSubtle}
           accessibilityLabel="Magic rules question"
           accessibilityHint="Enter up to 4000 characters about a Magic game interaction."
           editable={!isInterpreting}
@@ -374,7 +365,7 @@ export default function QuestionConfirmationScreen() {
           ]}
         >
           {isInterpreting ? (
-            <ManaLoader accessibilityLabel="Reading the question" size={11} />
+            <Loader accessibilityLabel="Reading the question" size={9} color={colors.accentInk} />
           ) : (
             <Text style={styles.primaryButtonText}>Find cards and game facts</Text>
           )}
@@ -652,14 +643,13 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   brand: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  logo: { width: 40, height: 40 },
-  title: { flexShrink: 1, color: colors.goldBright, fontFamily: fonts.displayHeavy, fontSize: 28 },
-  subtitle: { marginTop: -4, color: colors.textMuted, fontFamily: fonts.serif, fontSize: 18 },
-  divider: { height: 1, marginVertical: 4, backgroundColor: colors.gold, opacity: 0.55 },
+  title: { flexShrink: 1, color: colors.accent, fontFamily: fonts.display, fontSize: 28 },
+  subtitle: { marginTop: -4, color: colors.textMuted, fontFamily: fonts.display, fontSize: 18 },
+  divider: { height: 1, marginVertical: 4, backgroundColor: colors.accent, opacity: 0.55 },
   sectionTitle: {
     marginTop: 12,
-    color: colors.gold,
-    fontFamily: fonts.display,
+    color: colors.accent,
+    fontFamily: fonts.bodySemibold,
     fontSize: 14,
     letterSpacing: 1.6,
     textTransform: "uppercase",
@@ -667,26 +657,26 @@ const styles = StyleSheet.create({
   questionInput: {
     minHeight: 120,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 12,
     padding: 14,
-    backgroundColor: colors.parchment,
-    color: colors.ink,
+    backgroundColor: colors.surfaceRaised,
+    color: colors.text,
     fontSize: 16,
   },
   helperText: { color: colors.textMuted, fontSize: 13 },
-  link: { color: colors.goldBright, fontSize: 15, textDecorationLine: "underline" },
+  link: { color: colors.accent, fontSize: 15, textDecorationLine: "underline" },
   primaryButton: {
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
     borderRadius: 10,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
   },
   primaryButtonText: {
-    color: colors.ink,
-    fontFamily: fonts.display,
+    color: colors.accentInk,
+    fontFamily: fonts.bodySemibold,
     fontSize: 16,
     letterSpacing: 0.4,
     textAlign: "center",
@@ -697,24 +687,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 9,
     backgroundColor: colors.surface,
   },
   secondaryButtonText: {
-    color: colors.goldBright,
+    color: colors.accent,
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.bodySemibold,
     textAlign: "center",
   },
   pressedButton: { opacity: 0.75 },
   disabledButton: { opacity: 0.45 },
-  errorText: { color: colors.danger, fontWeight: "600" },
+  errorText: { color: colors.danger, fontFamily: fonts.bodySemibold },
   results: { gap: 12 },
   scopeBox: { padding: 14, borderRadius: 10, gap: 5 },
   scopeIn: { backgroundColor: colors.successSurface },
   scopeOut: { backgroundColor: colors.dangerSurface },
-  scopeTitle: { color: colors.text, fontSize: 17, fontWeight: "700" },
+  scopeTitle: { color: colors.text, fontSize: 17, fontFamily: fonts.bodySemibold },
   questionPreview: {
     padding: 14,
     borderRadius: 10,
@@ -724,22 +714,22 @@ const styles = StyleSheet.create({
   },
   highlight: {
     borderRadius: 4,
-    backgroundColor: colors.goldBright,
-    color: colors.ink,
-    fontWeight: "800",
+    backgroundColor: colors.accent,
+    color: colors.accentInk,
+    fontFamily: fonts.bodySemibold,
   },
   factsBox: { gap: 7, padding: 14, borderRadius: 10, backgroundColor: colors.surfaceRaised },
-  missingText: { color: colors.warning, fontWeight: "600" },
+  missingText: { color: colors.warning, fontFamily: fonts.bodySemibold },
   mentionBox: {
     gap: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.accent,
     borderRadius: 10,
     backgroundColor: colors.surfaceRaised,
   },
   cardRow: { gap: 12, paddingVertical: 4, paddingRight: 10 },
-  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  cardTitle: { color: colors.text, fontSize: 16, fontFamily: fonts.bodySemibold },
   inlineButtons: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   choiceButton: {
     minHeight: 48,
@@ -750,7 +740,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.surface,
   },
-  choiceText: { color: colors.text, fontWeight: "600" },
+  choiceText: { color: colors.text, fontFamily: fonts.bodySemibold },
   searchPanel: {
     gap: 10,
     padding: 14,
