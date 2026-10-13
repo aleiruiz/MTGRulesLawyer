@@ -13,6 +13,8 @@ import RecentRulings, { useRecentConversations } from "../src/home/RecentRulings
 import AdminReviewLink, { useIsAdmin } from "../src/reviews/AdminReviewLink";
 import GlassesLogo from "../src/ui/GlassesLogo";
 import LegalLinks from "../src/legal/LegalLinks";
+import { avatarUrl } from "../src/auth/avatar";
+import { Image } from "expo-image";
 import Loader from "../src/ui/Loader";
 import Text from "../src/ui/Text";
 import { colors, eyebrow, fonts } from "../src/theme";
@@ -40,6 +42,7 @@ export default function AccountScreen() {
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
 
   async function beginSignIn(provider: SocialProvider) {
     setPendingProvider(provider);
@@ -127,6 +130,7 @@ export default function AccountScreen() {
   const email = session?.user.email ?? "";
   const provider: unknown = session?.user.app_metadata.provider;
   const initial = (email.trim()[0] ?? "?").toUpperCase();
+  const photo = avatarUrl(session);
 
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
@@ -135,7 +139,16 @@ export default function AccountScreen() {
           <>
             <View style={styles.profile}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initial}</Text>
+                {photo && photo !== failedPhoto ? (
+                  <Image
+                    source={{ uri: photo }}
+                    style={styles.avatarPhoto}
+                    accessibilityIgnoresInvertColors
+                    onError={() => setFailedPhoto(photo)}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{initial}</Text>
+                )}
               </View>
               <View style={styles.profileText}>
                 <Text numberOfLines={1} style={styles.name}>
@@ -304,6 +317,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     backgroundColor: colors.accentSurface,
   },
+  avatarPhoto: { width: 50, height: 50, borderRadius: 25 },
   avatarText: { color: colors.accentText, fontFamily: fonts.displaySemibold, fontSize: 22 },
   profileText: { flex: 1, gap: 3 },
   name: { fontSize: 17 },

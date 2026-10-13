@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+import { avatarUrl } from "../auth/avatar";
 import { useAuth } from "../auth/AuthProvider";
 import { colors } from "../theme";
 import { useT } from "../i18n/LanguageProvider";
@@ -8,6 +11,8 @@ import { useT } from "../i18n/LanguageProvider";
 export default function AccountButton() {
   const { session } = useAuth();
   const { t } = useT();
+  const photo = avatarUrl(session);
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
 
   return (
     <Pressable
@@ -22,7 +27,16 @@ export default function AccountButton() {
         pressed && styles.pressed,
       ]}
     >
-      <Ionicons name={session ? "person" : "person-outline"} size={20} color={colors.accent} />
+      {photo && photo !== failedPhoto ? (
+        <Image
+          source={{ uri: photo }}
+          style={styles.photo}
+          accessibilityIgnoresInvertColors
+          onError={() => setFailedPhoto(photo)}
+        />
+      ) : (
+        <Ionicons name={session ? "person" : "person-outline"} size={20} color={colors.accent} />
+      )}
       {session ? <View style={styles.dot} /> : null}
     </Pressable>
   );
@@ -40,6 +54,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   signedIn: { borderColor: colors.accent },
+  photo: { width: 40, height: 40, borderRadius: 20 },
   pressed: { opacity: 0.75 },
   dot: {
     position: "absolute",

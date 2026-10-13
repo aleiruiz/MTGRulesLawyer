@@ -43,7 +43,7 @@ const privacy: Record<Language, LegalDocument> = {
         paragraphs: [
           "OpenAI receives your question, the earlier questions and rulings in the same conversation, and the relevant rules and card text, to interpret it and write the ruling. For hard questions it may also run a web search. We ask OpenAI not to store these requests.",
           "Supabase handles sign-in. Hostinger hosts our server and database.",
-          "Card images load directly from Scryfall, so your browser or phone contacts Scryfall's servers.",
+          "Card images load directly from Scryfall, so your browser or phone contacts Scryfall's servers. Your profile picture loads the same way from Google or GitHub.",
         ],
       },
       {
@@ -90,7 +90,7 @@ const privacy: Record<Language, LegalDocument> = {
         paragraphs: [
           "OpenAI recibe tu pregunta, las preguntas y fallos anteriores de la misma conversación, y las reglas y el texto de las cartas relevantes, para interpretarla y escribir el fallo. En preguntas difíciles también puede hacer una búsqueda web. Le pedimos a OpenAI que no guarde estas solicitudes.",
           "Supabase se encarga del inicio de sesión. Hostinger aloja nuestro servidor y la base de datos.",
-          "Las imágenes de las cartas se cargan directamente de Scryfall, así que tu navegador o teléfono se conecta a los servidores de Scryfall.",
+          "Las imágenes de las cartas se cargan directamente de Scryfall, así que tu navegador o teléfono se conecta a los servidores de Scryfall. Tu foto de perfil se carga igual, desde Google o GitHub.",
         ],
       },
       {
