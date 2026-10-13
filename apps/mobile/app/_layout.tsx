@@ -79,6 +79,8 @@ function AppStack() {
             <Stack.Screen name="rulings" options={{ title: t.titles.sharedRuling }} />
             <Stack.Screen name="table" options={{ title: t.titles.table }} />
             <Stack.Screen name="chat" options={{ title: t.titles.ruling }} />
+            <Stack.Screen name="privacy" options={{ title: t.titles.privacy }} />
+            <Stack.Screen name="terms" options={{ title: t.titles.terms }} />
             <Stack.Screen
               name="auth/callback"
               options={{ title: t.titles.signInCallback, headerBackVisible: false }}

@@ -14,6 +14,8 @@ export const en = {
     table: "Check the table",
     ruling: "Ruling",
     signInCallback: "Sign in",
+    privacy: "Privacy",
+    terms: "Terms",
   },
   common: {
     tryAgain: "Try again",
