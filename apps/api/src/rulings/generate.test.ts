@@ -4,6 +4,7 @@ import type { EvidenceSearchResponse } from "@mtg-rules/contracts";
 import { estimateAiTokenCostMicros } from "../ai/usage.js";
 import {
   boundEvidenceForPrompt,
+  buildFoundationalRulesPrompt,
   buildModelPrompt,
   chooseResearchedAnswer,
   containsWebLinks,
@@ -346,7 +347,21 @@ void describe("Ruling evidence verification", () => {
       bounded.rules.filter((rule) => rule.includedBecause === "CORE").map((rule) => rule.number),
       ["405.5", "704.3"],
     );
-    assert.match(RULING_SYSTEM_PROMPT, /foundational rules/i);
+    assert.match(RULING_SYSTEM_PROMPT, /foundationalRules/);
+    // The foundational rules go in their own system message, the same for every question, so
+    // the provider can cache it; evidence.rules holds only the question's own rules.
+    const packet = { ...evidence, rules: [...searched, ...core] };
+    const context = JSON.parse(buildFoundationalRulesPrompt(packet)) as {
+      foundationalRules: Array<{ id: string }>;
+    };
+    assert.deepEqual(
+      context.foundationalRules.map(({ id }) => id),
+      ["405.5", "704.3"],
+    );
+    const parsed = JSON.parse(buildModelPrompt({ question: "Q?" }, packet)) as {
+      evidence: { rules: Array<{ id: string }> };
+    };
+    assert.ok(parsed.evidence.rules.every(({ id }) => id !== "405.5" && id !== "704.3"));
   });
 
   void it("accepts a supplied rule cited by its number but not an unseen one", () => {
@@ -731,7 +746,9 @@ void describe("Ruling evidence verification", () => {
         ruleNumbers: ["704.5a"],
       })),
     );
-    assert.ok(prompt.length < MAX_USER_PROMPT_CHARACTERS, `prompt is ${prompt.length} characters`);
+    const total =
+      prompt.length + buildFoundationalRulesPrompt({ ...evidence, cards, rules }).length;
+    assert.ok(total < MAX_USER_PROMPT_CHARACTERS, `prompt is ${total} characters`);
   });
 
   void it("asks again for a rule the model only saw cut for length", async () => {
