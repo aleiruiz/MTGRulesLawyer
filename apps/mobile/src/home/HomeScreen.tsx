@@ -19,6 +19,7 @@ import { colors, fonts } from "../theme";
 import { saveQuestion } from "../questions/question-store";
 import RecentRulings, { useRecentConversations } from "./RecentRulings";
 import SourcesFooter from "./SourcesFooter";
+import LegalLinks from "../legal/LegalLinks";
 import { useT } from "../i18n/LanguageProvider";
 
 const MAX_QUESTION_LENGTH = 4_000;
@@ -120,6 +121,7 @@ export default function HomeScreen() {
           <RecentRulings {...recent} limit={3} />
           <View style={styles.spacer} />
           <SourcesFooter />
+          <LegalLinks />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
