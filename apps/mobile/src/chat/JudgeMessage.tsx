@@ -8,6 +8,7 @@ import CitationChip from "../verdict/CitationChip";
 import CitationSheet from "../verdict/CitationSheet";
 import Text from "../ui/Text";
 import { colors, eyebrow, fonts } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 type Ruling = PersistedRulingResponse["ruling"];
 type Outcome = Ruling["outcome"];
@@ -15,41 +16,32 @@ type Outcome = Ruling["outcome"];
 const outcomeStyles: Record<
   Outcome,
   {
-    label: string;
     color: string;
     background: string;
     icon: ComponentProps<typeof Ionicons>["name"];
   }
 > = {
   resolved: {
-    label: "Resolved",
     color: colors.success,
     background: colors.successSurface,
     icon: "checkmark",
   },
   conditional: {
-    label: "It depends",
     color: colors.warning,
     background: colors.warningSurface,
     icon: "git-branch-outline",
   },
   needs_information: {
-    label: "One more detail",
     color: colors.info,
     background: colors.infoSurface,
     icon: "help",
   },
   uncertain: {
-    label: "Not certain",
     color: colors.neutral,
     background: colors.neutralSurface,
     icon: "remove",
   },
 };
-
-export function outcomeLabel(outcome: Outcome): string {
-  return outcomeStyles[outcome].label;
-}
 
 interface JudgeMessageProps {
   result: PersistedRulingResponse;
@@ -71,6 +63,7 @@ export default function JudgeMessage({
   onDispute,
 }: JudgeMessageProps) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
+  const { t, locale } = useT();
   const [openCitation, setOpenCitation] = useState<string | null>(null);
   const { ruling } = result;
   const outcome = outcomeStyles[ruling.outcome];
@@ -80,7 +73,7 @@ export default function JudgeMessage({
   // When the judge needs a detail before ruling, the question leads; otherwise the answer does.
   const asking = ruling.outcome === "needs_information" && questions.length > 0;
   const yesNoQuestions = questions.filter(isYesNoQuestion);
-  const rulesOf = rulesDate(ruling.snapshot.version);
+  const rulesOf = rulesDate(ruling.snapshot.version, locale);
   // Without steps there is nothing to fold, so the rest always shows.
   const showDetails = expanded || ruling.reasoningSteps.length === 0;
   const chipped = new Set([
@@ -115,7 +108,7 @@ export default function JudgeMessage({
         <View style={[styles.badge, { backgroundColor: outcome.background }]}>
           <Ionicons name={outcome.icon} size={12} color={outcome.color} />
           <Text style={[styles.badgeText, { color: outcome.color }]}>
-            {outcome.label.toUpperCase()}
+            {t.verdict.outcomes[ruling.outcome].toLocaleUpperCase(locale)}
           </Text>
         </View>
 
@@ -147,7 +140,7 @@ export default function JudgeMessage({
         {chips(ruling.summaryCitationIds, true)}
         {!asking && questions.length > 0 ? (
           <View style={styles.openQuestions}>
-            <Text style={[eyebrow, styles.openQuestionsLabel]}>To be sure, tell the judge</Text>
+            <Text style={[eyebrow, styles.openQuestionsLabel]}>{t.verdict.openQuestions}</Text>
             {questions.map((question, index) => (
               <Text key={`${index}-${question}`} selectable style={styles.openQuestion}>
                 {question}
@@ -159,9 +152,9 @@ export default function JudgeMessage({
 
       {onAnswer && yesNoQuestions.length > 0 ? (
         <View style={styles.answers}>
-          <Text style={eyebrow}>Tap an answer</Text>
+          <Text style={eyebrow}>{t.verdict.tapAnswer}</Text>
           {yesNoQuestions.flatMap((question) =>
-            ["Yes", "No"].map((answer) => (
+            [t.common.yes, t.common.no].map((answer) => (
               <Pressable
                 key={`${question}-${answer}`}
                 accessibilityRole="button"
@@ -175,7 +168,7 @@ export default function JudgeMessage({
               </Pressable>
             )),
           )}
-          <Text style={styles.hint}>Or answer in your own words below.</Text>
+          <Text style={styles.hint}>{t.verdict.ownWords}</Text>
         </View>
       ) : null}
 
@@ -187,11 +180,11 @@ export default function JudgeMessage({
             onPress={() => setExpanded((current) => !current)}
             style={styles.sectionToggle}
           >
-            <Text style={eyebrow}>How it plays out</Text>
+            <Text style={eyebrow}>{t.verdict.howItPlaysOut}</Text>
             <View style={styles.toggleRight}>
               {!expanded ? (
                 <Text style={styles.toggleCount}>
-                  {ruling.reasoningSteps.length} step{ruling.reasoningSteps.length === 1 ? "" : "s"}
+                  {t.verdict.steps(ruling.reasoningSteps.length)}
                 </Text>
               ) : null}
               <Ionicons
@@ -229,7 +222,7 @@ export default function JudgeMessage({
 
       {showDetails && unchipped.length > 0 ? (
         <View style={styles.section}>
-          <Text style={eyebrow}>Also read</Text>
+          <Text style={eyebrow}>{t.verdict.alsoRead}</Text>
           {chips(unchipped.map((citation) => citation.id))}
         </View>
       ) : null}
@@ -240,9 +233,7 @@ export default function JudgeMessage({
           <View style={styles.assumptionList}>
             {ruling.assumptions.map((assumption, index) => (
               <Text key={`${index}-${assumption}`} style={styles.assumptionText}>
-                {/^assum/i.test(assumption)
-                  ? assumption
-                  : `Assumes ${assumption.charAt(0).toLowerCase()}${assumption.slice(1)}`}
+                {t.verdict.assumes(assumption)}
               </Text>
             ))}
           </View>
@@ -252,30 +243,28 @@ export default function JudgeMessage({
       <View style={styles.actions}>
         <ActionButton
           icon="share-outline"
-          label="Share"
-          accessibilityLabel="Share a link to this ruling"
+          label={t.verdict.share}
+          accessibilityLabel={t.verdict.shareLabel}
           onPress={() => void Share.share({ message: getPublicRulingUrl(result.rulingId) })}
         />
         {onDispute ? (
-          <ActionButton icon="flag-outline" label="This looks wrong" onPress={onDispute} />
+          <ActionButton icon="flag-outline" label={t.verdict.looksWrong} onPress={onDispute} />
         ) : null}
       </View>
 
       <View style={styles.footer}>
         <Text selectable style={styles.footnote}>
-          {rulesOf
-            ? `Checked against the Comprehensive Rules of ${rulesOf} and the Oracle text in that snapshot.`
-            : "Checked against the Comprehensive Rules and the Oracle text in that snapshot."}
-          {`\nSnapshot ${ruling.snapshot.version}`}
+          {rulesOf ? t.verdict.checked(rulesOf) : t.verdict.checkedNoDate}
+          {`\n${t.verdict.snapshot(ruling.snapshot.version)}`}
         </Text>
         {onAskAgain ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Ask the judge this question again"
+            accessibilityLabel={t.verdict.askAgainLabel}
             onPress={onAskAgain}
             style={styles.askAgainButton}
           >
-            <Text style={styles.askAgain}>Ask again</Text>
+            <Text style={styles.askAgain}>{t.verdict.askAgain}</Text>
           </Pressable>
         ) : null}
       </View>

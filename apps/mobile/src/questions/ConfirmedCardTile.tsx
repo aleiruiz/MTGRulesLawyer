@@ -4,6 +4,7 @@ import Text from "../ui/Text";
 import CardImage from "../cards/CardImage";
 import type { CardLookupResponse } from "@mtg-rules/contracts";
 import { colors, fonts } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 type Card = CardLookupResponse["cards"][number];
 
@@ -31,6 +32,7 @@ export default function ConfirmedCardTile({
   onReplace,
   onRemove,
 }: ConfirmedCardTileProps) {
+  const { t } = useT();
   const face =
     card.faces.find((candidate) => candidate.faceIndex === faceIndex) ?? card.matchedFace;
   const imageUri = face.imageUri ?? card.matchedFace.imageUri;
@@ -65,19 +67,19 @@ export default function ConfirmedCardTile({
       {card.faces.length > 1 ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Switch face for ${card.name}; currently ${face.name}`}
+          accessibilityLabel={t.tile.switchFace(card.name, face.name)}
           onPress={onSwitchFace}
           style={({ pressed }) => [styles.faceButton, pressed && styles.pressed]}
         >
           <Ionicons name="sync-outline" size={14} color={colors.textSoft} />
-          <Text style={styles.faceText}>Other face</Text>
+          <Text style={styles.faceText}>{t.tile.otherFace}</Text>
         </Pressable>
       ) : null}
 
       <View style={styles.stepper}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Fewer copies of ${card.name}`}
+          accessibilityLabel={t.tile.fewer(card.name)}
           accessibilityState={{ disabled: copyCount <= 1 }}
           disabled={copyCount <= 1}
           hitSlop={4}
@@ -90,15 +92,12 @@ export default function ConfirmedCardTile({
         >
           <Ionicons name="remove" size={16} color={colors.text} />
         </Pressable>
-        <Text
-          accessibilityLabel={`${copyCount} ${copyCount === 1 ? "copy" : "copies"}`}
-          style={styles.count}
-        >
+        <Text accessibilityLabel={t.tile.copies(copyCount)} style={styles.count}>
           ×{copyCount}
         </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`More copies of ${card.name}`}
+          accessibilityLabel={t.tile.more(card.name)}
           hitSlop={4}
           onPress={() => onChangeCount(1)}
           style={({ pressed }) => [styles.stepButton, pressed && styles.pressed]}
@@ -110,19 +109,19 @@ export default function ConfirmedCardTile({
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Replace ${card.name}`}
+          accessibilityLabel={t.tile.replaceLabel(card.name)}
           onPress={onReplace}
           style={({ pressed }) => [styles.action, pressed && styles.pressed]}
         >
-          <Text style={styles.actionText}>Replace</Text>
+          <Text style={styles.actionText}>{t.tile.replace}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${card.name}`}
+          accessibilityLabel={t.tile.removeLabel(card.name)}
           onPress={onRemove}
           style={({ pressed }) => [styles.action, pressed && styles.pressed]}
         >
-          <Text style={[styles.actionText, styles.removeText]}>Remove</Text>
+          <Text style={[styles.actionText, styles.removeText]}>{t.tile.remove}</Text>
         </Pressable>
       </View>
     </View>

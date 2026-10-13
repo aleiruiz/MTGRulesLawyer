@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { apiUrl } from "../api-url";
 import Text from "../ui/Text";
 import { colors } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 /** Whether the signed-in account is a judge who reviews disputes. */
 export function useIsAdmin(): boolean {
@@ -43,6 +44,7 @@ export function useIsAdmin(): boolean {
 
 /** The review queue entry on the account screen, shown only to judges. */
 export default function AdminReviewLink({ isAdmin }: { isAdmin: boolean }) {
+  const { t } = useT();
   if (!isAdmin) return null;
   return (
     <Pressable
@@ -52,8 +54,8 @@ export default function AdminReviewLink({ isAdmin }: { isAdmin: boolean }) {
     >
       <Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} />
       <View style={styles.text}>
-        <Text style={styles.title}>Review queue</Text>
-        <Text style={styles.detail}>Disputes waiting for a judge</Text>
+        <Text style={styles.title}>{t.account.reviewQueue}</Text>
+        <Text style={styles.detail}>{t.account.reviewQueueDetail}</Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>

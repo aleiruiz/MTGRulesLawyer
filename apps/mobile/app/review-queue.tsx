@@ -20,9 +20,12 @@ import {
 import { adminAccessMessage, readAdminAccessDenial } from "../src/auth/admin-access";
 import { useAuth } from "../src/auth/AuthProvider";
 import { apiUrl } from "../src/api-url";
+import { useT } from "../src/i18n/LanguageProvider";
+import { strings } from "../src/i18n/core";
 
 export default function ReviewQueueScreen() {
   const { session, loading: authLoading } = useAuth();
+  const { t, locale } = useT();
   const [queue, setQueue] = useState<ReviewQueueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -68,10 +71,10 @@ export default function ReviewQueueScreen() {
         setNeedsVerification(denial !== "not_admin");
         throw new Error(adminAccessMessage(denial));
       }
-      if (!response.ok) throw new Error("The review queue is temporarily unavailable.");
+      if (!response.ok) throw new Error(strings().review.unavailable);
       setQueue(reviewQueueResponseSchema.parse(await response.json()));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The review queue is unavailable.");
+      setMessage(error instanceof Error ? error.message : strings().review.unavailable);
     } finally {
       setLoading(false);
     }
@@ -87,7 +90,7 @@ export default function ReviewQueueScreen() {
     if (!session) return;
     const reason = reasons[challengeId]?.trim() ?? "";
     if (reason.length < 10) {
-      setMessage("Enter at least 10 characters explaining what information is needed.");
+      setMessage(t.review.reasonTooShort);
       return;
     }
     try {
@@ -107,14 +110,13 @@ export default function ReviewQueueScreen() {
         setNeedsVerification(denial !== "not_admin");
         throw new Error(adminAccessMessage(denial));
       }
-      if (response.status === 409)
-        throw new Error("This challenge changed while you were reviewing it. Refresh the queue.");
-      if (!response.ok) throw new Error("The information request could not be saved.");
+      if (response.status === 409) throw new Error(t.review.changed);
+      if (!response.ok) throw new Error(t.review.requestFailed);
       setReasons((current) => ({ ...current, [challengeId]: "" }));
-      setMessage("Information requested. The challenge remains in the review queue.");
+      setMessage(t.review.requested);
       await loadQueue();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The request could not be saved.");
+      setMessage(error instanceof Error ? error.message : t.review.requestFailed);
     }
   }
 
@@ -153,11 +155,7 @@ export default function ReviewQueueScreen() {
           : { decision, reason },
       );
     } catch {
-      setMessage(
-        decision === "approve"
-          ? "Provide a valid corrected answer. For evaluation, include a complete valid JSON fixture and confirm the player opted in."
-          : "Provide at least 10 characters explaining the rejection.",
-      );
+      setMessage(decision === "approve" ? t.review.invalidApproval : t.review.invalidRejection);
       return;
     }
     try {
@@ -177,19 +175,13 @@ export default function ReviewQueueScreen() {
         setNeedsVerification(denial !== "not_admin");
         throw new Error(adminAccessMessage(denial));
       }
-      if (response.status === 409)
-        throw new Error("This challenge was already decided. Refresh the queue.");
-      if (response.status === 400)
-        throw new Error(
-          "Review the corrected answer and sanitized scenario. Evaluation use needs the player's consent.",
-        );
-      if (!response.ok) throw new Error("The decision could not be saved.");
-      setMessage(
-        decision === "approve" ? "Correction approved and saved." : "Challenge rejected and saved.",
-      );
+      if (response.status === 409) throw new Error(t.review.alreadyDecided);
+      if (response.status === 400) throw new Error(t.review.badCorrection);
+      if (!response.ok) throw new Error(t.review.decisionFailed);
+      setMessage(decision === "approve" ? t.review.approved : t.review.rejected);
       await loadQueue();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The decision could not be saved.");
+      setMessage(error instanceof Error ? error.message : t.review.decisionFailed);
     }
   }
 
@@ -197,13 +189,13 @@ export default function ReviewQueueScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text accessibilityRole="header" style={styles.title}>
-          Challenge review queue
+          {t.review.title}
         </Text>
         {authLoading || loading ? (
-          <ActivityIndicator accessibilityLabel="Loading review queue" />
+          <ActivityIndicator accessibilityLabel={t.review.loading} />
         ) : null}
         {!session && !authLoading ? (
-          <Text style={styles.message}>Sign in with an admin account to review challenges.</Text>
+          <Text style={styles.message}>{t.review.signInAdmin}</Text>
         ) : null}
         {message ? (
           <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.message}>
@@ -216,20 +208,18 @@ export default function ReviewQueueScreen() {
             onPress={() => router.push("/admin-verify")}
             style={styles.button}
           >
-            <Text style={styles.buttonText}>Verify with authenticator app</Text>
+            <Text style={styles.buttonText}>{t.review.verify}</Text>
           </Pressable>
         ) : null}
-        {queue?.challenges.length === 0 ? <Text>No challenges are waiting for review.</Text> : null}
+        {queue?.challenges.length === 0 ? <Text>{t.review.empty}</Text> : null}
         {queue?.challenges.map((item) => (
           <View key={item.challengeId} style={styles.card}>
-            <Text style={styles.status}>{item.challenge.status.replaceAll("_", " ")}</Text>
-            <Text style={styles.meta}>
-              Evaluation consent: {item.evaluationConsent ? "granted" : "not granted"}
-            </Text>
-            <Text style={styles.sectionTitle}>Question</Text>
+            <Text style={styles.status}>{t.review.statuses[item.challenge.status]}</Text>
+            <Text style={styles.meta}>{t.review.consent(item.evaluationConsent)}</Text>
+            <Text style={styles.sectionTitle}>{t.review.question}</Text>
             <Text style={styles.body}>{item.question}</Text>
             <Text style={styles.sectionTitle}>
-              Original answer · {item.originalRuling.outcome.replaceAll("_", " ")}
+              {t.review.originalAnswer(t.review.outcomes[item.originalRuling.outcome])}
             </Text>
             <Text style={styles.body}>{item.originalRuling.summary}</Text>
             {item.originalRuling.reasoningSteps.map((step, index) => (
@@ -239,13 +229,13 @@ export default function ReviewQueueScreen() {
             ))}
             {item.originalRuling.assumptions.map((assumption, index) => (
               <Text key={`${index}-${assumption}`} style={styles.meta}>
-                Assumption: {assumption}
+                {t.review.assumption(assumption)}
               </Text>
             ))}
-            <Text style={styles.sectionTitle}>Game facts</Text>
+            <Text style={styles.sectionTitle}>{t.review.gameFacts}</Text>
             {[...item.originalRuling.gameState.events, ...item.originalRuling.gameState.knownFacts]
               .length === 0 ? (
-              <Text style={styles.meta}>No additional game facts were recorded.</Text>
+              <Text style={styles.meta}>{t.review.noFacts}</Text>
             ) : (
               [
                 ...item.originalRuling.gameState.events,
@@ -258,12 +248,12 @@ export default function ReviewQueueScreen() {
             )}
             {item.originalRuling.gameState.missingFacts.map((fact, index) => (
               <Text key={`${index}-${fact}`} style={styles.meta}>
-                Missing fact: {fact}
+                {t.review.missingFact(fact)}
               </Text>
             ))}
             {item.originalRuling.confirmedCards.length > 0 ? (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Confirmed cards</Text>
+                <Text style={styles.sectionTitle}>{t.review.confirmedCards}</Text>
                 {item.originalRuling.confirmedCards.map((card) => (
                   <View
                     key={`${card.oracleId}-${card.faceIndex ?? "card"}`}
@@ -279,10 +269,12 @@ export default function ReviewQueueScreen() {
               </View>
             ) : null}
             <Text style={styles.meta}>
-              Rules snapshot {item.originalRuling.snapshot.version} ·{" "}
-              {item.originalRuling.snapshot.activatedAt
-                ? new Date(item.originalRuling.snapshot.activatedAt).toLocaleDateString()
-                : "activation date unavailable"}
+              {t.review.snapshot(
+                item.originalRuling.snapshot.version,
+                item.originalRuling.snapshot.activatedAt
+                  ? new Date(item.originalRuling.snapshot.activatedAt).toLocaleDateString(locale)
+                  : t.review.noActivation,
+              )}
             </Text>
             {item.originalRuling.citations.map((citation, index) => (
               <View key={`${index}-${citation.sourceUrl}`} style={styles.citation}>
@@ -291,28 +283,28 @@ export default function ReviewQueueScreen() {
                 <Text style={styles.meta}>{citation.sourceUrl}</Text>
               </View>
             ))}
-            <Text style={styles.sectionTitle}>Challenge</Text>
+            <Text style={styles.sectionTitle}>{t.review.challenge}</Text>
             <Text style={styles.body}>{item.challenge.explanation}</Text>
             {item.challenge.proposedOutcome ? (
               <Text style={styles.meta}>
-                Proposed outcome: {item.challenge.proposedOutcome.replaceAll("_", " ")}
+                {t.review.proposedOutcome(t.review.outcomes[item.challenge.proposedOutcome])}
               </Text>
             ) : null}
             {item.challenge.latestInformationRequest ? (
               <Text style={styles.meta}>
-                Previous request: {item.challenge.latestInformationRequest.reason}
+                {t.review.previousRequest(item.challenge.latestInformationRequest.reason)}
               </Text>
             ) : null}
             <TextInput
               placeholderTextColor={colors.textSubtle}
-              accessibilityLabel={`Information needed for challenge ${item.challengeId}`}
+              accessibilityLabel={t.review.infoLabel(item.challengeId)}
               multiline
               maxLength={2_000}
               value={reasons[item.challengeId] ?? ""}
               onChangeText={(value) =>
                 setReasons((current) => ({ ...current, [item.challengeId]: value }))
               }
-              placeholder="Explain what additional information the player should provide."
+              placeholder={t.review.infoPlaceholder}
               style={styles.input}
             />
             <Pressable
@@ -320,23 +312,23 @@ export default function ReviewQueueScreen() {
               onPress={() => void requestInformation(item.challengeId)}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>Request more information</Text>
+              <Text style={styles.buttonText}>{t.review.requestInfo}</Text>
             </Pressable>
-            <Text style={styles.sectionTitle}>Record a decision</Text>
+            <Text style={styles.sectionTitle}>{t.review.recordDecision}</Text>
             <TextInput
               placeholderTextColor={colors.textSubtle}
-              accessibilityLabel={`Decision reason for challenge ${item.challengeId}`}
+              accessibilityLabel={t.review.decisionLabel(item.challengeId)}
               multiline
               maxLength={2_000}
               value={decisionReasons[item.challengeId] ?? ""}
               onChangeText={(value) =>
                 setDecisionReasons((current) => ({ ...current, [item.challengeId]: value }))
               }
-              placeholder="Required reason for approval or rejection."
+              placeholder={t.review.decisionPlaceholder}
               style={styles.input}
             />
-            <Text style={styles.meta}>For approval, write the corrected answer:</Text>
-            <Text style={styles.sectionTitle}>Error category</Text>
+            <Text style={styles.meta}>{t.review.forApproval}</Text>
+            <Text style={styles.sectionTitle}>{t.review.errorCategory}</Text>
             <View style={styles.choices}>
               {(
                 [
@@ -378,7 +370,7 @@ export default function ReviewQueueScreen() {
                       errorCategory && styles.selectedChoice,
                   ]}
                 >
-                  <Text style={styles.choiceText}>{errorCategory.replaceAll("_", " ")}</Text>
+                  <Text style={styles.choiceText}>{t.review.categories[errorCategory]}</Text>
                 </Pressable>
               ))}
             </View>
@@ -415,20 +407,16 @@ export default function ReviewQueueScreen() {
               style={styles.evalToggle}
             >
               <Text style={styles.body}>
-                {corrections[item.challengeId]?.includeInEvaluation ? "☑" : "☐"} Add a sanitized
-                scenario to regression evaluation
+                {corrections[item.challengeId]?.includeInEvaluation ? "☑" : "☐"}{" "}
+                {t.review.addToEvaluation}
               </Text>
             </Pressable>
             {corrections[item.challengeId]?.includeInEvaluation ? (
               <>
-                <Text style={styles.meta}>
-                  Write the complete fixture for the rewritten scenario. Include only cards, rules,
-                  expected answer text, and citations you reviewed for accuracy and privacy. The
-                  exporter uses this fixture as a unit and does not copy content from the challenge.
-                </Text>
+                <Text style={styles.meta}>{t.review.fixtureHelp}</Text>
                 <TextInput
                   placeholderTextColor={colors.textSubtle}
-                  accessibilityLabel={`Complete reviewed evaluation fixture JSON for challenge ${item.challengeId}`}
+                  accessibilityLabel={t.review.fixtureLabel(item.challengeId)}
                   multiline
                   maxLength={20_000}
                   value={corrections[item.challengeId]?.evaluationFixtureJson ?? ""}
@@ -486,14 +474,14 @@ export default function ReviewQueueScreen() {
                         styles.selectedChoice,
                     ]}
                   >
-                    <Text style={styles.choiceText}>{outcome.replaceAll("_", " ")}</Text>
+                    <Text style={styles.choiceText}>{t.review.outcomes[outcome]}</Text>
                   </Pressable>
                 ),
               )}
             </View>
             <TextInput
               placeholderTextColor={colors.textSubtle}
-              accessibilityLabel={`Corrected ruling summary for challenge ${item.challengeId}`}
+              accessibilityLabel={t.review.summaryLabel(item.challengeId)}
               multiline
               maxLength={1_200}
               value={corrections[item.challengeId]?.summary ?? ""}
@@ -513,12 +501,12 @@ export default function ReviewQueueScreen() {
                   },
                 }))
               }
-              placeholder="Corrected answer summary."
+              placeholder={t.review.summaryPlaceholder}
               style={styles.input}
             />
             <TextInput
               placeholderTextColor={colors.textSubtle}
-              accessibilityLabel={`Corrected ruling reasoning for challenge ${item.challengeId}`}
+              accessibilityLabel={t.review.reasoningLabel(item.challengeId)}
               multiline
               maxLength={800}
               value={corrections[item.challengeId]?.reasoning ?? ""}
@@ -538,7 +526,7 @@ export default function ReviewQueueScreen() {
                   },
                 }))
               }
-              placeholder="Explain the corrected result."
+              placeholder={t.review.reasoningPlaceholder}
               style={styles.input}
             />
             <View style={styles.actions}>
@@ -547,14 +535,14 @@ export default function ReviewQueueScreen() {
                 onPress={() => void decide(item.challengeId, "approve")}
                 style={styles.button}
               >
-                <Text style={styles.buttonText}>Approve correction</Text>
+                <Text style={styles.buttonText}>{t.review.approve}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => void decide(item.challengeId, "reject")}
                 style={styles.rejectButton}
               >
-                <Text style={styles.rejectButtonText}>Reject challenge</Text>
+                <Text style={styles.rejectButtonText}>{t.review.reject}</Text>
               </Pressable>
             </View>
           </View>

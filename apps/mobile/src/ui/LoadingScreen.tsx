@@ -4,6 +4,7 @@ import Loader from "./Loader";
 import GlassesLogo from "./GlassesLogo";
 import RaisedHand from "./RaisedHand";
 import { colors, fonts } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 interface LoadingScreenProps {
   // Custom fonts may still be loading, so the splash only uses them once they are ready.
@@ -11,6 +12,7 @@ interface LoadingScreenProps {
 }
 
 export default function LoadingScreen({ fontsReady }: LoadingScreenProps) {
+  const { t } = useT();
   return (
     <View style={styles.screen}>
       <View style={styles.center}>
@@ -27,15 +29,12 @@ export default function LoadingScreen({ fontsReady }: LoadingScreenProps) {
           </View>
           {/* Remount once fonts load so Android re-measures the text width. */}
           <View key={fontsReady ? "fonts" : "system"} style={styles.calling}>
-            <Text style={styles.callingText}>Judge!</Text>
-            <Loader accessibilityLabel="Loading Rules Lawyer" size={6} color={colors.textMuted} />
+            <Text style={styles.callingText}>{t.splash.judge}</Text>
+            <Loader accessibilityLabel={t.splash.loading} size={6} color={colors.textMuted} />
           </View>
         </View>
       </View>
-      <Text style={styles.notice}>
-        Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by
-        Wizards.
-      </Text>
+      <Text style={styles.notice}>{t.splash.fanContent}</Text>
     </View>
   );
 }

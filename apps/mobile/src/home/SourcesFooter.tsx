@@ -5,19 +5,21 @@ import { apiUrl } from "../api-url";
 import Text from "../ui/Text";
 import { rulesDate } from "../rulings/verdict-text";
 import { colors } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 const shortDate: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
 
-function cardsDate(checkedAt: string | null): string | null {
+function cardsDate(checkedAt: string | null, today: string, locale: string): string | null {
   if (!checkedAt) return null;
   const date = new Date(checkedAt);
-  if (date.toDateString() === new Date().toDateString()) return "today";
-  return date.toLocaleDateString(undefined, shortDate);
+  if (date.toDateString() === new Date().toDateString()) return today;
+  return date.toLocaleDateString(locale, shortDate);
 }
 
 /** Which Comprehensive Rules and card data the judge reads, so players can trust the answer. */
 export default function SourcesFooter() {
   const [status, setStatus] = useState<SourceStatusResponse | null>(null);
+  const { t, locale } = useT();
 
   useEffect(() => {
     let active = true;
@@ -37,13 +39,11 @@ export default function SourcesFooter() {
   const rules = status.sources.find((source) => source.kind === "COMPREHENSIVE_RULES");
   const cards = status.sources.find((source) => source.kind === "ORACLE_CARDS");
   const stale = status.sources.some((source) => source.stale);
+  const rulesOf = rules ? rulesDate(rules.sourceVersion, locale) : null;
+  const cardsOf = cards ? cardsDate(cards.checkedAt, t.sources.today, locale) : null;
   const parts = [
-    rules && rulesDate(rules.sourceVersion)
-      ? `Comprehensive Rules · ${rulesDate(rules.sourceVersion)}`
-      : null,
-    cards && cardsDate(cards.checkedAt)
-      ? `Cards and official rulings checked ${cardsDate(cards.checkedAt)}`
-      : null,
+    rulesOf ? t.sources.rules(rulesOf) : null,
+    cardsOf ? t.sources.cards(cardsOf) : null,
   ].filter(Boolean);
   if (parts.length === 0) return null;
 
@@ -52,7 +52,7 @@ export default function SourcesFooter() {
       <View style={[styles.dot, { backgroundColor: stale ? colors.warning : colors.successDot }]} />
       <Text style={styles.text}>
         {parts.join(" · ")}
-        {stale ? " · An update is overdue" : ""}
+        {stale ? t.sources.overdue : ""}
       </Text>
     </View>
   );

@@ -7,10 +7,12 @@ import { useMyChallenges } from "../src/challenges/useMyChallenges";
 import Loader from "../src/ui/Loader";
 import Text from "../src/ui/Text";
 import { colors, eyebrow, fonts } from "../src/theme";
+import { useT } from "../src/i18n/LanguageProvider";
 
 export default function MyChallengesScreen() {
   const { session } = useAuth();
   const { challenges, loading, error, reload } = useMyChallenges();
+  const { t, locale } = useT();
 
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
@@ -29,11 +31,9 @@ export default function MyChallengesScreen() {
       >
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={styles.heading}>
-            Your disputes
+            {t.disputes.heading}
           </Text>
-          <Text style={styles.lead}>
-            Every dispute is reviewed by a person. Pull down to check for news.
-          </Text>
+          <Text style={styles.lead}>{t.disputes.lead}</Text>
         </View>
 
         {!session ? (
@@ -42,22 +42,18 @@ export default function MyChallengesScreen() {
             onPress={() => router.push("/sign-in")}
             style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
           >
-            <Text style={styles.secondaryText}>Sign in to see your disputes</Text>
+            <Text style={styles.secondaryText}>{t.disputes.signInToSee}</Text>
           </Pressable>
         ) : null}
         {session && challenges === null && loading ? (
-          <Loader accessibilityLabel="Loading your disputes" />
+          <Loader accessibilityLabel={t.disputes.loading} />
         ) : null}
         {error ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {error}
           </Text>
         ) : null}
-        {challenges?.length === 0 ? (
-          <Text style={styles.lead}>
-            No disputes yet. If a ruling looks wrong, tap “This looks wrong” under it.
-          </Text>
-        ) : null}
+        {challenges?.length === 0 ? <Text style={styles.lead}>{t.disputes.none}</Text> : null}
 
         {challenges?.map((challenge) => {
           const status = challengeStatus(challenge);
@@ -72,7 +68,7 @@ export default function MyChallengesScreen() {
 
               {challenge.status === "needs_information" && challenge.latestInformationRequest ? (
                 <View accessibilityLiveRegion="polite" style={styles.note}>
-                  <Text style={[eyebrow, { color: colors.info }]}>The judge asks</Text>
+                  <Text style={[eyebrow, { color: colors.info }]}>{t.disputes.judgeAsks}</Text>
                   <Text style={styles.noteText}>{challenge.latestInformationRequest.reason}</Text>
                 </View>
               ) : null}
@@ -80,7 +76,9 @@ export default function MyChallengesScreen() {
               {decision ? (
                 <View accessibilityLiveRegion="polite" style={styles.note}>
                   <Text style={eyebrow}>
-                    {decision.decision === "approve" ? "The judge agreed" : "The judge disagreed"}
+                    {decision.decision === "approve"
+                      ? t.disputes.judgeAgreed
+                      : t.disputes.judgeDisagreed}
                   </Text>
                   <Text style={styles.noteText}>{decision.reason}</Text>
                   {decision.correctedRulingVersion ? (
@@ -97,7 +95,7 @@ export default function MyChallengesScreen() {
                       }
                       style={styles.linkButton}
                     >
-                      <Text style={styles.link}>Read the corrected ruling</Text>
+                      <Text style={styles.link}>{t.disputes.readCorrected}</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -105,7 +103,7 @@ export default function MyChallengesScreen() {
 
               <View style={styles.footer}>
                 <Text style={styles.date}>
-                  Sent {new Date(challenge.createdAt).toLocaleDateString()}
+                  {t.disputes.sentOn(new Date(challenge.createdAt).toLocaleDateString(locale))}
                 </Text>
                 <Pressable
                   accessibilityRole="link"
@@ -117,7 +115,7 @@ export default function MyChallengesScreen() {
                   }
                   style={styles.linkButton}
                 >
-                  <Text style={styles.link}>Original ruling</Text>
+                  <Text style={styles.link}>{t.disputes.original}</Text>
                 </Pressable>
               </View>
             </View>

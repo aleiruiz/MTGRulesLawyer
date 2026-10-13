@@ -1,3 +1,5 @@
+import { strings } from "../i18n/core";
+
 export type AdminAccessDenial = "mfa_required" | "reauthentication_required" | "not_admin";
 
 /** Maps an admin API 403 response to the step the reviewer needs to take. */
@@ -16,9 +18,8 @@ export async function readAdminAccessDenial(response: Response): Promise<AdminAc
 }
 
 export function adminAccessMessage(denial: AdminAccessDenial): string {
-  if (denial === "mfa_required")
-    return "Admin reviews need a code from your authenticator app. Verify your identity to continue.";
-  if (denial === "reauthentication_required")
-    return "Your last identity check has expired. Enter a new authenticator code to continue.";
-  return "Admin access is required to review challenges.";
+  const t = strings().auth;
+  if (denial === "mfa_required") return t.adminMfaRequired;
+  if (denial === "reauthentication_required") return t.adminReauth;
+  return t.adminRequired;
 }

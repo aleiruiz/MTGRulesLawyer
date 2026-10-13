@@ -26,10 +26,12 @@ import {
 } from "./api";
 import { QuestionRequestError } from "../questions/question-error-message";
 import { discardDraft, getDraft } from "./draft-store";
-import JudgeMessage, { outcomeLabel } from "./JudgeMessage";
+import JudgeMessage from "./JudgeMessage";
 import GlintReveal from "../verdict/GlintReveal";
 import ThinkingCard from "../verdict/ThinkingCard";
 import { contextRulingIds, mergeCards, resolveMentions, toChatCard, type ChatCard } from "./turns";
+import { useT } from "../i18n/LanguageProvider";
+import { strings } from "../i18n/core";
 
 type Mention = QuestionInterpretResponse["cardMentions"][number];
 
@@ -77,6 +79,7 @@ export default function ChatScreen({
   conversationId?: string;
 }) {
   const { session, loading: authLoading } = useAuth();
+  const { t } = useT();
   const accessToken = session?.access_token;
   const insets = useSafeAreaInsets();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -136,8 +139,8 @@ export default function ChatScreen({
         if (!mounted.current) return;
         fail(
           key,
-          controller.signal.aborted ? new QuestionRequestError("Stopped.") : error,
-          "The judge could not answer.",
+          controller.signal.aborted ? new QuestionRequestError(strings().chat.stopped) : error,
+          strings().chat.couldNotAnswer,
         );
       }
     },
@@ -154,7 +157,7 @@ export default function ChatScreen({
         if (controller.signal.aborted || !mounted.current) return;
         if (!interpretation.inScope) {
           updateTurn(key, { status: "out_of_scope", note: interpretation.scopeReason });
-          announce(`Outside what the judge can rule on. ${interpretation.scopeReason}`);
+          announce(strings().chat.announceOutOfScope(interpretation.scopeReason));
           return;
         }
         const gameState: ChatGameState = {
@@ -173,7 +176,9 @@ export default function ChatScreen({
             gameState,
             unmatched: resolution.unmatched,
           });
-          announce(`Which card do you mean by ${resolution.ambiguous[0]?.text ?? "that name"}?`);
+          announce(
+            strings().chat.announceWhich(resolution.ambiguous[0]?.text ?? strings().chat.thatName),
+          );
           return;
         }
         updateTurn(key, { gameState, unmatched: resolution.unmatched });
@@ -186,8 +191,8 @@ export default function ChatScreen({
         if (!mounted.current) return;
         fail(
           key,
-          controller.signal.aborted ? new QuestionRequestError("Stopped.") : error,
-          "The judge could not read that.",
+          controller.signal.aborted ? new QuestionRequestError(strings().chat.stopped) : error,
+          strings().chat.couldNotRead,
         );
       }
     },
@@ -206,13 +211,13 @@ export default function ChatScreen({
   useEffect(() => {
     if (started.current) return;
     if (!draftId && !initialConversationId) {
-      setLoadError("Start a new question from the home screen.");
+      setLoadError(strings().chat.noDraft);
       return;
     }
     if (draftId) {
       const draft = getDraft(draftId);
       if (!draft) {
-        setLoadError("This question is no longer available. Ask it again from the home screen.");
+        setLoadError(strings().chat.draftGone);
         return;
       }
       started.current = true;
@@ -226,7 +231,7 @@ export default function ChatScreen({
     if (!initialConversationId || authLoading) return;
     if (!accessToken) {
       setLoadingConversation(false);
-      setLoadError("Sign in to open your saved chats.");
+      setLoadError(strings().chat.signInToOpen);
       return;
     }
     started.current = true;
@@ -248,7 +253,7 @@ export default function ChatScreen({
       .catch((error: unknown) => {
         if (mounted.current)
           setLoadError(
-            error instanceof QuestionRequestError ? error.message : "Could not open this chat.",
+            error instanceof QuestionRequestError ? error.message : strings().chat.couldNotOpen,
           );
       })
       .finally(() => {
@@ -342,14 +347,14 @@ export default function ChatScreen({
             if (followEnd.current) scrollRef.current?.scrollToEnd({ animated: true });
           }}
         >
-          {loadingConversation ? <Loader accessibilityLabel="Opening chat" size={14} /> : null}
+          {loadingConversation ? <Loader accessibilityLabel={t.chat.opening} size={14} /> : null}
           {loadError ? (
             <View style={styles.notice}>
               <Text accessibilityRole="alert" style={styles.noticeText}>
                 {loadError}
               </Text>
               <Pressable accessibilityRole="button" onPress={() => router.replace("/")}>
-                <Text style={styles.link}>Back to the home screen</Text>
+                <Text style={styles.link}>{t.chat.backHome}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -368,7 +373,7 @@ export default function ChatScreen({
                 (index === 0 ||
                   turn.cards.map((card) => card.oracleId).join() !==
                     turns[index - 1]?.cards.map((card) => card.oracleId).join()) ? (
-                  <View style={styles.chips} accessibilityLabel="Cards in this question">
+                  <View style={styles.chips} accessibilityLabel={t.chat.cardsInQuestion}>
                     {turn.cards.map((card) => (
                       <View key={card.oracleId} style={styles.chip}>
                         <Text style={styles.chipText}>
@@ -383,8 +388,7 @@ export default function ChatScreen({
 
               {turn.unmatched && turn.unmatched.length > 0 ? (
                 <Text style={styles.aside}>
-                  No card found for {turn.unmatched.map((name) => `“${name}”`).join(", ")}; the
-                  judge treats it as plain text.
+                  {t.chat.unmatched(turn.unmatched.map((name) => `“${name}”`).join(", "))}
                 </Text>
               ) : null}
 
@@ -399,13 +403,13 @@ export default function ChatScreen({
                 <View style={styles.judgeNote}>
                   {turn.pendingMentions.map((mention) => (
                     <View key={`${mention.start}-${mention.end}`} style={styles.choiceGroup}>
-                      <Text style={styles.noteText}>Which “{mention.text}” do you mean?</Text>
+                      <Text style={styles.noteText}>{t.chat.whichCard(mention.text)}</Text>
                       <View style={styles.chips}>
                         {mention.candidates.map((candidate) => (
                           <Pressable
                             key={candidate.oracleId}
                             accessibilityRole="button"
-                            accessibilityLabel={`Use ${candidate.name} for ${mention.text}`}
+                            accessibilityLabel={t.chat.useCandidate(candidate.name, mention.text)}
                             onPress={() => chooseCard(turn, mention, candidate)}
                             style={styles.choice}
                           >
@@ -426,7 +430,7 @@ export default function ChatScreen({
                     updateTurn(turn.key, { fresh: false });
                     if (turn.ruling) {
                       announce(
-                        `${outcomeLabel(turn.ruling.ruling.outcome)}. ${turn.ruling.ruling.summary}`,
+                        `${t.verdict.outcomes[turn.ruling.ruling.outcome]}. ${turn.ruling.ruling.summary}`,
                       );
                     }
                   }}
@@ -466,9 +470,7 @@ export default function ChatScreen({
 
               {turn.status === "out_of_scope" ? (
                 <View style={styles.judgeNote}>
-                  <Text style={styles.noteText}>
-                    That one is outside what I can rule on. {turn.note}
-                  </Text>
+                  <Text style={styles.noteText}>{t.chat.outOfScope(turn.note ?? "")}</Text>
                 </View>
               ) : null}
 
@@ -483,7 +485,9 @@ export default function ChatScreen({
                     disabled={busy}
                     onPress={() => rerun(turn)}
                   >
-                    <Text style={[styles.link, busy && styles.disabledLink]}>Try again</Text>
+                    <Text style={[styles.link, busy && styles.disabledLink]}>
+                      {t.common.tryAgain}
+                    </Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -491,33 +495,31 @@ export default function ChatScreen({
           ))}
 
           {!session && turns.some((turn) => turn.ruling) ? (
-            <Text style={styles.aside}>
-              Sign in from the account icon to keep your last 10 rulings.
-            </Text>
+            <Text style={styles.aside}>{t.chat.signInToKeep}</Text>
           ) : null}
         </ScrollView>
 
         <View style={styles.composer}>
           <View style={styles.composerBox}>
             <TextInput
-              accessibilityLabel="Follow-up question"
+              accessibilityLabel={t.chat.followUpLabel}
               editable={!loadError}
               multiline
               maxLength={4_000}
               onChangeText={setInput}
               placeholder={
                 busy
-                  ? "The judge is answering…"
+                  ? t.chat.answering
                   : lastTurn?.ruling?.ruling.outcome === "needs_information"
-                    ? "Or answer in your own words"
-                    : "Ask a follow-up about this table"
+                    ? t.chat.answerOwnWords
+                    : t.chat.askFollowUp
               }
               style={styles.input}
               value={input}
             />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Send follow-up"
+              accessibilityLabel={t.chat.send}
               accessibilityState={{ disabled: busy || !input.trim() || Boolean(loadError) }}
               disabled={busy || !input.trim() || Boolean(loadError)}
               onPress={() => sendFollowUp()}

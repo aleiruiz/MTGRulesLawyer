@@ -3,19 +3,18 @@ import { Ionicons } from "@expo/vector-icons";
 import type { RulingGenerationResponse } from "@mtg-rules/contracts";
 import Text from "../ui/Text";
 import { colors, fonts } from "../theme";
+import { strings } from "../i18n/core";
 
 export type Citation = RulingGenerationResponse["citations"][number];
 
 /** What a citation is called on its chip: a rule number, a card name or "Official ruling". */
 export function citationChipLabel(citation: Citation): string {
-  if (citation.kind === "CARD_RULING") return "Official ruling";
+  if (citation.kind === "CARD_RULING") return strings().citation.officialRuling;
   return citation.label;
 }
 
 export function citationKindTitle(citation: Citation): string {
-  if (citation.kind === "RULE") return "Comprehensive Rules";
-  if (citation.kind === "CARD_FACE") return "Card text";
-  return "Official ruling";
+  return strings().citation.kinds[citation.kind];
 }
 
 interface CitationChipProps {
@@ -31,7 +30,7 @@ export default function CitationChip({ citation, onPress, prominent }: CitationC
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${citationKindTitle(citation)} ${label}`}
-      accessibilityHint="Shows the cited text."
+      accessibilityHint={strings().citation.hint}
       hitSlop={{ top: 8, bottom: 8 }}
       onPress={onPress}
       style={({ pressed }) => [

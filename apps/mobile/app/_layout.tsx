@@ -18,12 +18,14 @@ import { AuthProvider, useAuth } from "../src/auth/AuthProvider";
 import LoadingScreen from "../src/ui/LoadingScreen";
 import { FontsReadyContext } from "../src/ui/fonts-ready";
 import { colors, fonts } from "../src/theme";
+import { LanguageProvider, useT } from "../src/i18n/LanguageProvider";
 
 // Keeps the loading screen up long enough to read instead of flashing for a frame.
 const MIN_SPLASH_MS = 1_200;
 
 function AppStack() {
   const { loading: authLoading } = useAuth();
+  const { t } = useT();
   const [fontsLoaded, fontError] = useFonts({
     Spectral_400Regular,
     Spectral_400Regular_Italic,
@@ -67,18 +69,18 @@ function AppStack() {
               contentStyle: { backgroundColor: colors.background },
             }}
           >
-            <Stack.Screen name="index" options={{ title: "Rules Lawyer", headerShown: false }} />
-            <Stack.Screen name="sign-in" options={{ title: "You" }} />
-            <Stack.Screen name="challenges" options={{ title: "Disputes" }} />
-            <Stack.Screen name="dispute" options={{ title: "Dispute this ruling" }} />
-            <Stack.Screen name="review-queue" options={{ title: "Review queue" }} />
-            <Stack.Screen name="admin-verify" options={{ title: "Verify identity" }} />
-            <Stack.Screen name="rulings" options={{ title: "Shared ruling" }} />
-            <Stack.Screen name="table" options={{ title: "Check the table" }} />
-            <Stack.Screen name="chat" options={{ title: "Ruling" }} />
+            <Stack.Screen name="index" options={{ title: t.titles.home, headerShown: false }} />
+            <Stack.Screen name="sign-in" options={{ title: t.titles.account }} />
+            <Stack.Screen name="challenges" options={{ title: t.titles.disputes }} />
+            <Stack.Screen name="dispute" options={{ title: t.titles.dispute }} />
+            <Stack.Screen name="review-queue" options={{ title: t.titles.reviewQueue }} />
+            <Stack.Screen name="admin-verify" options={{ title: t.titles.adminVerify }} />
+            <Stack.Screen name="rulings" options={{ title: t.titles.sharedRuling }} />
+            <Stack.Screen name="table" options={{ title: t.titles.table }} />
+            <Stack.Screen name="chat" options={{ title: t.titles.ruling }} />
             <Stack.Screen
               name="auth/callback"
-              options={{ title: "Sign in", headerBackVisible: false }}
+              options={{ title: t.titles.signInCallback, headerBackVisible: false }}
             />
           </Stack>
         </FontsReadyContext.Provider>
@@ -94,9 +96,11 @@ function AppStack() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <AppStack />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <AppStack />
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 

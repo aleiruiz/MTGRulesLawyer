@@ -15,14 +15,16 @@ import GlassesLogo from "../src/ui/GlassesLogo";
 import Loader from "../src/ui/Loader";
 import Text from "../src/ui/Text";
 import { colors, eyebrow, fonts } from "../src/theme";
+import { useT } from "../src/i18n/LanguageProvider";
+import { LANGUAGES, languageNames } from "../src/i18n/core";
 
 const providers: Record<
   SocialProvider,
-  { label: string; name: string; icon: ComponentProps<typeof Ionicons>["name"] }
+  { name: string; icon: ComponentProps<typeof Ionicons>["name"] }
 > = {
-  google: { label: "Continue with Google", name: "Google", icon: "logo-google" },
-  apple: { label: "Continue with Apple", name: "Apple", icon: "logo-apple" },
-  github: { label: "Continue with GitHub", name: "GitHub", icon: "logo-github" },
+  google: { name: "Google", icon: "logo-google" },
+  apple: { name: "Apple", icon: "logo-apple" },
+  github: { name: "GitHub", icon: "logo-github" },
 };
 
 function isSocialProvider(value: unknown): value is SocialProvider {
@@ -31,6 +33,7 @@ function isSocialProvider(value: unknown): value is SocialProvider {
 
 export default function AccountScreen() {
   const { session, signIn, signOut } = useAuth();
+  const { t, language, setLanguage } = useT();
   const isAdmin = useIsAdmin();
   const recent = useRecentConversations();
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
@@ -42,9 +45,9 @@ export default function AccountScreen() {
     setMessage("");
     try {
       const result = await signIn(provider);
-      if (result === "cancelled") setMessage("Sign-in was cancelled.");
+      if (result === "cancelled") setMessage(t.account.cancelled);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Sign-in could not be completed.");
+      setMessage(error instanceof Error ? error.message : t.account.signInFailed);
     } finally {
       setPendingProvider(null);
     }
@@ -60,30 +63,28 @@ export default function AccountScreen() {
         headers: { authorization: `Bearer ${session.access_token}` },
       });
       if (response.status === 502) {
-        setMessage(
-          "Your app data was deleted, but your sign-in could not be removed. Try deleting again.",
-        );
+        setMessage(t.account.deletePartial);
         return;
       }
       if (response.status === 401) {
         // The sign-in is no longer valid, for example because a previous attempt already
         // removed it; clear this device's session so the player can sign in again if needed.
         await supabase.auth.signOut({ scope: "local" });
-        setMessage("Your sign-in is no longer valid. If your account still exists, sign in again.");
+        setMessage(t.account.deleteStale);
         return;
       }
       if (response.status === 429) {
-        setMessage("Too many deletion attempts. Wait an hour and try again. Nothing was deleted.");
+        setMessage(t.account.deleteTooMany);
         return;
       }
       const denial = await readAdminAccessDenial(response);
       if (denial === "mfa_required" || denial === "reauthentication_required") {
-        setMessage("Admin accounts need a fresh authenticator code before they can be deleted.");
+        setMessage(t.account.deleteNeedsMfa);
         router.push("/admin-verify");
         return;
       }
       if (!response.ok) {
-        setMessage("Account deletion is unavailable right now. Nothing was deleted.");
+        setMessage(t.account.deleteUnavailable);
         return;
       }
       // The server already removed the sign-in identity, so only clear this device's session.
@@ -92,24 +93,23 @@ export default function AccountScreen() {
       } catch {
         // Deletion succeeded; the API rejects the stale local session anyway.
       }
-      setMessage("Your account and its data were deleted.");
+      setMessage(t.account.deleted);
     } catch {
-      setMessage("Account deletion is unavailable right now. Check your connection.");
+      setMessage(t.account.deleteOffline);
     } finally {
       setDeleting(false);
     }
   }
 
   function confirmDeleteAccount() {
-    const warning =
-      "This permanently deletes your account, your saved rulings and your disputes. Reviewed disputes stay for the audit record without your name or text. This cannot be undone.";
+    const warning = t.account.deleteWarning;
     if (Platform.OS === "web") {
       if (globalThis.confirm?.(warning)) void deleteAccount();
       return;
     }
-    Alert.alert("Delete account?", warning, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => void deleteAccount() },
+    Alert.alert(t.account.deleteTitle, warning, [
+      { text: t.common.cancel, style: "cancel" },
+      { text: t.common.delete, style: "destructive", onPress: () => void deleteAccount() },
     ]);
   }
 
@@ -117,9 +117,9 @@ export default function AccountScreen() {
     setMessage("");
     try {
       await signOut();
-      setMessage("You are signed out.");
+      setMessage(t.account.signedOut);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Sign-out could not be completed.");
+      setMessage(error instanceof Error ? error.message : t.account.signOutFailed);
     }
   }
 
@@ -138,17 +138,17 @@ export default function AccountScreen() {
               </View>
               <View style={styles.profileText}>
                 <Text numberOfLines={1} style={styles.name}>
-                  {email || "Signed in"}
+                  {email || t.account.signedIn}
                 </Text>
                 <Text style={styles.detail}>
                   {[
                     isSocialProvider(provider)
-                      ? `Signed in with ${providers[provider].name}`
+                      ? t.account.signedInWith(providers[provider].name)
                       : null,
-                    isAdmin ? "Judge reviewer" : null,
+                    isAdmin ? t.account.judgeReviewer : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "Signed in"}
+                    .join(" · ") || t.account.signedIn}
                 </Text>
               </View>
             </View>
@@ -157,11 +157,11 @@ export default function AccountScreen() {
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={eyebrow}>Your last 10 rulings</Text>
-                <Text style={styles.detail}>Tap one to keep asking</Text>
+                <Text style={eyebrow}>{t.account.last10}</Text>
+                <Text style={styles.detail}>{t.account.tapToKeep}</Text>
               </View>
               {recent.loaded && recent.conversations.length === 0 && !recent.error ? (
-                <Text style={styles.detail}>Rulings you ask while signed in are kept here.</Text>
+                <Text style={styles.detail}>{t.account.keptHere}</Text>
               ) : null}
               <RecentRulings {...recent} hideTitle />
             </View>
@@ -172,18 +172,18 @@ export default function AccountScreen() {
               style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
             >
               <Ionicons name="flag-outline" size={18} color={colors.textSoft} />
-              <Text style={styles.linkRowText}>Your disputes</Text>
+              <Text style={styles.linkRowText}>{t.account.yourDisputes}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
 
             <View style={styles.section}>
-              <Text style={eyebrow}>Account</Text>
+              <Text style={eyebrow}>{t.account.section}</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => void beginSignOut()}
                 style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
               >
-                <Text style={styles.secondaryText}>Sign out</Text>
+                <Text style={styles.secondaryText}>{t.account.signOut}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -198,9 +198,9 @@ export default function AccountScreen() {
                 ]}
               >
                 {deleting ? (
-                  <Loader accessibilityLabel="Deleting account" size={7} color={colors.danger} />
+                  <Loader accessibilityLabel={t.account.deleting} size={7} color={colors.danger} />
                 ) : (
-                  <Text style={styles.dangerText}>Delete account and history</Text>
+                  <Text style={styles.dangerText}>{t.account.deleteAccount}</Text>
                 )}
               </Pressable>
             </View>
@@ -209,16 +209,11 @@ export default function AccountScreen() {
           <View style={styles.signIn}>
             <GlassesLogo width={64} />
             <Text accessibilityRole="header" style={styles.heading}>
-              Keep your rulings
+              {t.account.keepTitle}
             </Text>
-            <Text style={styles.lead}>
-              Sign in to keep your last 10 rulings and dispute a ruling. Asking the judge works
-              without an account.
-            </Text>
+            <Text style={styles.lead}>{t.account.keepLead}</Text>
             {!isSupabaseConfigured ? (
-              <Text style={styles.setup}>
-                Add the Supabase URL and publishable key to the local environment to enable sign-in.
-              </Text>
+              <Text style={styles.setup}>{t.account.supabaseSetup}</Text>
             ) : null}
             {SOCIAL_PROVIDERS.map((item) => (
               <Pressable
@@ -234,11 +229,11 @@ export default function AccountScreen() {
                 ]}
               >
                 {pendingProvider === item ? (
-                  <Loader accessibilityLabel="Signing in" size={7} />
+                  <Loader accessibilityLabel={t.account.signingIn} size={7} />
                 ) : (
                   <>
                     <Ionicons name={providers[item].icon} size={18} color={colors.text} />
-                    <Text style={styles.providerText}>{providers[item].label}</Text>
+                    <Text style={styles.providerText}>{t.account.providers[item]}</Text>
                   </>
                 )}
               </Pressable>
@@ -252,11 +247,33 @@ export default function AccountScreen() {
           </Text>
         ) : null}
 
-        <Text style={styles.notice}>
-          Rules from the Comprehensive Rules. Card text and official rulings from Scryfall.
-          Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by
-          Wizards.
-        </Text>
+        <View style={styles.section}>
+          <Text style={eyebrow}>{t.account.language}</Text>
+          <View accessibilityRole="radiogroup" style={styles.languages}>
+            {LANGUAGES.map((code) => {
+              const selected = code === language;
+              return (
+                <Pressable
+                  key={code}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => setLanguage(code)}
+                  style={({ pressed }) => [
+                    styles.languageChip,
+                    selected && styles.languageChipSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.languageText, selected && styles.languageTextSelected]}>
+                    {languageNames[code]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <Text style={styles.notice}>{t.account.notice}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -340,4 +357,16 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.75 },
   message: { color: colors.textSoft, fontFamily: fonts.bodyMedium },
   notice: { color: colors.textSubtle, fontSize: 11.5, lineHeight: 16 },
+  languages: { flexDirection: "row", gap: 8 },
+  languageChip: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 22,
+  },
+  languageChipSelected: { borderColor: colors.accent, backgroundColor: colors.accentSurface },
+  languageText: { color: colors.textSoft, fontSize: 14 },
+  languageTextSelected: { color: colors.accentText },
 });

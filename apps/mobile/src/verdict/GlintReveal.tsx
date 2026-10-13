@@ -4,6 +4,7 @@ import Svg, { Path, Rect } from "react-native-svg";
 import Text from "../ui/Text";
 import { colors, fonts } from "../theme";
 import useReduceMotion from "../ui/useReduceMotion";
+import { useT } from "../i18n/LanguageProvider";
 
 // The mark is drawn in a 120×66 box (the glasses plus room for the finger) at twice the size.
 const SCALE = 2;
@@ -23,6 +24,7 @@ interface GlintRevealProps {
 // The "well, actually" moment when a ruling arrives: a finger pushes up the glasses, the lenses
 // light up, a shine sweeps across them and a sparkle pops.
 export default function GlintReveal({ onDone }: GlintRevealProps) {
+  const { t } = useT();
   const reduceMotion = useReduceMotion();
   const progress = useRef(new Animated.Value(0)).current;
   const onDoneRef = useRef(onDone);
@@ -80,7 +82,7 @@ export default function GlintReveal({ onDone }: GlintRevealProps) {
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel="The judge pushes up their glasses: the ruling is ready"
+      accessibilityLabel={t.reveal.label}
       style={styles.wrap}
     >
       <View style={styles.stage}>
@@ -165,7 +167,7 @@ export default function GlintReveal({ onDone }: GlintRevealProps) {
         </Animated.View>
       </View>
       <Animated.View style={{ opacity: caption }}>
-        <Text style={styles.caption}>Actually…</Text>
+        <Text style={styles.caption}>{t.reveal.actually}</Text>
       </Animated.View>
     </View>
   );

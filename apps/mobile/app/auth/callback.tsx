@@ -5,8 +5,11 @@ import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/auth/AuthProvider";
 import { completeOAuthCallback, getAuthRedirectUrl } from "../../src/auth/oauth";
 import { colors } from "../../src/theme";
+import { useT } from "../../src/i18n/LanguageProvider";
+import { strings } from "../../src/i18n/core";
 
 export default function AuthCallbackScreen() {
+  const { t } = useT();
   const { loading, session } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -28,7 +31,7 @@ export default function AuthCallbackScreen() {
     if (error) callbackUrl.searchParams.set("error", error);
     if (errorDescription) callbackUrl.searchParams.set("error_description", errorDescription);
     void completeOAuthCallback(callbackUrl.toString()).catch((error: unknown) => {
-      setCallbackError(error instanceof Error ? error.message : "Sign-in could not be completed.");
+      setCallbackError(error instanceof Error ? error.message : strings().account.signInFailed);
     });
   }, [code, error, errorDescription]);
 
@@ -39,13 +42,13 @@ export default function AuthCallbackScreen() {
       ) : null}
       <Text accessibilityRole={errorMessage ? "alert" : "text"} style={styles.message}>
         {errorMessage
-          ? `Sign-in did not finish: ${errorMessage}`
+          ? t.auth.didNotFinish(errorMessage)
           : loading || (code && !session)
-            ? "Finishing sign-in…"
-            : "Sign-in could not be completed."}
+            ? t.auth.finishing
+            : t.account.signInFailed}
       </Text>
       {errorMessage || (!loading && !session) ? (
-        <Link href="/sign-in">Return to sign in</Link>
+        <Link href="/sign-in">{t.auth.returnToSignIn}</Link>
       ) : null}
     </View>
   );

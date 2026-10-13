@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, View } from "react-native";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 import { colors } from "../theme";
 import useReduceMotion from "./useReduceMotion";
+import { useT } from "../i18n/LanguageProvider";
 
 const WIDTH = 220;
 const HEIGHT = 200;
@@ -18,6 +19,7 @@ const HAND =
 
 // A player raises a hand at the table and waves to call a judge, while a "!" bubble pops.
 export default function RaisedHand() {
+  const { t } = useT();
   const reduceMotion = useReduceMotion();
   const progress = useRef(new Animated.Value(1)).current;
 
@@ -61,7 +63,7 @@ export default function RaisedHand() {
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel="A player raises a hand at the table to call a judge"
+      accessibilityLabel={t.splash.hand}
       style={styles.stage}
     >
       <View style={styles.handClip}>

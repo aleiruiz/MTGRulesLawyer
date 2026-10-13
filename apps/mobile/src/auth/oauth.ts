@@ -1,3 +1,4 @@
+import { strings } from "../i18n/core";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import type { Provider } from "@supabase/supabase-js";
@@ -45,9 +46,7 @@ export async function signInWithSocialProvider(
   provider: SocialProvider,
 ): Promise<SocialSignInResult> {
   if (!isSupabaseConfigured) {
-    throw new Error(
-      "Add the Supabase URL and publishable key to the local environment to sign in.",
-    );
+    throw new Error(strings().auth.notConfigured);
   }
 
   const redirectTo = getAuthRedirectUrl();
@@ -56,7 +55,7 @@ export async function signInWithSocialProvider(
     options: { redirectTo, skipBrowserRedirect: true },
   });
   if (error) throw error;
-  if (!data.url) throw new Error("Supabase did not return a sign-in URL.");
+  if (!data.url) throw new Error(strings().auth.noUrl);
 
   if (Platform.OS === "web") {
     window.location.assign(data.url);
@@ -70,8 +69,7 @@ export async function signInWithSocialProvider(
   ) {
     return "cancelled";
   }
-  if (result.type !== "success")
-    throw new Error("The sign-in window closed before authentication finished.");
+  if (result.type !== "success") throw new Error(strings().auth.windowClosed);
   await completeOAuthCallback(result.url);
   return "signed_in";
 }

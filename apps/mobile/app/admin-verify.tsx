@@ -8,6 +8,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/AuthProvider";
 import { supabase } from "../src/auth/supabase";
 import { colors, fonts } from "../src/theme";
+import { useT } from "../src/i18n/LanguageProvider";
+import { strings } from "../src/i18n/core";
 
 interface PendingEnrollment {
   factorId: string;
@@ -22,6 +24,7 @@ const pendingEnrollments = new Map<string, PendingEnrollment>();
 /** Admin step-up: enroll an authenticator app once, then enter a fresh code before reviewing. */
 export default function AdminVerifyScreen() {
   const { session, loading: authLoading } = useAuth();
+  const { t } = useT();
   const [factorId, setFactorId] = useState<string | null>(null);
   const [enrollment, setEnrollment] = useState<PendingEnrollment | null>(null);
   const [code, setCode] = useState("");
@@ -93,7 +96,7 @@ export default function AdminVerifyScreen() {
       .catch(() => {
         if (!active) return;
         setSetupFailed(true);
-        setMessage("Authenticator setup is unavailable. Check your connection and try again.");
+        setMessage(strings().adminVerify.setupUnavailable);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -107,7 +110,7 @@ export default function AdminVerifyScreen() {
     if (!factorId) return;
     const trimmed = code.trim();
     if (!/^\d{6}$/.test(trimmed)) {
-      setMessage("Enter the 6-digit code from your authenticator app.");
+      setMessage(t.adminVerify.codeFormat);
       return;
     }
     setVerifying(true);
@@ -115,7 +118,7 @@ export default function AdminVerifyScreen() {
     try {
       const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: trimmed });
       if (error) {
-        setMessage("That code was not accepted. Check the time on your device and try again.");
+        setMessage(t.adminVerify.codeRejected);
         return;
       }
       setCode("");
@@ -123,7 +126,7 @@ export default function AdminVerifyScreen() {
       if (router.canGoBack()) router.back();
       else router.replace("/review-queue");
     } catch {
-      setMessage("Verification is unavailable. Check your connection and try again.");
+      setMessage(t.adminVerify.verifyUnavailable);
     } finally {
       setVerifying(false);
     }
@@ -133,42 +136,37 @@ export default function AdminVerifyScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.page}>
         <Text accessibilityRole="header" style={styles.title}>
-          Verify admin identity
+          {t.adminVerify.title}
         </Text>
         {authLoading || loading ? (
-          <ActivityIndicator accessibilityLabel="Loading authenticator setup" />
+          <ActivityIndicator accessibilityLabel={t.adminVerify.loading} />
         ) : null}
         {!session && !authLoading ? (
-          <Text style={styles.description}>Sign in with an admin account first.</Text>
+          <Text style={styles.description}>{t.adminVerify.signInFirst}</Text>
         ) : null}
         {enrollment ? (
           <View style={styles.setup}>
-            <Text style={styles.description}>
-              Add this account to an authenticator app, then enter the code it shows. You will only
-              need to do this once.
-            </Text>
+            <Text style={styles.description}>{t.adminVerify.addAccount}</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => void Linking.openURL(enrollment.uri).catch(() => undefined)}
               style={styles.secondaryButton}
             >
-              <Text style={styles.secondaryButtonText}>Open authenticator app</Text>
+              <Text style={styles.secondaryButtonText}>{t.adminVerify.openApp}</Text>
             </Pressable>
-            <Text style={styles.meta}>Or enter this setup key manually:</Text>
-            <Text selectable accessibilityLabel="Authenticator setup key" style={styles.secret}>
+            <Text style={styles.meta}>{t.adminVerify.manualKey}</Text>
+            <Text selectable accessibilityLabel={t.adminVerify.setupKey} style={styles.secret}>
               {enrollment.secret}
             </Text>
           </View>
         ) : factorId ? (
-          <Text style={styles.description}>
-            Enter the current code from your authenticator app to continue reviewing challenges.
-          </Text>
+          <Text style={styles.description}>{t.adminVerify.enterCode}</Text>
         ) : null}
         {factorId ? (
           <>
             <TextInput
               placeholderTextColor={colors.textSubtle}
-              accessibilityLabel="Authenticator code"
+              accessibilityLabel={t.adminVerify.codeLabel}
               autoComplete="one-time-code"
               inputMode="numeric"
               keyboardType="number-pad"
@@ -189,7 +187,7 @@ export default function AdminVerifyScreen() {
               {verifying ? (
                 <ActivityIndicator color={colors.accentInk} />
               ) : (
-                <Text style={styles.buttonText}>Verify</Text>
+                <Text style={styles.buttonText}>{t.adminVerify.verify}</Text>
               )}
             </Pressable>
           </>
@@ -205,7 +203,7 @@ export default function AdminVerifyScreen() {
             onPress={() => setAttempt((current) => current + 1)}
             style={styles.secondaryButton}
           >
-            <Text style={styles.secondaryButtonText}>Try again</Text>
+            <Text style={styles.secondaryButtonText}>{t.common.tryAgain}</Text>
           </Pressable>
         ) : null}
       </View>

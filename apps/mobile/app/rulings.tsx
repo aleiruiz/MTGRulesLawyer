@@ -8,11 +8,14 @@ import JudgeMessage from "../src/chat/JudgeMessage";
 import Loader from "../src/ui/Loader";
 import Text from "../src/ui/Text";
 import { colors, fonts } from "../src/theme";
+import { useT } from "../src/i18n/LanguageProvider";
+import { strings } from "../src/i18n/core";
 
 const rulingIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function PublicRulingScreen() {
+  const { t, locale } = useT();
   const { id, version } = useLocalSearchParams<{ id?: string; version?: string }>();
   const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +31,7 @@ export default function PublicRulingScreen() {
       !rulingIdPattern.test(id) ||
       (version !== undefined && (!/^\d+$/.test(version) || Number(version) < 1))
     ) {
-      setError("This ruling link is invalid.");
+      setError(strings().shared.invalid);
       setLoading(false);
       return () => {
         active = false;
@@ -39,8 +42,8 @@ export default function PublicRulingScreen() {
     const versionQuery = version === undefined ? "" : `?version=${encodeURIComponent(version)}`;
     void fetch(`${apiUrl}/api/rulings/${encodeURIComponent(id)}${versionQuery}`)
       .then(async (response) => {
-        if (response.status === 404) throw new Error("This ruling could not be found.");
-        if (!response.ok) throw new Error("The ruling is temporarily unavailable.");
+        if (response.status === 404) throw new Error(strings().shared.notFound);
+        if (!response.ok) throw new Error(strings().shared.unavailable);
         return persistedRulingResponseSchema.parse(await response.json());
       })
       .then((result) => {
@@ -48,9 +51,7 @@ export default function PublicRulingScreen() {
       })
       .catch((reason: unknown) => {
         if (active) {
-          setError(
-            reason instanceof Error ? reason.message : "The ruling is temporarily unavailable.",
-          );
+          setError(reason instanceof Error ? reason.message : strings().shared.unavailable);
         }
       })
       .finally(() => {
@@ -65,7 +66,7 @@ export default function PublicRulingScreen() {
   return (
     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.page}>
-        {loading ? <Loader accessibilityLabel="Loading ruling" /> : null}
+        {loading ? <Loader accessibilityLabel={t.shared.loading} /> : null}
         {error ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {error}
@@ -87,7 +88,10 @@ export default function PublicRulingScreen() {
               }
             />
             <Text selectable style={styles.meta}>
-              Ruling version {ruling.version} · {new Date(ruling.createdAt).toLocaleDateString()}
+              {t.shared.versionLine(
+                ruling.version,
+                new Date(ruling.createdAt).toLocaleDateString(locale),
+              )}
             </Text>
           </>
         ) : null}
@@ -96,13 +100,9 @@ export default function PublicRulingScreen() {
           onPress={() => router.replace("/")}
           style={({ pressed }) => [styles.ask, pressed && styles.pressed]}
         >
-          <Text style={styles.askText}>Ask your own question</Text>
+          <Text style={styles.askText}>{t.shared.askOwn}</Text>
         </Pressable>
-        <Text style={styles.notice}>
-          Rules Lawyer is unofficial Fan Content permitted under the Fan Content Policy. Not
-          approved/endorsed by Wizards. Portions of the materials used are property of Wizards of
-          the Coast. ©Wizards of the Coast LLC.
-        </Text>
+        <Text style={styles.notice}>{t.shared.notice}</Text>
       </ScrollView>
     </SafeAreaView>
   );

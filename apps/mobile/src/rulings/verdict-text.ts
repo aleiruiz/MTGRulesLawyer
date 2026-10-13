@@ -1,12 +1,17 @@
+import { localeFor } from "../i18n/core";
+
 const shortDate: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
 
 /** The Comprehensive Rules date in a snapshot version like "rules-v2-20260925-<checksum>". */
-export function rulesDate(version: string | null | undefined): string | null {
+export function rulesDate(
+  version: string | null | undefined,
+  locale: string = localeFor(),
+): string | null {
   const match = version?.match(/(\d{4})(\d{2})(\d{2})/);
   if (!match) return null;
   const [, year, month, day] = match;
   return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString(
-    undefined,
+    locale,
     shortDate,
   );
 }

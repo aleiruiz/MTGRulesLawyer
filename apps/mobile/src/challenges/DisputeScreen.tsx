@@ -27,20 +27,18 @@ import BrokenGlasses from "../ui/BrokenGlasses";
 import { colors, eyebrow, fonts } from "../theme";
 import ChallengeRow from "./ChallengeRow";
 import { useMyChallenges } from "./useMyChallenges";
+import { useT } from "../i18n/LanguageProvider";
+import { strings } from "../i18n/core";
 
 type Outcome = RulingGenerationResponse["outcome"];
 
-const outcomeChoices: Array<{ outcome: Outcome; label: string }> = [
-  { outcome: "resolved", label: "A different answer" },
-  { outcome: "conditional", label: "It depends" },
-  { outcome: "needs_information", label: "Needs more facts" },
-  { outcome: "uncertain", label: "Not answerable" },
-];
+const outcomeChoices: Outcome[] = ["resolved", "conditional", "needs_information", "uncertain"];
 
 const MIN_EXPLANATION = 10;
 
 export default function DisputeScreen({ rulingId }: { rulingId: string | undefined }) {
   const { session } = useAuth();
+  const { t } = useT();
   const insets = useSafeAreaInsets();
   const [ruling, setRuling] = useState<PersistedRulingResponse | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -54,7 +52,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
 
   useEffect(() => {
     if (!rulingId) {
-      setLoadError("This ruling link is invalid.");
+      setLoadError(strings().dispute.invalidLink);
       return undefined;
     }
     let active = true;
@@ -67,7 +65,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
         if (active) setRuling(result);
       })
       .catch(() => {
-        if (active) setLoadError("This ruling could not be loaded.");
+        if (active) setLoadError(strings().dispute.loadFailed);
       });
     return () => {
       active = false;
@@ -102,15 +100,15 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
           body: JSON.stringify(payload),
         },
       );
-      if (response.status === 409) throw new Error("You already disputed this ruling.");
-      if (response.status === 429) throw new Error("You have reached today's dispute limit.");
-      if (!response.ok) throw new Error("The dispute could not be sent. Try again later.");
+      if (response.status === 409) throw new Error(strings().dispute.alreadyDisputed);
+      if (response.status === 429) throw new Error(strings().dispute.limit);
+      if (!response.ok) throw new Error(strings().dispute.sendFailed);
       challengeResponseSchema.parse(await response.json());
       setSent(true);
-      setMessage("Sent. A judge will review it, and you can follow it under Your disputes.");
+      setMessage(strings().dispute.sent);
       void reload();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The dispute could not be sent.");
+      setMessage(error instanceof Error ? error.message : strings().dispute.sendFailed);
     } finally {
       setSubmitting(false);
     }
@@ -129,11 +127,9 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
           <View style={styles.intro}>
             <BrokenGlasses width={112} />
             <Text accessibilityRole="header" style={styles.heading}>
-              Tell a judge what’s wrong
+              {t.dispute.heading}
             </Text>
-            <Text style={styles.lead}>
-              A person reviews every dispute. If they agree, the ruling is corrected.
-            </Text>
+            <Text style={styles.lead}>{t.dispute.lead}</Text>
           </View>
 
           {loadError ? (
@@ -141,7 +137,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
               {loadError}
             </Text>
           ) : null}
-          {!ruling && !loadError ? <Loader accessibilityLabel="Loading the ruling" /> : null}
+          {!ruling && !loadError ? <Loader accessibilityLabel={t.dispute.loadingRuling} /> : null}
 
           {ruling && verdict ? (
             <View style={styles.rulingCard}>
@@ -151,7 +147,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
                   {verdict.headline ?? ruling.ruling.summary}
                 </Text>
                 <Text numberOfLines={1} style={styles.rulingMeta}>
-                  {ruling.question} · version {ruling.version}
+                  {ruling.question} · {t.dispute.version(ruling.version)}
                 </Text>
               </View>
             </View>
@@ -159,31 +155,29 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
 
           {!session ? (
             <View style={styles.signIn}>
-              <Text style={styles.lead}>
-                Sign in so a judge can tell you what they decide about your dispute.
-              </Text>
+              <Text style={styles.lead}>{t.dispute.signInLead}</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push("/sign-in")}
                 style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
               >
-                <Text style={styles.secondaryText}>Sign in</Text>
+                <Text style={styles.secondaryText}>{t.common.signIn}</Text>
               </Pressable>
             </View>
           ) : (
             <>
               <View style={styles.section} accessibilityRole="radiogroup">
-                <Text style={eyebrow}>The ruling should be</Text>
+                <Text style={eyebrow}>{t.dispute.shouldBe}</Text>
                 <View style={styles.choices}>
                   {outcomeChoices.map((choice) => {
-                    const selected = proposedOutcome === choice.outcome;
+                    const selected = proposedOutcome === choice;
                     return (
                       <Pressable
-                        key={choice.outcome}
+                        key={choice}
                         accessibilityRole="radio"
                         accessibilityState={{ checked: selected }}
-                        accessibilityHint={selected ? "Tap again to clear." : undefined}
-                        onPress={() => setProposedOutcome(selected ? undefined : choice.outcome)}
+                        accessibilityHint={selected ? t.dispute.tapToClear : undefined}
+                        onPress={() => setProposedOutcome(selected ? undefined : choice)}
                         style={({ pressed }) => [
                           styles.choice,
                           selected && styles.choiceSelected,
@@ -191,24 +185,24 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
                         ]}
                       >
                         <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>
-                          {choice.label}
+                          {t.dispute.choices[choice]}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </View>
-                <Text style={styles.helper}>Optional. Tap again to clear.</Text>
+                <Text style={styles.helper}>{t.dispute.optional}</Text>
               </View>
 
               <View style={styles.section}>
-                <Text style={eyebrow}>Why</Text>
+                <Text style={eyebrow}>{t.dispute.why}</Text>
                 <TextInput
-                  accessibilityLabel="Why the ruling is wrong"
+                  accessibilityLabel={t.dispute.whyLabel}
                   editable={!sent}
                   multiline
                   maxLength={4_000}
                   onChangeText={setExplanation}
-                  placeholder="Which step is wrong, and which rule or official ruling says otherwise?"
+                  placeholder={t.dispute.whyPlaceholder}
                   style={styles.input}
                   textAlignVertical="top"
                   value={explanation}
@@ -226,10 +220,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
                   size={22}
                   color={evaluationConsent ? colors.accent : colors.textMuted}
                 />
-                <Text style={styles.consentText}>
-                  Let a de-identified scenario from this dispute be used to test the judge.
-                  Optional; your original question, explanation and account are not exported.
-                </Text>
+                <Text style={styles.consentText}>{t.dispute.consent}</Text>
               </Pressable>
             </>
           )}
@@ -242,7 +233,7 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
 
           {challenges && challenges.length > 0 ? (
             <View style={styles.section}>
-              <Text style={eyebrow}>Your disputes</Text>
+              <Text style={eyebrow}>{t.dispute.yourDisputes}</Text>
               {challenges.slice(0, 5).map((challenge) => (
                 <ChallengeRow key={challenge.challengeId} challenge={challenge} />
               ))}
@@ -264,9 +255,11 @@ export default function DisputeScreen({ rulingId }: { rulingId: string | undefin
               ]}
             >
               {submitting ? (
-                <Loader accessibilityLabel="Sending" size={8} color={colors.accentInk} />
+                <Loader accessibilityLabel={t.dispute.sending} size={8} color={colors.accentInk} />
               ) : (
-                <Text style={styles.primaryText}>{sent ? "Sent" : "Send to a judge"}</Text>
+                <Text style={styles.primaryText}>
+                  {sent ? t.dispute.sentButton : t.dispute.send}
+                </Text>
               )}
             </Pressable>
           </View>
