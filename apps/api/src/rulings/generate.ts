@@ -13,6 +13,7 @@ import {
 } from "../ai/usage.js";
 import {
   createOpenAiAdapter,
+  MAX_OUTPUT_TOKENS_LIMIT,
   MAX_USER_PROMPT_CHARACTERS,
   OPENAI_DEFAULT_MODEL,
   readOpenAiConfig,
@@ -559,7 +560,7 @@ export async function generateRuling(
     .number()
     .int()
     .min(1)
-    .max(4_000)
+    .max(MAX_OUTPUT_TOKENS_LIMIT)
     .parse(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS ?? 2_500));
   const reasoningEffort = z
     .enum(["none", "low", "medium", "high", "xhigh", "max"])

@@ -26,6 +26,13 @@ export interface OpenAiConfig {
   reasoningEffort: z.infer<typeof effortSchema>;
 }
 
+/**
+ * Reasoning counts against the output limit. At medium and high effort, hard questions used up
+ * 4,000 tokens before answering, so the ceiling leaves them room; answers only pay for what
+ * they use.
+ */
+export const MAX_OUTPUT_TOKENS_LIMIT = 8_000;
+
 export function readOpenAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiConfig {
   const apiKey = env.OPENAI_API_KEY?.trim();
   if (!apiKey || apiKey === "your-openai-api-key") {
@@ -37,8 +44,14 @@ export function readOpenAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCo
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
     throw new Error("OPENAI_TIMEOUT_MS must be an integer between 1000 and 120000.");
   }
-  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 4_000) {
-    throw new Error("OPENAI_MAX_OUTPUT_TOKENS must be an integer between 1 and 4000.");
+  if (
+    !Number.isSafeInteger(maxOutputTokens) ||
+    maxOutputTokens < 1 ||
+    maxOutputTokens > MAX_OUTPUT_TOKENS_LIMIT
+  ) {
+    throw new Error(
+      `OPENAI_MAX_OUTPUT_TOKENS must be an integer between 1 and ${MAX_OUTPUT_TOKENS_LIMIT}.`,
+    );
   }
 
   return {
