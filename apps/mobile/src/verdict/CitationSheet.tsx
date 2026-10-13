@@ -5,6 +5,7 @@ import type { RulingGenerationResponse } from "@mtg-rules/contracts";
 import Text from "../ui/Text";
 import { colors, eyebrow, fonts } from "../theme";
 import { citationChipLabel, citationKindTitle, type Citation } from "./CitationChip";
+import { strings } from "../i18n/core";
 
 interface CitationSheetProps {
   ruling: RulingGenerationResponse;
@@ -18,10 +19,10 @@ function usedIn(ruling: RulingGenerationResponse, citationId: string): string | 
     step.citationIds.includes(citationId) ? [index + 1] : [],
   );
   const parts = [
-    steps.length > 0 ? `step${steps.length === 1 ? "" : "s"} ${steps.join(", ")}` : null,
-    ruling.summaryCitationIds.includes(citationId) ? "the answer" : null,
+    steps.length > 0 ? strings().citation.steps(steps) : null,
+    ruling.summaryCitationIds.includes(citationId) ? strings().citation.theAnswer : null,
   ].filter(Boolean);
-  return parts.length > 0 ? `Used in ${parts.join(" and ")}` : null;
+  return parts.length > 0 ? strings().citation.usedIn(parts.filter((part) => part !== null)) : null;
 }
 
 function citationTitle(citation: Citation): string {
@@ -50,7 +51,7 @@ export default function CitationSheet({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Close the citation"
+        accessibilityLabel={strings().citation.closeCitation}
         onPress={onClose}
         style={styles.backdrop}
       />
@@ -64,7 +65,7 @@ export default function CitationSheet({
             <Text style={styles.kind}>{citationKindTitle(citation)}</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={strings().common.close}
               onPress={onClose}
               style={styles.close}
             >
@@ -90,12 +91,12 @@ export default function CitationSheet({
               style={styles.sourceLink}
             >
               <Ionicons name="open-outline" size={15} color={colors.accent} />
-              <Text style={styles.sourceText}>Open the source</Text>
+              <Text style={styles.sourceText}>{strings().citation.openSource}</Text>
             </Pressable>
 
             {others.length > 0 ? (
               <View style={styles.others}>
-                <Text style={eyebrow}>Also cited</Text>
+                <Text style={eyebrow}>{strings().citation.alsoCited}</Text>
                 {others.map((item) => (
                   <Pressable
                     key={item.id}

@@ -3,15 +3,17 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useAuth } from "../auth/AuthProvider";
 import { colors } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 export default function AccountButton() {
   const { session } = useAuth();
+  const { t } = useT();
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={session ? "Account" : "Sign in"}
-      accessibilityHint="Opens sign-in and account features."
+      accessibilityLabel={session ? t.accountButton.account : t.accountButton.signIn}
+      accessibilityHint={t.accountButton.hint}
       hitSlop={8}
       onPress={() => router.push("/sign-in")}
       style={({ pressed }) => [

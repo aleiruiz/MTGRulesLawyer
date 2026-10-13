@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Text from "../ui/Text";
 import Loader from "../ui/Loader";
 import { colors, fonts } from "../theme";
+import { useT } from "../i18n/LanguageProvider";
 
 interface ThinkingCardProps {
   /** Names of the cards the judge was given. */
@@ -14,6 +15,7 @@ interface ThinkingCardProps {
 // What the player sees while a ruling is generated. It only lists steps that are really
 // happening; the ruling request is a single call, so there is no fake progress.
 export default function ThinkingCard({ cardNames, reading }: ThinkingCardProps) {
+  const { t } = useT();
   return (
     <View style={styles.wrap}>
       <View
@@ -28,14 +30,14 @@ export default function ThinkingCard({ cardNames, reading }: ThinkingCardProps) 
         </View>
       </View>
       <Text accessibilityRole="header" style={styles.title}>
-        {reading ? "The judge is reading your question" : "The judge is reading the rules"}
+        {reading ? t.thinking.readingQuestion : t.thinking.readingRules}
       </Text>
       <View style={styles.steps}>
         {cardNames.length > 0 && !reading ? (
           <View style={styles.step}>
             <Ionicons name="checkmark-circle" size={20} color={colors.successDot} />
             <View style={styles.stepText}>
-              <Text style={styles.stepTitle}>Cards confirmed</Text>
+              <Text style={styles.stepTitle}>{t.thinking.cardsConfirmed}</Text>
               <Text numberOfLines={2} style={styles.stepDetail}>
                 {cardNames.join(", ")}
               </Text>
@@ -44,16 +46,14 @@ export default function ThinkingCard({ cardNames, reading }: ThinkingCardProps) 
         ) : null}
         <View style={styles.step}>
           <View style={styles.loader}>
-            <Loader accessibilityLabel="The judge is working" size={5} />
+            <Loader accessibilityLabel={t.thinking.working} size={5} />
           </View>
           <View style={styles.stepText}>
             <Text style={styles.stepTitle}>
-              {reading ? "Checking which cards you mean" : "Walking through the play"}
+              {reading ? t.thinking.checkingCards : t.thinking.walking}
             </Text>
             <Text style={styles.stepDetail}>
-              {reading
-                ? "Then the judge reads the rules for it."
-                : "Every step is checked against the rules and official rulings."}
+              {reading ? t.thinking.thenRules : t.thinking.everyStep}
             </Text>
           </View>
         </View>

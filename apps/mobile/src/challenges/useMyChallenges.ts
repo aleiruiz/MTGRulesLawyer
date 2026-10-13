@@ -3,6 +3,7 @@ import { useFocusEffect } from "expo-router";
 import { myChallengesResponseSchema, type ChallengeResponse } from "@mtg-rules/contracts";
 import { useAuth } from "../auth/AuthProvider";
 import { apiUrl } from "../api-url";
+import { strings } from "../i18n/core";
 
 /** The signed-in player's disputes, refreshed whenever the screen comes into view. */
 export function useMyChallenges() {
@@ -33,7 +34,7 @@ export function useMyChallenges() {
       const result = myChallengesResponseSchema.parse(await response.json()).challenges;
       if (requestId === latestRequest.current) setChallenges(result);
     } catch {
-      if (requestId === latestRequest.current) setError("Your disputes could not be loaded.");
+      if (requestId === latestRequest.current) setError(strings().disputes.loadFailed);
     } finally {
       if (requestId === latestRequest.current) setLoading(false);
     }

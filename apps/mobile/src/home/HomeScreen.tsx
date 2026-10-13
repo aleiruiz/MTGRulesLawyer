@@ -19,31 +19,16 @@ import { colors, fonts } from "../theme";
 import { saveQuestion } from "../questions/question-store";
 import RecentRulings, { useRecentConversations } from "./RecentRulings";
 import SourcesFooter from "./SourcesFooter";
+import { useT } from "../i18n/LanguageProvider";
 
 const MAX_QUESTION_LENGTH = 4_000;
-
-// Shown to people who have not asked anything yet. Tapping one fills the composer.
-const examples = [
-  {
-    label: "Double strike and trample",
-    question:
-      "My Bolrac-Clan Basher has double strike and trample and is blocked by Llanowar Elves. How much damage does my opponent take?",
-  },
-  {
-    label: "Blood Moon + Urborg",
-    question:
-      "Blood Moon and Urborg, Tomb of Yawgmoth are both on the battlefield. What can my Swamp and my Forest tap for?",
-  },
-  {
-    label: "Is this a loop?",
-    question:
-      "I control Exquisite Blood and Sanguine Bond, and my opponent loses 1 life. What happens?",
-  },
-];
 
 export default function HomeScreen() {
   const [question, setQuestion] = useState("");
   const recent = useRecentConversations();
+  const { t } = useT();
+  // Shown to people who have not asked anything yet. Tapping one fills the composer.
+  const examples = t.home.examples;
   const canAsk = question.trim().length > 0;
   const showExamples = recent.loaded && recent.conversations.length === 0 && !recent.error;
 
@@ -71,16 +56,16 @@ export default function HomeScreen() {
 
           <View style={styles.askSection}>
             <Text accessibilityRole="header" style={styles.heading}>
-              {"What’s happening\nat the table?"}
+              {t.home.heading}
             </Text>
             <View style={styles.composer}>
               <TextInput
-                accessibilityLabel="Your question"
-                accessibilityHint="Describe the game situation, up to 4000 characters."
+                accessibilityLabel={t.home.questionLabel}
+                accessibilityHint={t.home.questionHint}
                 multiline
                 maxLength={MAX_QUESTION_LENGTH}
                 onChangeText={setQuestion}
-                placeholder="My opponent blocks my Bolrac-Clan Basher with Llanowar Elves. How much damage do they take?"
+                placeholder={t.home.placeholder}
                 style={styles.input}
                 textAlignVertical="top"
                 value={question}
@@ -93,7 +78,7 @@ export default function HomeScreen() {
                 </Text>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Ask"
+                  accessibilityLabel={t.home.ask}
                   accessibilityState={{ disabled: !canAsk }}
                   disabled={!canAsk}
                   onPress={ask}
@@ -103,7 +88,7 @@ export default function HomeScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.askText}>Ask</Text>
+                  <Text style={styles.askText}>{t.home.ask}</Text>
                 </Pressable>
               </View>
             </View>
@@ -112,15 +97,15 @@ export default function HomeScreen() {
               <View style={styles.examples}>
                 <View style={styles.examplesLabel}>
                   <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-                  <Text style={styles.examplesText}>New here? Try an example</Text>
+                  <Text style={styles.examplesText}>{t.home.examplesLabel}</Text>
                 </View>
                 <View style={styles.chips}>
                   {examples.map((example) => (
                     <Pressable
                       key={example.label}
                       accessibilityRole="button"
-                      accessibilityLabel={`Example: ${example.label}`}
-                      accessibilityHint="Fills in the question so you can ask it."
+                      accessibilityLabel={t.home.exampleLabel(example.label)}
+                      accessibilityHint={t.home.exampleHint}
                       onPress={() => setQuestion(example.question)}
                       style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
                     >

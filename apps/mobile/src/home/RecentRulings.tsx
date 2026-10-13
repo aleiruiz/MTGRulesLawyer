@@ -7,15 +7,17 @@ import { useAuth } from "../auth/AuthProvider";
 import Text from "../ui/Text";
 import { colors, eyebrow } from "../theme";
 import { fetchConversations, removeConversation } from "../chat/api";
+import { useT } from "../i18n/LanguageProvider";
+import { strings, type Messages } from "../i18n/core";
 
 type Outcome = NonNullable<ConversationSummary["lastOutcome"]>;
 
 /** The dot beside a ruling says how sure the judge was. */
-export const outcomeDots: Record<Outcome, { color: string; label: string }> = {
-  resolved: { color: colors.successDot, label: "Resolved" },
-  conditional: { color: colors.accent, label: "Depends on the situation" },
-  needs_information: { color: colors.infoDot, label: "Needs more information" },
-  uncertain: { color: colors.textSubtle, label: "Uncertain" },
+export const outcomeDots: Record<Outcome, { color: string }> = {
+  resolved: { color: colors.successDot },
+  conditional: { color: colors.accent },
+  needs_information: { color: colors.infoDot },
+  uncertain: { color: colors.textSubtle },
 };
 
 export interface RecentConversationsState {
@@ -49,7 +51,7 @@ export function useRecentConversations(): RecentConversationsState {
           if (active) setConversations(result.conversations);
         })
         .catch(() => {
-          if (active) setError("Recent rulings are unavailable right now.");
+          if (active) setError(strings().recent.unavailable);
         })
         .finally(() => {
           if (active) setLoaded(true);
@@ -69,7 +71,7 @@ export function useRecentConversations(): RecentConversationsState {
         await removeConversation(accessToken, conversationId);
       } catch {
         setConversations(previous);
-        setError("That ruling could not be deleted. Try again.");
+        setError(strings().recent.deleteFailed);
       }
     },
     [accessToken, conversations],
@@ -78,15 +80,15 @@ export function useRecentConversations(): RecentConversationsState {
   return { conversations, loaded, error, forget };
 }
 
-function whenLabel(updatedAt: string): string {
+function whenLabel(updatedAt: string, t: Messages["recent"], locale: string): string {
   const date = new Date(updatedAt);
   const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1) return t.justNow;
+  if (minutes < 60) return t.minutes(minutes);
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h`;
-  if (hours < 48) return "yesterday";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (hours < 24) return t.hours(hours);
+  if (hours < 48) return t.yesterday;
+  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
 interface RecentRulingsProps extends RecentConversationsState {
@@ -103,6 +105,7 @@ export default function RecentRulings({
   hideTitle,
   limit,
 }: RecentRulingsProps) {
+  const { t, locale } = useT();
   if (conversations.length === 0 && !error) return null;
   const shown = limit ? conversations.slice(0, limit) : conversations;
 
@@ -111,16 +114,16 @@ export default function RecentRulings({
       {!hideTitle ? (
         <View style={styles.header}>
           <Text accessibilityRole="header" style={styles.title}>
-            Recent rulings
+            {t.recent.title}
           </Text>
           {limit && conversations.length > limit ? (
             <Pressable
               accessibilityRole="link"
-              accessibilityLabel={`All ${conversations.length} rulings`}
+              accessibilityLabel={t.recent.allLabel(conversations.length)}
               onPress={() => router.push("/sign-in")}
               style={styles.allLink}
             >
-              <Text style={styles.allText}>All {conversations.length}</Text>
+              <Text style={styles.allText}>{t.recent.all(conversations.length)}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -130,8 +133,8 @@ export default function RecentRulings({
         const dot = conversation.lastOutcome ? outcomeDots[conversation.lastOutcome] : null;
         const followUps = conversation.turnCount - 1;
         const meta = [
-          whenLabel(conversation.updatedAt),
-          followUps > 0 ? `${followUps} follow-up${followUps === 1 ? "" : "s"}` : null,
+          whenLabel(conversation.updatedAt, t.recent, locale),
+          followUps > 0 ? t.recent.followUps(followUps) : null,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -139,8 +142,8 @@ export default function RecentRulings({
           <View key={conversation.id} style={styles.row}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${dot ? `${dot.label}: ` : ""}${conversation.title}, ${meta}`}
-              accessibilityHint="Opens the ruling."
+              accessibilityLabel={`${conversation.lastOutcome ? `${t.recent.outcomes[conversation.lastOutcome]}: ` : ""}${conversation.title}, ${meta}`}
+              accessibilityHint={t.recent.openHint}
               onPress={() => router.push({ pathname: "/chat", params: { id: conversation.id } })}
               style={({ pressed }) => [styles.open, pressed && styles.pressed]}
             >
@@ -154,7 +157,7 @@ export default function RecentRulings({
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Delete ruling: ${conversation.title}`}
+              accessibilityLabel={t.recent.deleteLabel(conversation.title)}
               onPress={() => void forget(conversation.id)}
               style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
             >

@@ -4,6 +4,7 @@ import type { ChallengeResponse } from "@mtg-rules/contracts";
 import Text from "../ui/Text";
 import { colors, fonts } from "../theme";
 import { challengeStatus } from "./challenge-status";
+import { strings } from "../i18n/core";
 
 /** One dispute in a list: the question and where its review stands. */
 export default function ChallengeRow({ challenge }: { challenge: ChallengeResponse }) {
@@ -12,7 +13,7 @@ export default function ChallengeRow({ challenge }: { challenge: ChallengeRespon
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${challenge.question}. ${status.label}`}
-      accessibilityHint="Opens your disputes."
+      accessibilityHint={strings().disputes.openHint}
       onPress={() => router.push("/challenges")}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >

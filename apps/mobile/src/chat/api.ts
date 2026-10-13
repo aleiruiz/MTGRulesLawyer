@@ -10,10 +10,11 @@ import {
 } from "@mtg-rules/contracts";
 import { apiUrl } from "../api-url";
 import {
-  QUESTION_CONNECTION_ERROR,
   QuestionRequestError,
+  questionConnectionError,
   questionErrorMessage,
 } from "../questions/question-error-message";
+import { strings } from "../i18n/core";
 import type { ChatCard } from "./turns";
 
 /** Game facts the interpretation step extracted, sent along with the ruling request. */
@@ -31,17 +32,20 @@ export const emptyGameState: ChatGameState = {
   searchTerms: [],
 };
 
-const errorMessages: Record<string, string> = {
-  CONVERSATION_NOT_FOUND: "This conversation is no longer saved.",
-  CONFIRMED_CARD_UNAVAILABLE: "One of the cards is not in the current card data.",
-  AUTHENTICATION_REQUIRED: "Your session ended. Sign in again to keep saving this chat.",
-  INVALID_ACCESS_TOKEN: "Your session ended. Sign in again to keep saving this chat.",
-};
+function errorMessages(): Record<string, string> {
+  const t = strings().errors;
+  return {
+    CONVERSATION_NOT_FOUND: t.conversationNotFound,
+    CONFIRMED_CARD_UNAVAILABLE: t.cardUnavailable,
+    AUTHENTICATION_REQUIRED: t.sessionEnded,
+    INVALID_ACCESS_TOKEN: t.sessionEnded,
+  };
+}
 
 async function requestJson(
   path: string,
   init: RequestInit & { accessToken?: string },
-  fallback = "The judge could not answer right now. Try again in a moment.",
+  fallback = strings().errors.judgeUnavailable,
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
   let response: Response;
@@ -57,7 +61,7 @@ async function requestJson(
   } catch (error) {
     // Let cancellation propagate as-is; anything else is a connection problem.
     if (rest.signal?.aborted) throw error;
-    throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
+    throw new QuestionRequestError(questionConnectionError());
   }
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
@@ -74,9 +78,9 @@ async function requestJson(
         ? body.retryAfterSeconds
         : undefined;
     // No JSON body means a proxy or gateway answered, not the API.
-    if (body === null) throw new QuestionRequestError(QUESTION_CONNECTION_ERROR);
+    if (body === null) throw new QuestionRequestError(questionConnectionError());
     throw new QuestionRequestError(
-      (code && errorMessages[code]) ?? questionErrorMessage(code, retryAfter, fallback),
+      (code && errorMessages()[code]) ?? questionErrorMessage(code, retryAfter, fallback),
     );
   }
   return body;
@@ -132,7 +136,7 @@ export async function fetchConversations(accessToken: string): Promise<Conversat
     await requestJson(
       "/api/me/conversations",
       { method: "GET", accessToken },
-      "Could not load your recent chats.",
+      strings().recent.unavailable,
     ),
   );
 }
@@ -145,7 +149,7 @@ export async function fetchConversation(
     await requestJson(
       `/api/me/conversations/${encodeURIComponent(conversationId)}`,
       { method: "GET", accessToken },
-      "Could not open this chat.",
+      strings().chat.couldNotOpen,
     ),
   );
 }
@@ -157,6 +161,6 @@ export async function removeConversation(
   await requestJson(
     `/api/me/conversations/${encodeURIComponent(conversationId)}`,
     { method: "DELETE", accessToken },
-    "Could not delete this chat. Try again in a moment.",
+    strings().recent.deleteFailed,
   );
 }

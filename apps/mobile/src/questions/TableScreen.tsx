@@ -11,8 +11,8 @@ import { router } from "expo-router";
 import { saveDraft } from "../chat/draft-store";
 import ConfirmedCardTile from "./ConfirmedCardTile";
 import {
-  QUESTION_CONNECTION_ERROR,
   QuestionRequestError,
+  questionConnectionError,
   questionErrorMessage,
 } from "./question-error-message";
 import { apiUrl } from "../api-url";
@@ -23,6 +23,8 @@ import {
   type CardLookupResponse,
   type QuestionInterpretResponse,
 } from "@mtg-rules/contracts";
+import { useT } from "../i18n/LanguageProvider";
+import { strings } from "../i18n/core";
 
 type Card = CardLookupResponse["cards"][number];
 type SearchMode =
@@ -42,6 +44,7 @@ interface TableScreenProps {
 // Step two of asking: the judge shows which cards and facts it read from the question, and the
 // player fixes anything it got wrong before the ruling is generated.
 export default function TableScreen({ question }: TableScreenProps) {
+  const { t } = useT();
   const searchRequestId = useRef(0);
   const [interpretation, setInterpretation] = useState<QuestionInterpretResponse | null>(null);
   const [selectedByMention, setSelectedByMention] = useState<Record<number, string>>({});
@@ -108,7 +111,7 @@ export default function TableScreen({ question }: TableScreenProps) {
             : undefined;
         // No JSON body means a proxy or gateway answered, not the API.
         throw new QuestionRequestError(
-          body === null ? QUESTION_CONNECTION_ERROR : questionErrorMessage(errorCode, retryAfter),
+          body === null ? questionConnectionError() : questionErrorMessage(errorCode, retryAfter),
         );
       }
       const result = questionInterpretResponseSchema.parse(body);
@@ -127,7 +130,7 @@ export default function TableScreen({ question }: TableScreenProps) {
     } catch (error) {
       if (!signal.aborted) {
         setRequestError(
-          error instanceof QuestionRequestError ? error.message : QUESTION_CONNECTION_ERROR,
+          error instanceof QuestionRequestError ? error.message : questionConnectionError(),
         );
       }
     } finally {
@@ -191,17 +194,16 @@ export default function TableScreen({ question }: TableScreenProps) {
     try {
       const response = await fetch(`${apiUrl}/api/cards/lookup?name=${encodeURIComponent(name)}`);
       const result: unknown = await response.json();
-      if (!response.ok)
-        throw new Error("Card search failed. Check the API connection and try again.");
+      if (!response.ok) throw new Error(strings().table.searchFailed);
       const cards = cardLookupResponseSchema.parse(result).cards;
       if (requestId !== searchRequestId.current) return;
       setSearchResults(cards);
       if (cards.length === 0) {
-        setSearchError("No card found with that name. Check the spelling or try part of the name.");
+        setSearchError(strings().table.noCardFound);
       }
     } catch (error) {
       if (requestId === searchRequestId.current) {
-        setSearchError(error instanceof Error ? error.message : "Card search failed.");
+        setSearchError(error instanceof Error ? error.message : strings().table.searchFailed);
       }
     } finally {
       if (requestId === searchRequestId.current) setIsSearching(false);
@@ -215,7 +217,7 @@ export default function TableScreen({ question }: TableScreenProps) {
       displayCards.length >= MAX_CONFIRMED_CARDS &&
       !displayCards.some((entry) => entry.card.oracleId === card.oracleId)
     ) {
-      setSearchError(`The judge can read up to ${MAX_CONFIRMED_CARDS} different cards.`);
+      setSearchError(strings().table.maxCardsShort(MAX_CONFIRMED_CARDS));
       return;
     }
     searchRequestId.current += 1;
@@ -285,9 +287,9 @@ export default function TableScreen({ question }: TableScreenProps) {
     return (
       <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
         <View style={styles.centered}>
-          <Text style={styles.heading}>This question is no longer here.</Text>
-          <Text style={styles.lead}>Questions are not saved until the judge answers them.</Text>
-          <SecondaryButton label="Write a question" onPress={() => router.replace("/")} />
+          <Text style={styles.heading}>{t.table.gone}</Text>
+          <Text style={styles.lead}>{t.table.goneLead}</Text>
+          <SecondaryButton label={t.table.writeQuestion} onPress={() => router.replace("/")} />
         </View>
       </SafeAreaView>
     );
@@ -297,14 +299,14 @@ export default function TableScreen({ question }: TableScreenProps) {
     <View style={styles.searchPanel}>
       <Text style={styles.searchTitle}>
         {searchMode.type === "add"
-          ? "Add a card"
+          ? t.table.addTitle
           : searchMode.type === "resolve"
-            ? "Find the right card"
-            : "Replace card"}
+            ? t.table.resolveTitle
+            : t.table.replaceTitle}
       </Text>
       <View style={styles.searchRow}>
         <TextInput
-          accessibilityLabel="Card name"
+          accessibilityLabel={t.table.cardName}
           autoFocus
           onChangeText={(value) => {
             searchRequestId.current += 1;
@@ -314,20 +316,20 @@ export default function TableScreen({ question }: TableScreenProps) {
             setSearchText(value);
           }}
           onSubmitEditing={() => void searchCards()}
-          placeholder="Card name, partial or misspelled is fine"
+          placeholder={t.table.cardPlaceholder}
           returnKeyType="search"
           style={styles.searchInput}
           value={searchText}
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Search cards by name"
+          accessibilityLabel={t.table.searchCards}
           disabled={isSearching || !searchText.trim()}
           onPress={() => void searchCards()}
           style={[styles.searchButton, (isSearching || !searchText.trim()) && styles.disabled]}
         >
           {isSearching ? (
-            <Loader accessibilityLabel="Searching cards" size={6} color={colors.accentInk} />
+            <Loader accessibilityLabel={t.table.searching} size={6} color={colors.accentInk} />
           ) : (
             <Ionicons name="search" size={18} color={colors.accentInk} />
           )}
@@ -342,7 +344,7 @@ export default function TableScreen({ question }: TableScreenProps) {
         <Pressable
           key={card.oracleId}
           accessibilityRole="button"
-          accessibilityLabel={`Choose ${card.name}`}
+          accessibilityLabel={t.table.chooseCard(card.name)}
           onPress={() => selectSearchResult(card)}
           style={({ pressed }) => [styles.resultRow, pressed && styles.pressed]}
         >
@@ -355,7 +357,7 @@ export default function TableScreen({ question }: TableScreenProps) {
         onPress={closeCardSearch}
         style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}
       >
-        <Text style={styles.textButtonLabel}>Cancel</Text>
+        <Text style={styles.textButtonLabel}>{t.common.cancel}</Text>
       </Pressable>
     </View>
   ) : null;
@@ -374,11 +376,9 @@ export default function TableScreen({ question }: TableScreenProps) {
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={styles.heading}>
-            Is this the right table?
+            {t.table.heading}
           </Text>
-          <Text style={styles.lead}>
-            The judge reads these exact cards, with their current Oracle text and official rulings.
-          </Text>
+          <Text style={styles.lead}>{t.table.lead}</Text>
         </View>
 
         <View style={styles.questionQuote}>
@@ -387,18 +387,18 @@ export default function TableScreen({ question }: TableScreenProps) {
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Edit question"
+            accessibilityLabel={t.table.editLabel}
             hitSlop={8}
             onPress={editQuestion}
           >
-            <Text style={styles.link}>Edit</Text>
+            <Text style={styles.link}>{t.table.edit}</Text>
           </Pressable>
         </View>
 
         {isInterpreting ? (
           <View style={styles.waiting}>
-            <Loader accessibilityLabel="Reading your question" />
-            <Text style={styles.helper}>Reading your question…</Text>
+            <Loader accessibilityLabel={t.table.reading} />
+            <Text style={styles.helper}>{t.table.reading}</Text>
           </View>
         ) : null}
 
@@ -407,15 +407,18 @@ export default function TableScreen({ question }: TableScreenProps) {
             <Text accessibilityRole="alert" style={styles.noticeText}>
               {requestError}
             </Text>
-            <SecondaryButton label="Try again" onPress={() => setAttempt((value) => value + 1)} />
+            <SecondaryButton
+              label={t.common.tryAgain}
+              onPress={() => setAttempt((value) => value + 1)}
+            />
           </View>
         ) : null}
 
         {interpretation && !interpretation.inScope ? (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>This isn’t a rules question</Text>
+            <Text style={styles.noticeTitle}>{t.table.notRules}</Text>
             <Text style={styles.noticeText}>{interpretation.scopeReason}</Text>
-            <SecondaryButton label="Edit question" onPress={editQuestion} />
+            <SecondaryButton label={t.table.editQuestion} onPress={editQuestion} />
           </View>
         ) : null}
 
@@ -427,9 +430,9 @@ export default function TableScreen({ question }: TableScreenProps) {
                 <View key={`${mention.start}-${mention.end}`} style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text accessibilityRole="header" style={styles.eyebrow}>
-                      {mention.candidates.length > 0 ? "Did you mean" : "Card not found"}
+                      {mention.candidates.length > 0 ? t.table.didYouMean : t.table.notFound}
                     </Text>
-                    <Text style={styles.wrote}>you wrote “{mention.text}”</Text>
+                    <Text style={styles.wrote}>{t.table.youWrote(mention.text)}</Text>
                   </View>
                   {mention.candidates.length > 0 ? (
                     <ScrollView
@@ -441,7 +444,11 @@ export default function TableScreen({ question }: TableScreenProps) {
                         <Pressable
                           key={candidate.oracleId}
                           accessibilityRole="button"
-                          accessibilityLabel={`Use ${candidate.name}, ${candidate.matchedFace.typeLine}, for ${mention.text}`}
+                          accessibilityLabel={t.table.useCandidate(
+                            candidate.name,
+                            candidate.matchedFace.typeLine,
+                            mention.text,
+                          )}
                           onPress={() =>
                             setSelectedByMention((current) => ({
                               ...current,
@@ -471,7 +478,7 @@ export default function TableScreen({ question }: TableScreenProps) {
                   <View style={styles.chips}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Search for a different card for ${mention.text}`}
+                      accessibilityLabel={t.table.searchFor(mention.text)}
                       onPress={() =>
                         openCardSearch({ type: "resolve", mentionIndex }, mention.text)
                       }
@@ -481,11 +488,11 @@ export default function TableScreen({ question }: TableScreenProps) {
                         pressed && styles.pressed,
                       ]}
                     >
-                      <Text style={styles.quietChipText}>Search</Text>
+                      <Text style={styles.quietChipText}>{t.table.search}</Text>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`“${mention.text}” is not a card`}
+                      accessibilityLabel={t.table.notACardLabel(mention.text)}
                       onPress={() =>
                         setIgnoredMentions((current) => [...new Set([...current, mentionIndex])])
                       }
@@ -495,7 +502,7 @@ export default function TableScreen({ question }: TableScreenProps) {
                         pressed && styles.pressed,
                       ]}
                     >
-                      <Text style={styles.quietChipText}>Not a card</Text>
+                      <Text style={styles.quietChipText}>{t.table.notACard}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -506,11 +513,11 @@ export default function TableScreen({ question }: TableScreenProps) {
 
             <View style={styles.section}>
               <Text accessibilityRole="header" style={styles.eyebrow}>
-                Cards on the table
+                {t.table.cardsOnTable}
               </Text>
               {displayCards.length > 0 ? (
                 <ScrollView
-                  accessibilityLabel="Cards on the table"
+                  accessibilityLabel={t.table.cardsOnTable}
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.cardRow}
@@ -538,20 +545,14 @@ export default function TableScreen({ question }: TableScreenProps) {
                   })}
                 </ScrollView>
               ) : (
-                <Text style={styles.helper}>
-                  No cards yet. Add any card the question involves, or ask without cards for a
-                  general rules question.
-                </Text>
+                <Text style={styles.helper}>{t.table.noCards}</Text>
               )}
             </View>
 
             {searchMode && searchMode.type !== "resolve" ? (
               searchPanel
             ) : displayCards.length >= MAX_CONFIRMED_CARDS ? (
-              <Text style={styles.helper}>
-                The judge can read up to {MAX_CONFIRMED_CARDS} different cards. Remove one to add
-                another.
-              </Text>
+              <Text style={styles.helper}>{t.table.maxCards(MAX_CONFIRMED_CARDS)}</Text>
             ) : (
               <Pressable
                 accessibilityRole="button"
@@ -559,14 +560,14 @@ export default function TableScreen({ question }: TableScreenProps) {
                 style={({ pressed }) => [styles.addCard, pressed && styles.pressed]}
               >
                 <Ionicons name="add" size={16} color={colors.textSoft} />
-                <Text style={styles.addCardText}>Add a card the question left out</Text>
+                <Text style={styles.addCardText}>{t.table.addCard}</Text>
               </Pressable>
             )}
 
             {understood.length > 0 ? (
               <View style={styles.section}>
                 <Text accessibilityRole="header" style={styles.eyebrow}>
-                  What the judge understood
+                  {t.table.understood}
                 </Text>
                 {understood.map((item, index) => (
                   <View key={`${index}-${item.text}`} style={styles.fact}>
@@ -576,7 +577,7 @@ export default function TableScreen({ question }: TableScreenProps) {
                         item.text
                       ) : (
                         <>
-                          <Text style={styles.unclearLabel}>Still unclear: </Text>
+                          <Text style={styles.unclearLabel}>{t.table.stillUnclear}</Text>
                           {item.text}
                         </>
                       )}
@@ -592,17 +593,11 @@ export default function TableScreen({ question }: TableScreenProps) {
       {interpretation?.inScope ? (
         <View style={styles.footer}>
           {blocked ? (
-            <Text style={styles.helper}>
-              Pick a card for each name above
-              {unresolvedMentionIndexes.length > 1
-                ? ` (${unresolvedMentionIndexes.length} left)`
-                : ""}
-              .
-            </Text>
+            <Text style={styles.helper}>{t.table.pickEach(unresolvedMentionIndexes.length)}</Text>
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityHint="The judge reads the cards and the rules and answers."
+            accessibilityHint={t.table.getRulingHint}
             accessibilityState={{ disabled: blocked }}
             disabled={blocked}
             onPress={getTheRuling}
@@ -612,7 +607,7 @@ export default function TableScreen({ question }: TableScreenProps) {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.primaryButtonText}>Get the ruling</Text>
+            <Text style={styles.primaryButtonText}>{t.table.getRuling}</Text>
           </Pressable>
         </View>
       ) : null}
