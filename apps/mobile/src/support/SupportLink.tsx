@@ -1,4 +1,5 @@
-import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Text from "../ui/Text";
 import { colors } from "../theme";
@@ -17,19 +18,22 @@ export default function SupportLink() {
   if (!KOFI_URL || Platform.OS !== "web") return null;
   const url = KOFI_URL;
   return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityHint={t.support.detail}
-      onPress={() => void Linking.openURL(url).catch(() => undefined)}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-    >
-      <Ionicons name="cafe-outline" size={18} color={colors.textSoft} />
-      <View style={styles.text}>
-        <Text style={styles.title}>{t.support.title}</Text>
-        <Text style={styles.detail}>{t.support.detail}</Text>
-      </View>
-      <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-    </Pressable>
+    // A real anchor on the web, like the legal links, so it can be middle-clicked or copied.
+    <Link href={url} target="_blank" rel="noopener noreferrer" asChild>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={t.support.title}
+        accessibilityHint={t.support.detail}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        <Ionicons name="cafe-outline" size={18} color={colors.textSoft} />
+        <View style={styles.text}>
+          <Text style={styles.title}>{t.support.title}</Text>
+          <Text style={styles.detail}>{t.support.detail}</Text>
+        </View>
+        <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+      </Pressable>
+    </Link>
   );
 }
 
