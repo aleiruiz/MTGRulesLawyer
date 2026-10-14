@@ -93,6 +93,8 @@ export default function ChatScreen({
   const followEnd = useRef(true);
   const revealTarget = useRef<string | null>(null);
   const turnOffsets = useRef(new Map<string, number>());
+  // A reopened conversation starts at its latest question rather than scrolled to the end.
+  const openAtTurn = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const started = useRef(false);
@@ -245,15 +247,16 @@ export default function ChatScreen({
     void fetchConversation(accessToken, initialConversationId)
       .then((conversation) => {
         if (!mounted.current) return;
-        setTurns(
-          conversation.turns.map((turn) => ({
-            key: nextKey(),
-            question: turn.ruling.question,
-            cards: turn.cards,
-            status: "answered" as const,
-            ruling: turn.ruling,
-          })),
-        );
+        const loaded = conversation.turns.map((turn) => ({
+          key: nextKey(),
+          question: turn.ruling.question,
+          cards: turn.cards,
+          status: "answered" as const,
+          ruling: turn.ruling,
+        }));
+        followEnd.current = false;
+        openAtTurn.current = loaded[loaded.length - 1]?.key ?? null;
+        setTurns(loaded);
       })
       .catch((error: unknown) => {
         if (mounted.current)
@@ -367,7 +370,13 @@ export default function ChatScreen({
           {turns.map((turn, index) => (
             <View
               key={turn.key}
-              onLayout={(event) => turnOffsets.current.set(turn.key, event.nativeEvent.layout.y)}
+              onLayout={(event) => {
+                const { y } = event.nativeEvent.layout;
+                turnOffsets.current.set(turn.key, y);
+                if (openAtTurn.current !== turn.key) return;
+                openAtTurn.current = null;
+                scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: false });
+              }}
               style={styles.turn}
             >
               <View style={styles.userBubble}>

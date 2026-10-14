@@ -1,17 +1,11 @@
 import { Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { RulingGenerationResponse } from "@mtg-rules/contracts";
 import Text from "../ui/Text";
 import { colors, fonts } from "../theme";
 import { strings } from "../i18n/core";
+import { citationChipLabel, type Citation } from "./citation-labels";
 
-export type Citation = RulingGenerationResponse["citations"][number];
-
-/** What a citation is called on its chip: a rule number, a card name or "Official ruling". */
-export function citationChipLabel(citation: Citation): string {
-  if (citation.kind === "CARD_RULING") return strings().citation.officialRuling;
-  return citation.label;
-}
+export { citationChipLabel, citationChipLabels, type Citation } from "./citation-labels";
 
 export function citationKindTitle(citation: Citation): string {
   return strings().citation.kinds[citation.kind];
@@ -19,13 +13,19 @@ export function citationKindTitle(citation: Citation): string {
 
 interface CitationChipProps {
   citation: Citation;
+  /** Overrides the chip's own label, e.g. to number repeated ones. */
+  label?: string;
   onPress: () => void;
   /** The summary's chips are a little larger than a step's. */
   prominent?: boolean;
 }
 
-export default function CitationChip({ citation, onPress, prominent }: CitationChipProps) {
-  const label = citationChipLabel(citation);
+export default function CitationChip({
+  citation,
+  label = citationChipLabel(citation),
+  onPress,
+  prominent,
+}: CitationChipProps) {
   return (
     <Pressable
       accessibilityRole="button"
