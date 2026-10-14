@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping build MTG Rules Lawyer. Keep each change focused on one task from [`TASKS.md`](TASKS.md), preserve the boundaries in [the architecture map](docs/architecture.md), and open a pull request for review before merging.
+Thank you for helping build MTG Rules Lawyer. Contributions are accepted under the project's [AGPL-3.0 license](LICENSE). Keep each change focused on one task from [`TASKS.md`](TASKS.md), preserve the boundaries in [the architecture map](docs/architecture.md), and open a pull request for review before merging.
 
 ## Development setup
 

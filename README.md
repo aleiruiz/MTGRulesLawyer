@@ -1,6 +1,6 @@
 # MTG Rules Lawyer
 
-MTG Rules Lawyer is a free judge for Magic: The Gathering. You describe what is happening at the table in plain words ("I attack with a deathtouch double striker into an indestructible blocker"), confirm which cards you mean, and get a ruling that cites the Comprehensive Rules, the Oracle text and the official card rulings it is based on. It answers in English or Spanish and runs on the web at [mtgruleslawyer.io](https://mtgruleslawyer.io), with Android on the way.
+MTG Rules Lawyer is a free, open-source judge for Magic: The Gathering. You describe what is happening at the table in plain words ("I attack with a deathtouch double striker into an indestructible blocker"), confirm which cards you mean, and get a ruling that cites the Comprehensive Rules, the Oracle text and the official card rulings it is based on. It answers in English or Spanish and runs on the web at [mtgruleslawyer.io](https://mtgruleslawyer.io), with Android on the way.
 
 The goal is simple: settle rules arguments at the table quickly, show the evidence so players can check it, and stay free. There are no ads and no paid features. Donations only cover the server and AI costs.
 
@@ -23,7 +23,6 @@ These are the open problems we know about. Issues and pull requests on any of th
 - **iOS.** There is no iOS release yet and Apple sign-in is hidden until there is. Web and Android come first.
 - **End-to-end testing on devices.** There are no automated UI tests for the app, and the full journey (question, card correction, ruling, dispute, review) has not been checked on both platforms ([TASKS.md](TASKS.md) L01).
 - **Cost.** Every ruling is a paid model call. Usage is capped per player and per day, and answers are cached briefly, but cheaper ways to answer (for example matching card names without a model call) are open.
-- **License.** The code is public but has no license file yet, so it is not formally open source. Choosing one is pending.
 - **Production backups.** The hosted database has no automatic backups by choice; rules and cards can be re-imported, but saved rulings and disputes would be lost.
 
 The remaining MVP checklist lives in [TASKS.md](TASKS.md), and the design and architecture in [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) and [docs/architecture.md](docs/architecture.md).
@@ -31,6 +30,10 @@ The remaining MVP checklist lives in [TASKS.md](TASKS.md), and the design and ar
 ## Support the project
 
 MTG Rules Lawyer is free and will stay free. If it settles an argument for you, a donation on Ko-fi helps pay for the server and the AI judge. The Ko-fi link will be added here and in the web app's account screen.
+
+## License
+
+The code is licensed under the [GNU Affero General Public License v3.0](LICENSE). You may use, change and share it, including commercially; if you share copies, or run a modified version for other people over a network (such as a public website or app), you must make its source available under the same license. Rules text, card data and images are not covered by this license; they belong to their owners and follow the notice below.
 
 ## Unofficial Fan Content
 
