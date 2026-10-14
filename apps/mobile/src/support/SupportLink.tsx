@@ -6,7 +6,7 @@ import { colors } from "../theme";
 import { useT } from "../i18n/LanguageProvider";
 
 /** The project's Ko-fi page. Leave null to hide the link. */
-export const KOFI_URL: string | null = null;
+export const KOFI_URL: string | null = "https://ko-fi.com/aleiruiz";
 
 /**
  * A quiet donation link on the account screen. The app stays free; donations only cover the
