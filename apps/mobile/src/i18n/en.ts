@@ -285,6 +285,10 @@ export const en = {
       rejected: "Ruling stands",
     },
   },
+  support: {
+    title: "Support the project on Ko-fi",
+    detail: "Rules Lawyer is free. Donations help pay for the server and the AI judge.",
+  },
   account: {
     providers: {
       google: "Continue with Google",

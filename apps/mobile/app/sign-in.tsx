@@ -13,6 +13,7 @@ import RecentRulings, { useRecentConversations } from "../src/home/RecentRulings
 import AdminReviewLink, { useIsAdmin } from "../src/reviews/AdminReviewLink";
 import GlassesLogo from "../src/ui/GlassesLogo";
 import LegalLinks from "../src/legal/LegalLinks";
+import SupportLink from "../src/support/SupportLink";
 import { avatarUrl } from "../src/auth/avatar";
 import { Image } from "expo-image";
 import Loader from "../src/ui/Loader";
@@ -287,6 +288,7 @@ export default function AccountScreen() {
           </View>
         </View>
 
+        <SupportLink />
         <LegalLinks />
         <Text style={styles.notice}>{t.account.notice}</Text>
       </ScrollView>

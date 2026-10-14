@@ -1,8 +1,40 @@
 # MTG Rules Lawyer
 
-MTG Rules Lawyer is an unofficial Magic: The Gathering rules research assistant. The MVP is being built in small, reviewable tasks. The API includes local source import commands, exact card face lookup, and bounded evidence retrieval from the active rules and Oracle snapshots; question interpretation and rulings are still in development.
+MTG Rules Lawyer is a free judge for Magic: The Gathering. You describe what is happening at the table in plain words ("I attack with a deathtouch double striker into an indestructible blocker"), confirm which cards you mean, and get a ruling that cites the Comprehensive Rules, the Oracle text and the official card rulings it is based on. It answers in English or Spanish and runs on the web at [mtgruleslawyer.io](https://mtgruleslawyer.io), with Android on the way.
 
-This project is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast. Magic: The Gathering, its game rules, cards, and related marks belong to Wizards of the Coast LLC and their respective owners. Read the [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Planned card data sources include [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data); see the [source and image use decision](docs/source-policy.md) for import, attribution, and display requirements.
+The goal is simple: settle rules arguments at the table quickly, show the evidence so players can check it, and stay free. There are no ads and no paid features. Donations only cover the server and AI costs.
+
+## What it does
+
+- **Asks the judge.** An AI reads the question, finds the cards it mentions, and lets the player fix any wrong match before a ruling is made.
+- **Cites its sources.** Each ruling is checked against the active rules and card snapshot; a citation that does not exist is never shown as valid, and an answer the evidence does not support comes back as uncertain or asks for the missing fact.
+- **Keeps the basics in view.** The stack, priority, layers, phases and steps, state-based actions, loops and basic combat are always part of the prompt, because those answers must never be wrong.
+- **Lets players dispute a ruling.** Signed-in players can challenge an answer; a human judge reviews it in the app, and approved cases can become regression tests.
+- **Stays current.** The Comprehensive Rules, Scryfall Oracle cards and official rulings are refreshed daily, and Spanish card names weekly.
+- **Shares rulings.** Every ruling has a read-only public page that works in any browser.
+
+## Known gaps and where help is welcome
+
+These are the open problems we know about. Issues and pull requests on any of them are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) first.
+
+- **Judge accuracy on tricky interactions.** Most questions are answered correctly, but hard cases (layer and type-changing interactions such as Urborg with Blood Moon, deathtouch and indestructible with double strike) depend on the model's reasoning effort, and lower effort misses some of them. More benchmark cases and better evidence retrieval help most. Run the judge benchmark with `pnpm eval:judge` (it calls OpenAI and costs money; use `--only` to run a few cases).
+- **Card recognition from free text.** Card names are found by the AI and then resolved exactly in code. Nicknames, partial names, plurals and unusual phrasing can still pick the wrong card or count, which is why the player confirms cards before the ruling.
+- **Spanish.** The interface and answers are bilingual, but the Comprehensive Rules exist only in English and rules search uses English text analysis, so Spanish questions rely on the model to bridge the two.
+- **iOS.** There is no iOS release yet and Apple sign-in is hidden until there is. Web and Android come first.
+- **End-to-end testing on devices.** There are no automated UI tests for the app, and the full journey (question, card correction, ruling, dispute, review) has not been checked on both platforms ([TASKS.md](TASKS.md) L01).
+- **Cost.** Every ruling is a paid model call. Usage is capped per player and per day, and answers are cached briefly, but cheaper ways to answer (for example matching card names without a model call) are open.
+- **License.** The code is public but has no license file yet, so it is not formally open source. Choosing one is pending.
+- **Production backups.** The hosted database has no automatic backups by choice; rules and cards can be re-imported, but saved rulings and disputes would be lost.
+
+The remaining MVP checklist lives in [TASKS.md](TASKS.md), and the design and architecture in [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) and [docs/architecture.md](docs/architecture.md).
+
+## Support the project
+
+MTG Rules Lawyer is free and will stay free. If it settles an argument for you, a donation on Ko-fi helps pay for the server and the AI judge. The Ko-fi link will be added here and in the web app's account screen.
+
+## Unofficial Fan Content
+
+This project is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast. Magic: The Gathering, its game rules, cards, and related marks belong to Wizards of the Coast LLC and their respective owners. Read the [Wizards Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Card data and images come from [Scryfall](https://scryfall.com/docs/api/bulk-data); see the [source and image use decision](docs/source-policy.md) for import, attribution, and display requirements.
 
 ## Start locally
 
@@ -64,7 +96,7 @@ These commands require network access but no API credentials. They store source 
 
 `pnpm sources:refresh` records each source check as `RUNNING`, `UNCHANGED`, `IMPORTED`, or `FAILED` in PostgreSQL. It checks rules by content checksum and checks Scryfall's Oracle Cards update timestamp before downloading the bulk file. `GET /api/sources/status` reports the active snapshot, source versions, last check, and stale status without returning imported rules or card text. The stale threshold defaults to 72 hours and can be changed with `SOURCE_STALE_AFTER_HOURS`.
 
-The daily GitHub Actions refresh can be enabled by setting the repository Actions secret `DATABASE_URL` to the deployed PostgreSQL connection string. Run database migrations as part of deployment before enabling it. The scheduled and manually dispatched workflow applies pending migrations, checks both upstream sources, activates validated changes, and fails visibly in Actions on import errors or stale sources. It does not need OpenAI or OAuth credentials.
+In production the server runs these refreshes daily; see [deployment](docs/deploy.md). The manual **Source refresh** GitHub Actions workflow does the same for a database GitHub can reach.
 
 In one terminal, start the API:
 
