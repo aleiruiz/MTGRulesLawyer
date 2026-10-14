@@ -6,6 +6,7 @@ import Text from "../ui/Text";
 import { colors, eyebrow, fonts } from "../theme";
 import { citationChipLabel, citationKindTitle, type Citation } from "./CitationChip";
 import { strings } from "../i18n/core";
+import { parseRulingLabel } from "./citation-labels";
 
 interface CitationSheetProps {
   ruling: RulingGenerationResponse;
@@ -26,7 +27,9 @@ function usedIn(ruling: RulingGenerationResponse, citationId: string): string | 
 }
 
 function citationTitle(citation: Citation): string {
-  return citation.kind === "CARD_RULING" ? citation.label : citationChipLabel(citation);
+  if (citation.kind !== "CARD_RULING") return citationChipLabel(citation);
+  const ruling = parseRulingLabel(citation.label);
+  return ruling ? `${strings().citation.rulingFor(ruling.card)} (${ruling.date})` : citation.label;
 }
 
 // A bottom sheet with the exact text a citation points to, so a player can show it at the table.

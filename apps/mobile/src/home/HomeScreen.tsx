@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { questionInterpretRequestSchema } from "@mtg-rules/contracts";
 import Text from "../ui/Text";
@@ -16,7 +16,7 @@ import TextInput from "../ui/TextInput";
 import GlassesLogo from "../ui/GlassesLogo";
 import AccountButton from "../ui/AccountButton";
 import { colors, fonts } from "../theme";
-import { saveQuestion } from "../questions/question-store";
+import { consumeQuestionAsked, saveQuestion } from "../questions/question-store";
 import RecentRulings, { useRecentConversations } from "./RecentRulings";
 import SourcesFooter from "./SourcesFooter";
 import LegalLinks from "../legal/LegalLinks";
@@ -32,6 +32,12 @@ export default function HomeScreen() {
   const examples = t.home.examples;
   const canAsk = question.trim().length > 0;
   const showExamples = recent.loaded && recent.conversations.length === 0 && !recent.error;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (consumeQuestionAsked()) setQuestion("");
+    }, []),
+  );
 
   function ask() {
     const parsed = questionInterpretRequestSchema.safeParse({ question });

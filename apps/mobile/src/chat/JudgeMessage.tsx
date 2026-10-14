@@ -3,8 +3,8 @@ import { Pressable, Share, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PersistedRulingResponse } from "@mtg-rules/contracts";
 import { getPublicRulingUrl } from "../rulings/public-ruling-url";
-import { isYesNoQuestion, rulesDate, splitVerdict } from "../rulings/verdict-text";
-import CitationChip from "../verdict/CitationChip";
+import { isYesNoQuestion, rulesDate, splitLead } from "../rulings/verdict-text";
+import CitationChip, { citationChipLabels } from "../verdict/CitationChip";
 import CitationSheet from "../verdict/CitationSheet";
 import Text from "../ui/Text";
 import { colors, eyebrow, fonts } from "../theme";
@@ -67,7 +67,7 @@ export default function JudgeMessage({
   const [openCitation, setOpenCitation] = useState<string | null>(null);
   const { ruling } = result;
   const outcome = outcomeStyles[ruling.outcome];
-  const { headline, body } = splitVerdict(ruling.summary);
+  const { lead: headline, body, compact } = splitLead(ruling.summary);
   const citationById = new Map(ruling.citations.map((citation) => [citation.id, citation]));
   const questions = ruling.clarificationQuestions;
   // When the judge needs a detail before ruling, the question leads; otherwise the answer does.
@@ -88,12 +88,14 @@ export default function JudgeMessage({
       return citation ? [citation] : [];
     });
     if (cited.length === 0) return null;
+    const labels = citationChipLabels(cited);
     return (
       <View style={styles.chips}>
-        {cited.map((citation) => (
+        {cited.map((citation, index) => (
           <CitationChip
             key={citation.id}
             citation={citation}
+            label={labels[index]}
             prominent={prominent}
             onPress={() => setOpenCitation(citation.id)}
           />
@@ -126,7 +128,7 @@ export default function JudgeMessage({
         ) : (
           <>
             {headline ? (
-              <Text selectable style={styles.headline}>
+              <Text selectable style={compact ? styles.headlineCompact : styles.headline}>
                 {headline}
               </Text>
             ) : null}
@@ -324,6 +326,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, letterSpacing: 0.4 },
   headline: { fontFamily: fonts.display, fontSize: 28, lineHeight: 33 },
+  headlineCompact: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28 },
   question: { fontFamily: fonts.display, fontSize: 23, lineHeight: 29 },
   body: { color: colors.textSoft, fontSize: 15.5, lineHeight: 23 },
   bodyLarge: { fontSize: 17, lineHeight: 25 },

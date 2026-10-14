@@ -209,6 +209,7 @@ export const en = {
       CARD_RULING: "Official ruling",
     },
     officialRuling: "Official ruling",
+    rulingFor: (card: string) => `Ruling · ${card}`,
     hint: "Shows the cited text.",
     closeCitation: "Close the citation",
     steps: (numbers: number[]) =>

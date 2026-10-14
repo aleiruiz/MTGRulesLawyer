@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isYesNoQuestion, rulesDate, splitVerdict } from "./verdict-text";
+import { isYesNoQuestion, rulesDate, splitLead, splitVerdict } from "./verdict-text";
 
 void describe("splitVerdict", () => {
   void it("uses a short first sentence as the headline", () => {
@@ -24,6 +24,30 @@ void describe("splitVerdict", () => {
       splitVerdict("Rule 702.19d applies. Then trample.").headline,
       "Rule 702.19d applies.",
     );
+  });
+});
+
+void describe("splitLead", () => {
+  void it("keeps a short first sentence at full size", () => {
+    assert.deepEqual(splitLead("Yes. It deals damage."), {
+      lead: "Yes.",
+      body: "It deals damage.",
+      compact: false,
+    });
+  });
+
+  void it("keeps a longer first sentence as a compact lead", () => {
+    const first = `${"Because ".repeat(15)}it works.`;
+    assert.deepEqual(splitLead(`${first} Then it ends.`), {
+      lead: first,
+      body: "Then it ends.",
+      compact: true,
+    });
+  });
+
+  void it("leaves a paragraph-long first sentence in the body", () => {
+    const summary = `${"Because ".repeat(40)}it works.`;
+    assert.deepEqual(splitLead(summary), { lead: null, body: summary, compact: false });
   });
 });
 

@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Loader from "../ui/Loader";
 import { router } from "expo-router";
 import { saveDraft } from "../chat/draft-store";
+import { markQuestionAsked } from "./question-store";
 import ConfirmedCardTile from "./ConfirmedCardTile";
 import {
   QuestionRequestError,
@@ -174,6 +175,7 @@ export default function TableScreen({ question }: TableScreenProps) {
         quantity: counts[card.oracleId] ?? 1,
       })),
     });
+    markQuestionAsked();
     router.replace({ pathname: "/chat", params: { draft: draftId } });
   }
 

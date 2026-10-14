@@ -217,6 +217,7 @@ export const es: Messages = {
       CARD_RULING: "Aclaración oficial",
     },
     officialRuling: "Aclaración oficial",
+    rulingFor: (card: string) => `Aclaración · ${card}`,
     hint: "Muestra el texto citado.",
     closeCitation: "Cerrar la cita",
     steps: (numbers: number[]) =>
