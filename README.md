@@ -29,7 +29,7 @@ The remaining MVP checklist lives in [TASKS.md](TASKS.md), and the design and ar
 
 ## Support the project
 
-MTG Rules Lawyer is free and will stay free. If it settles an argument for you, a donation on Ko-fi helps pay for the server and the AI judge. The Ko-fi link will be added here and in the web app's account screen.
+MTG Rules Lawyer is free and will stay free. If it settles an argument for you, a donation on [Ko-fi](https://ko-fi.com/aleiruiz) helps pay for the server and the AI judge. The same link is on the account screen of the web app.
 
 ## License
 
