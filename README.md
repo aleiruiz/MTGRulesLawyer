@@ -33,7 +33,7 @@ MTG Rules Lawyer is free and will stay free. If it settles an argument for you, 
 
 ## License
 
-The code is licensed under the [GNU Affero General Public License v3.0](LICENSE). You may use, change and share it, including commercially; if you run a modified version for other people, such as a public website or app, you must offer them its source under the same license. Rules text, card data and images are not covered by this license; they belong to their owners and follow the notice below.
+The code is licensed under the [GNU Affero General Public License v3.0](LICENSE). You may use, change and share it, including commercially; if you share copies, or run a modified version for other people over a network (such as a public website or app), you must make its source available under the same license. Rules text, card data and images are not covered by this license; they belong to their owners and follow the notice below.
 
 ## Unofficial Fan Content
 
