@@ -293,6 +293,10 @@ export const es: Messages = {
       rejected: "El fallo se mantiene",
     },
   },
+  support: {
+    title: "Apoya el proyecto en Ko-fi",
+    detail: "Rules Lawyer es gratis. Las donaciones ayudan a pagar el servidor y el juez de IA.",
+  },
   account: {
     providers: {
       google: "Continuar con Google",
